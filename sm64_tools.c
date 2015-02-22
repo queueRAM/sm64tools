@@ -223,6 +223,8 @@ void sm64_decompress_mio0(const sm64_config_t *config,
    int move_offset;
    unsigned int in_addr;
    unsigned int out_addr = OUT_START_ADDR;
+   unsigned int align_add = config->alignment - 1;
+   unsigned int align_mask = ~align_add;
    ptr_t ptr_table[MAX_PTRS];
    int ptr_count;
    int i;
@@ -238,6 +240,8 @@ void sm64_decompress_mio0(const sm64_config_t *config,
       if (in_addr == 0x00108A40) ptr_table[i].command = 0x1A;
       if (!memcmp(&in_buf[in_addr], "MIO0", 4)) {
          int length;
+         // align output address
+         out_addr = (out_addr + align_add) & align_mask;
          length = mio0_decode(&in_buf[in_addr], &out_buf[out_addr]);
          assert(length > 0);
          // 0x1A needs fake MIO0 header: relocate data and add MIO0 header with all uncompressed data
@@ -245,13 +249,13 @@ void sm64_decompress_mio0(const sm64_config_t *config,
             case 0x1A:
                // TODO: this + 2 isn't needed, but mimic M64 ROM Extender 1.3b
                bit_length = (length + 7) / 8 + 2;
-               move_offset = 16 + bit_length + COMPRESSED_LENGTH;
+               move_offset = MIO0_HEADER_LENGTH + bit_length + COMPRESSED_LENGTH;
                memmove(&out_buf[out_addr + move_offset], &out_buf[out_addr], length);
                head.dest_size = length;
                head.comp_offset = move_offset - COMPRESSED_LENGTH;
                head.uncomp_offset = move_offset;
                mio0_encode_header(&out_buf[out_addr], &head);
-               memset(&out_buf[out_addr + 16], 0xFF, head.comp_offset - MIO0_HEADER_LENGTH);
+               memset(&out_buf[out_addr + MIO0_HEADER_LENGTH], 0xFF, head.comp_offset - MIO0_HEADER_LENGTH);
                memset(&out_buf[out_addr + head.comp_offset], 0x0, 2);
                length += head.uncomp_offset;
                INFO("MIO0 file from %08X is decompressed at %08X to %08X as raw data with a MIO0 header",

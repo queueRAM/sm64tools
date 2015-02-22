@@ -8,6 +8,7 @@ typedef struct
    char *ext_filename;
    unsigned int ext_size;
    unsigned int padding;
+   unsigned int alignment;
 } sm64_config_t;
 
 // find and decompress all MIO0 blocks

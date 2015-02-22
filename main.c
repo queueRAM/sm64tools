@@ -13,6 +13,7 @@ static const sm64_config_t default_config =
    NULL, // extended filename
    64,   // extended size
    32,   // MIO0 padding
+   1,    // MIO0 alignment
 };
 
 static void print_usage(void)
@@ -28,12 +29,15 @@ static void print_usage(void)
          "-p <padding>\n"
          "\tPadding to insert between MIO0 files in KB (default = %d).\n"
          "\n"
+         "-a <alignment>\n"
+         "\tByte boundary to align MIO0 files (default = %d).\n"
+         "\n"
          "-v\n"
          "\tVerbose output.\n"
          "\n"
          "Output file:\n"
          "\tIf unspecified, it is constructed by replacing file extension of input file with .ext.z64\n",
-         default_config.ext_size, default_config.padding);
+         default_config.ext_size, default_config.padding, default_config.alignment);
    exit(1);
 }
 
@@ -70,17 +74,23 @@ static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
    for (i = 1; i < argc; i++) {
       if (argv[i][0] == '-') {
          switch (argv[i][1]) {
-            case 's':
+            case 'a':
                if (++i >= argc) {
                   print_usage();
                }
-               config->ext_size = strtoul(argv[i], NULL, 0);
+               config->alignment = strtoul(argv[i], NULL, 0);
                break;
             case 'p':
                if (++i >= argc) {
                   print_usage();
                }
                config->padding = strtoul(argv[i], NULL, 0);
+               break;
+            case 's':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               config->ext_size = strtoul(argv[i], NULL, 0);
                break;
             case 'v':
                g_verbosity = 1;
