@@ -7,8 +7,6 @@
 
 // defines
 
-#define MIO0_HEADER_LENGTH 16
-
 #define GET_BIT(buf, bit) ((buf)[(bit) / 8] & (1 << (7 - ((bit) % 8))))
 
 // functions
@@ -99,11 +97,8 @@ int mio0_decode(const unsigned char *in, unsigned char *out)
       return -2;
    }
 
-   //printf("Found: %s, size = %d, comp_offset = 0x%X, uncomp_offset = 0x%X\n",
-   //      head.big_endian ? "BE" : "LE", head.dest_size, head.comp_offset, head.uncomp_offset);
-
    if (!head.big_endian) {
-      printf("Sorry, only big endian supported right now\n");
+      ERROR("Sorry, only big endian supported right now\n");
       return -1;
    }
 
@@ -356,7 +351,7 @@ int main(int argc, char *argv[])
    int ret_val;
 
    if (argc < 3) {
-      printf("Usage: mio0 <op> <in_file> [offset] [out_file]\n");
+      ERROR("Usage: mio0 <op> <in_file> [offset] [out_file]\n");
       exit(1);
    }
 
@@ -382,19 +377,19 @@ int main(int argc, char *argv[])
 
    switch (ret_val) {
       case 1:
-         printf("Error opening input file \"%s\"\n", in_file);
+         ERROR("Error opening input file \"%s\"\n", in_file);
          break;
       case 2:
-         printf("Error reading from input file \"%s\"\n", in_file);
+         ERROR("Error reading from input file \"%s\"\n", in_file);
          break;
       case 3:
-         printf("Error decoding MIO0 data. Wrong offset (0x%lX)?\n", offset);
+         ERROR("Error decoding MIO0 data. Wrong offset (0x%lX)?\n", offset);
          break;
       case 4:
-         printf("Error opening output file \"%s\"\n", out_file);
+         ERROR("Error opening output file \"%s\"\n", out_file);
          break;
       case 5:
-         printf("Error writing bytes to output file \"%s\"\n", out_file);
+         ERROR("Error writing bytes to output file \"%s\"\n", out_file);
          break;
    }
 

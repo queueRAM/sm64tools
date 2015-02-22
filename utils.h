@@ -35,6 +35,13 @@
     putchar(' '); \
   } while(0)
 
+// global verbosity setting
+extern int g_verbosity;
+
+#define ERROR(...) fprintf(stderr, __VA_ARGS__)
+#define INFO(...) if (g_verbosity) printf(__VA_ARGS__)
+#define INFO_HEX(...) if (g_verbosity) print_hex(__VA_ARGS__)
+
 // functions
 
 // print buffer as hex bytes

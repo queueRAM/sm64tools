@@ -3,6 +3,9 @@
 
 #include "utils.h"
 
+// global verbosity setting
+int g_verbosity = 0;
+
 void print_hex(unsigned char *buf, int length)
 {
    int i;

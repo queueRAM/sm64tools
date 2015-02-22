@@ -9,7 +9,6 @@
 // TODO: make these configurable
 #define IN_START_ADDR  0x00100000
 #define OUT_START_ADDR 0x00800000
-#define MIO0_OFFSET  (32 * KB)
 
 typedef struct
 {
@@ -92,17 +91,17 @@ static void sm64_adjust_pointers(unsigned char *buf, unsigned int length, ptr_t 
          old_ptr = read_u32_be(&buf[addr+4]);
          idx = find_ptr(old_ptr, table, count);
          if (idx >= 0) {
-            printf("Old pointer at %X = ", addr);
-            print_hex(&buf[addr], 12);
-            printf("\n");
+            INFO("Old pointer at %X = ", addr);
+            INFO_HEX(&buf[addr], 12);
+            INFO("\n");
             write_u32_be(&buf[addr+4], table[idx].new);
             write_u32_be(&buf[addr+8], table[idx].new_end);
             if (buf[addr] == 0x18) {
                buf[addr] = 0x17;
             }
-            printf("NEW pointer at %X = ", addr);
-            print_hex(&buf[addr], 12);
-            printf("\n");
+            INFO("NEW pointer at %X = ", addr);
+            INFO_HEX(&buf[addr], 12);
+            INFO("\n");
          }
       }
    }
@@ -212,7 +211,10 @@ static void sm64_calc_checksums(unsigned char *buf, unsigned int cksum[]) {
    cksum[1] = s0;
 }
 
-void sm64_decompress_mio0(unsigned char *in_buf, unsigned int in_length, unsigned char *out_buf)
+void sm64_decompress_mio0(const sm64_config_t *config,
+                          unsigned char *in_buf,
+                          unsigned int in_length,
+                          unsigned char *out_buf)
 {
 #define MAX_PTRS 128
 #define COMPRESSED_LENGTH 2
@@ -249,22 +251,22 @@ void sm64_decompress_mio0(unsigned char *in_buf, unsigned int in_length, unsigne
                head.comp_offset = move_offset - COMPRESSED_LENGTH;
                head.uncomp_offset = move_offset;
                mio0_encode_header(&out_buf[out_addr], &head);
-               memset(&out_buf[out_addr + 16], 0xFF, head.comp_offset - 16);
+               memset(&out_buf[out_addr + 16], 0xFF, head.comp_offset - MIO0_HEADER_LENGTH);
                memset(&out_buf[out_addr + head.comp_offset], 0x0, 2);
                length += head.uncomp_offset;
-               printf("MIO0 file from %08X is decompressed at %08X to %08X as raw data with a MIO0 header",
+               INFO("MIO0 file from %08X is decompressed at %08X to %08X as raw data with a MIO0 header",
                      in_addr, out_addr, out_addr + length);
                break;
             default:
-               printf("MIO0 file from %08X is decompressed at %08X to %08X as raw data",
+               INFO("MIO0 file from %08X is decompressed at %08X to %08X as raw data",
                      in_addr, out_addr, out_addr + length);
                break;
          }
-         printf("\n");
+         INFO("\n");
          // keep track of new pointers
          ptr_table[i].new = out_addr;
          ptr_table[i].new_end = out_addr + length;
-         out_addr += length + MIO0_OFFSET;
+         out_addr += length + config->padding;
       }
    }
 
@@ -282,7 +284,7 @@ void sm64_update_checksums(unsigned char *buf)
    int i;
 
    // assume CIC-NUS-6102
-   printf("BootChip: CIC-NUS-6102\n");
+   INFO("BootChip: CIC-NUS-6102\n");
 
    // calculate new N64 header checksum
    sm64_calc_checksums(buf, calc_cksum);
@@ -290,17 +292,17 @@ void sm64_update_checksums(unsigned char *buf)
    // mimic the n64sums output
    for (i = 0; i < 2; i++) {
       read_cksum[i] = read_u32_be(&buf[cksum_offsets[i]]);
-      printf("CRC%d: 0x%08X ", i+1, read_cksum[i]);
-      printf("Calculated: 0x%08X ", calc_cksum[i]);
+      INFO("CRC%d: 0x%08X ", i+1, read_cksum[i]);
+      INFO("Calculated: 0x%08X ", calc_cksum[i]);
       if (calc_cksum[i] == read_cksum[i]) {
-         printf("(Good)\n");
+         INFO("(Good)\n");
       } else {
-         printf("(Bad)\n");
+         INFO("(Bad)\n");
       }
    }
 
    // write checksums into header
-   printf("Writing back calculated Checksum\n");
+   INFO("Writing back calculated Checksum\n");
    write_u32_be(&buf[cksum_offsets[0]], calc_cksum[0]);
    write_u32_be(&buf[cksum_offsets[1]], calc_cksum[1]);
 }

@@ -1,6 +1,10 @@
 #ifndef LIBMIO0_H_
 #define LIBMIO0_H_
 
+// defines
+
+#define MIO0_HEADER_LENGTH 16
+
 // typedefs
 
 typedef struct
@@ -12,7 +16,6 @@ typedef struct
 } mio0_header_t;
 
 // function prototypes
-
 
 // decode MIO0 header
 // returns 1 if valid header, 0 otherwise
