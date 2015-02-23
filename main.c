@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
 
    // write to output file
    bytes_written = write_file(config.ext_filename, out_buf, config.ext_size);
-   if (bytes_written < config.ext_size) {
+   if (bytes_written < (long)config.ext_size) {
       ERROR("Error writing bytes to output file \"%s\"\n", config.ext_filename);
       exit(1);
    }
