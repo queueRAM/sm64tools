@@ -79,6 +79,10 @@ static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
                   print_usage();
                }
                config->alignment = strtoul(argv[i], NULL, 0);
+               if (!is_power2(config->alignment)) {
+                  ERROR("Error: Alignment must be power of 2\n");
+                  exit(2);
+               }
                break;
             case 'p':
                if (++i >= argc) {
@@ -142,6 +146,10 @@ int main(int argc, char *argv[])
    in_size = read_file(config.in_filename, &in_buf);
    if (in_size <= 0) {
       ERROR("Error reading input file \"%s\"\n", config.in_filename);
+      exit(1);
+   } else if (in_size > 8 * MB) {
+      // TODO: better checks to see if it has been extended
+      ERROR("This ROM is already extended!\n");
       exit(1);
    }
 

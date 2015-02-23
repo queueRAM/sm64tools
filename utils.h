@@ -60,4 +60,8 @@ long read_file(const char *file_name, unsigned char **data);
 // returns number of bytes written out or -1 on failure
 long write_file(const char *file_name, unsigned char *data, long length);
 
+// determine if value is power of 2
+// returns 1 if val is power of 2, 0 otherwise
+int is_power2(unsigned int val);
+
 #endif // UTILS_H_

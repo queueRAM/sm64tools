@@ -6,6 +6,14 @@
 // global verbosity setting
 int g_verbosity = 0;
 
+int is_power2(unsigned int val)
+{
+   while (((val & 1) == 0) && (val > 1)) {
+      val >>= 1;
+   }
+   return (val == 1);
+}
+
 void print_hex(unsigned char *buf, int length)
 {
    int i;
