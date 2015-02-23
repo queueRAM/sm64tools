@@ -6,6 +6,8 @@
 #include "sm64_tools.h"
 #include "utils.h"
 
+#define SM64EXTEND_VERSION "0.1"
+
 // default configuration
 static const sm64_config_t default_config = 
 {
@@ -18,7 +20,7 @@ static const sm64_config_t default_config =
 
 static void print_usage(void)
 {
-   ERROR("sm64extend is a Super Mario 64 ROM extender\n"
+   ERROR("sm64extend v" SM64EXTEND_VERSION " is a Super Mario 64 ROM extender\n"
          "\n"
          "Usage: sm64extend [options] <input file> [output file]\n"
          "\n"
