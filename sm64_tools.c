@@ -10,12 +10,16 @@
 #define IN_START_ADDR  0x00100000
 #define OUT_START_ADDR 0x00800000
 
+// extract opcode from instruction MSB
+#define OPCODE(VAL_) ((VAL_) & 0xFC)
+
 typedef struct
 {
    unsigned int old;      // MIO0 address in original ROM
    unsigned int new;      // starting MIO0 address in extended ROM
    unsigned int new_end;  // ending MIO0 address in extended ROM
-   unsigned char command; // command type (0x1A or 0x18)
+   unsigned int addr;     // ASM address for referenced pointer
+   unsigned char command; // command type: 0x1A or 0x18 (or 0xFF for ASM)
 } ptr_t;
 
 // find a pointer in the list and return index
@@ -76,6 +80,45 @@ static void find_pointers(unsigned char *buf, unsigned int length, ptr_t table[]
    }
 }
 
+// find references to the MIO0 blocks in ASM and store type
+// buf: buffer containing SM64 data
+// length: length of buf
+// table: list of addresses to MIO0 data
+// count: number of addresses in table
+static void find_asm_pointers(unsigned char *buf, ptr_t table[], int count)
+{
+   // find the ASM references
+   // looking for some code that looks like this:
+   // LUI     a1,start_upper    ; start ptr MSword
+   // LUI     a2,end_upper      ; end ptr MSword
+   // ADDIU   a2,a2,end_lower   ; end ptr LSword
+   // ADDIU   a1,a1,start_lower ; start ptr LSword
+   // JAL     somewhere
+   unsigned int addr;
+   unsigned int ptr;
+   int idx;
+   unsigned short addr_low, addr_high;
+   for (addr = 0; addr < IN_START_ADDR; addr += 4) {
+      if (OPCODE(buf[addr])   == 0x3C && OPCODE(buf[addr+4])  == 0x3C &&
+          OPCODE(buf[addr+8]) == 0x24 && OPCODE(buf[addr+12]) == 0x24) {
+         // reconstruct address
+         addr_high = read_u16_be(&buf[addr + 0x2]);
+         addr_low = read_u16_be(&buf[addr + 0xe]);
+         // ADDIU sign extends which causes the encoded high val to be +1 if low MSb is set
+         if (addr_low & 0x8000) {
+            addr_high--;
+         }
+         ptr = (addr_high << 16) | addr_low;
+         idx = find_ptr(ptr, table, count);
+         if (idx >= 0) {
+            INFO("Found ASM reference to %X at %X\n", ptr, addr);
+            table[idx].command = 0xFF;
+            table[idx].addr = addr;
+         }
+      }
+   }
+}
+
 // adjust pointers to from old to new locations
 // buf: buffer containing SM64 data
 // length: length of buf
@@ -110,32 +153,35 @@ static void sm64_adjust_pointers(unsigned char *buf, unsigned int length, ptr_t 
 // adjust 'pointer' encoded in ASM LUI and ADDIU instructions
 static void sm64_adjust_asm(unsigned char *buf, ptr_t table[], int count)
 {
-#define ASM_OFFSET 0x0003ac0 // cheat here and specify the offset
-/*
-  3ac0:  3c050011  lui     a1,0x11      : upper start
-  3ac4:  3c060011  lui     a2,0x11      : upper end
-  3ac8:  24c64750  addiu   a2,a2,0x4750 : lower end
-  3acc:  24a58a40  addiu   a1,a1,0x8A40 : lower start
-  3ad0:  0c09e1f6  jal     0x2787d8
-*/
-   int idx = find_ptr(0x108A40, table, count);
+   unsigned int addr;
+   int i;
    unsigned short addr_low, addr_high;
-   if (idx >= 0) {
-      addr_low = table[idx].new & 0xFFFF;
-      addr_high = (table[idx].new >> 16) & 0xFFFF;
-      if (addr_low >= 0x8000) {
-         addr_high++;
-      }
-      write_u16_be(&buf[ASM_OFFSET + 0x2], addr_high);
-      write_u16_be(&buf[ASM_OFFSET + 0xe], addr_low);
+   for (i = 0; i < count; i++) {
+      if (table[i].command == 0xFF) {
+         addr = table[i].addr;
+         INFO("Old ASM reference at %X = ", addr);
+         INFO_HEX(&buf[addr], 16);
+         INFO("\n");
+         addr_low = table[i].new & 0xFFFF;
+         addr_high = (table[i].new >> 16) & 0xFFFF;
+         // ADDIU sign extends which causes the summed high to be 1 less if low MSb is set
+         if (addr_low & 0x8000) {
+            addr_high++;
+         }
+         write_u16_be(&buf[addr + 0x2], addr_high);
+         write_u16_be(&buf[addr + 0xe], addr_low);
 
-      addr_low = table[idx].new_end & 0xFFFF;
-      addr_high = (table[idx].new_end >> 16) & 0xFFFF;
-      if (addr_low >= 0x8000) {
-         addr_high++;
+         addr_low = table[i].new_end & 0xFFFF;
+         addr_high = (table[i].new_end >> 16) & 0xFFFF;
+         if (addr_low & 0x8000) {
+            addr_high++;
+         }
+         write_u16_be(&buf[addr + 0x6], addr_high);
+         write_u16_be(&buf[addr + 0xa], addr_low);
+         INFO("NEW ASM reference at %X = ", addr);
+         INFO_HEX(&buf[addr], 16);
+         INFO("\n");
       }
-      write_u16_be(&buf[ASM_OFFSET + 0x6], addr_high);
-      write_u16_be(&buf[ASM_OFFSET + 0xa], addr_low);
    }
 }
 
@@ -232,21 +278,23 @@ void sm64_decompress_mio0(const sm64_config_t *config,
    // find MIO0 locations and pointers
    ptr_count = find_mio0(in_buf, in_length, ptr_table);
    find_pointers(in_buf, in_length, ptr_table, ptr_count);
+   find_asm_pointers(in_buf, ptr_table, ptr_count);
 
-   // for each MIO0 file, extract and add fake MIO0 header if 0x1A command
+   // extract each MIO0 block and prepend fake MIO0 header for 0x1A command and ASM references
    for (i = 0; i < ptr_count; i++) {
       in_addr = ptr_table[i].old;
-      // secret pointer to 0x00108A40
-      if (in_addr == 0x00108A40) ptr_table[i].command = 0x1A;
       if (!memcmp(&in_buf[in_addr], "MIO0", 4)) {
          int length;
+         int is_mio0 = 0;
          // align output address
          out_addr = (out_addr + align_add) & align_mask;
          length = mio0_decode(&in_buf[in_addr], &out_buf[out_addr]);
          assert(length > 0);
-         // 0x1A needs fake MIO0 header: relocate data and add MIO0 header with all uncompressed data
+         // 0x1A commands and ASM references need fake MIO0 header
+         // relocate data and add MIO0 header with all uncompressed data
          switch (ptr_table[i].command) {
             case 0x1A:
+            case 0xFF: // ASM reference
                // TODO: this + 2 isn't needed, but mimic M64 ROM Extender 1.3b
                bit_length = (length + 7) / 8 + 2;
                move_offset = MIO0_HEADER_LENGTH + bit_length + COMPRESSED_LENGTH;
@@ -258,15 +306,11 @@ void sm64_decompress_mio0(const sm64_config_t *config,
                memset(&out_buf[out_addr + MIO0_HEADER_LENGTH], 0xFF, head.comp_offset - MIO0_HEADER_LENGTH);
                memset(&out_buf[out_addr + head.comp_offset], 0x0, 2);
                length += head.uncomp_offset;
-               INFO("MIO0 file from %08X is decompressed at %08X to %08X as raw data with a MIO0 header",
-                     in_addr, out_addr, out_addr + length);
-               break;
-            default:
-               INFO("MIO0 file from %08X is decompressed at %08X to %08X as raw data",
-                     in_addr, out_addr, out_addr + length);
+               is_mio0 = 1;
                break;
          }
-         INFO("\n");
+         INFO("MIO0 file from %08X is decompressed at %08X to %08X as raw data%s\n",
+               in_addr, out_addr, out_addr + length, is_mio0 ? " with a MIO0 header" : "");
          // keep track of new pointers
          ptr_table[i].new = out_addr;
          ptr_table[i].new_end = out_addr + length;
