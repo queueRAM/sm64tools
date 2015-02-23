@@ -9,6 +9,7 @@ typedef struct
    unsigned int ext_size;
    unsigned int padding;
    unsigned int alignment;
+   char fill;
 } sm64_config_t;
 
 // find and decompress all MIO0 blocks

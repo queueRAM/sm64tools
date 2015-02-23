@@ -284,11 +284,12 @@ void sm64_decompress_mio0(const sm64_config_t *config,
    for (i = 0; i < ptr_count; i++) {
       in_addr = ptr_table[i].old;
       if (!memcmp(&in_buf[in_addr], "MIO0", 4)) {
+         unsigned int end;
          int length;
          int is_mio0 = 0;
          // align output address
          out_addr = (out_addr + align_add) & align_mask;
-         length = mio0_decode(&in_buf[in_addr], &out_buf[out_addr]);
+         length = mio0_decode(&in_buf[in_addr], &out_buf[out_addr], &end);
          assert(length > 0);
          // 0x1A commands and ASM references need fake MIO0 header
          // relocate data and add MIO0 header with all uncompressed data
@@ -311,6 +312,10 @@ void sm64_decompress_mio0(const sm64_config_t *config,
          }
          INFO("MIO0 file from %08X is decompressed at %08X to %08X as raw data%s\n",
                in_addr, out_addr, out_addr + length, is_mio0 ? " with a MIO0 header" : "");
+         if (config->fill) {
+            INFO("Filling old MIO0 with 0x01 from %X length %X\n", in_addr, end);
+            memset(&out_buf[in_addr], 0x01, end);
+         }
          // keep track of new pointers
          ptr_table[i].new = out_addr;
          ptr_table[i].new_end = out_addr + length;

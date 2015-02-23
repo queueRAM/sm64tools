@@ -27,8 +27,9 @@ void mio0_encode_header(unsigned char *buf, const mio0_header_t *head);
 // decode MIO0 data in memory
 // in: buffer containing MIO0 data
 // out: buffer for output data - allocated by this function
+// end: output offset of the last byte decoded from in (set to NULL if unwanted)
 // returns bytes extracted into output or negative value on failure
-int mio0_decode(const unsigned char *in, unsigned char *out);
+int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end);
 
 // encode MIO0 data in memory
 // in: buffer containing raw data

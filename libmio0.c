@@ -78,10 +78,7 @@ void mio0_encode_header(unsigned char *buf, const mio0_header_t *head)
 }
 
 // decode MIO0 data in memory
-// in: buffer containing MIO0 data
-// out: buffer for output data - allocated by this function
-// returns bytes extracted into output or negative value on failure
-int mio0_decode(const unsigned char *in, unsigned char *out)
+int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end)
 {
    mio0_header_t head;
    unsigned int bytes_written = 0;
@@ -126,6 +123,9 @@ int mio0_decode(const unsigned char *in, unsigned char *out)
       bit_idx++;
    }
 
+   if (end) {
+      *end = head.uncomp_offset + uncomp_idx;
+   }
    return bytes_written;
 }
 
@@ -247,7 +247,7 @@ int mio0_decode_file(const char *in_file, unsigned long offset, const char *out_
    out_buf = malloc(head.dest_size);
 
    // decompress MIO0 encoded data
-   bytes_decoded = mio0_decode(in_buf, out_buf);
+   bytes_decoded = mio0_decode(in_buf, out_buf, NULL);
    if (bytes_decoded < 0) {
       ret_val = 3;
       goto free_all;

@@ -16,6 +16,7 @@ static const sm64_config_t default_config =
    64,   // extended size
    32,   // MIO0 padding
    1,    // MIO0 alignment
+   0,    // fill old MIO0 blocks
 };
 
 static void print_usage(void)
@@ -33,6 +34,9 @@ static void print_usage(void)
          "\n"
          "-a <alignment>\n"
          "\tByte boundary to align MIO0 files (default = %d).\n"
+         "\n"
+         "-f\n"
+         "\tFill old MIO0 blocks with 0x01.\n"
          "\n"
          "-v\n"
          "\tVerbose output.\n"
@@ -85,6 +89,9 @@ static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
                   ERROR("Error: Alignment must be power of 2\n");
                   exit(2);
                }
+               break;
+            case 'f':
+               config->fill = 1;
                break;
             case 'p':
                if (++i >= argc) {
