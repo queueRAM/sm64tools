@@ -6,7 +6,7 @@
 #include "sm64_tools.h"
 #include "utils.h"
 
-#define SM64EXTEND_VERSION "0.1"
+#define SM64EXTEND_VERSION "0.2"
 
 // default configuration
 static const sm64_config_t default_config = 
