@@ -11,6 +11,7 @@ OBJ_DIR     = ./obj
 
 ##################### Compiler Options #######################
 
+WIN_CROSS = i686-w64-mingw32-
 CC        = gcc
 LD        = $(CC)
 
@@ -18,12 +19,15 @@ INCLUDES  =
 DEFS      = 
 CFLAGS    = -Wall -Wextra -O2 $(INCLUDES) $(DEFS) -MMD
 
-LDFLAGS   = 
+LDFLAGS   = -s
 LIBS      = 
 
 OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(SRC_FILES:.c=.o))
 DEP_FILES = $(OBJ_FILES:.o=.d)
 
+WIN_OBJ_DIR = $(OBJ_DIR)_win
+WIN_OBJ_FILES = $(addprefix $(WIN_OBJ_DIR)/,$(SRC_FILES:.c=.o))
+WIN_DEP_FILES = $(WIN_OBJ_FILES:.o=.d)
 ######################## Targets #############################
 
 default: all
@@ -34,15 +38,23 @@ $(OBJ_DIR)/%.o: %.c
 	@[ -d $(OBJ_DIR) ] || mkdir -p $(OBJ_DIR)
 	$(CC) $(CFLAGS) -o $@ -c $<
 
+$(WIN_OBJ_DIR)/%.o: %.c
+	@[ -d $(WIN_OBJ_DIR) ] || mkdir -p $(WIN_OBJ_DIR)
+	$(WIN_CROSS)$(CC) $(CFLAGS) -o $@ -c $<
+
 $(TARGET): $(OBJ_FILES)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+$(TARGET).exe: $(WIN_OBJ_FILES)
+	$(WIN_CROSS)$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 mio0: libmio0.c libmio0.h
 	$(CC) -DMIO0_TEST $(CFLAGS) -o $@ $<
 
 clean:
-	rm -f $(TARGET) $(OBJ_FILES) $(DEP_FILES)
-	@rmdir --ignore-fail-on-non-empty $(OBJ_DIR)
+	rm -f $(TARGET) $(TARGET).exe $(OBJ_FILES) $(WIN_OBJ_FILES) $(DEP_FILES)
+	-@[ -d $(OBJ_DIR) ] && rmdir --ignore-fail-on-non-empty $(OBJ_DIR)
+	-@[ -d $(WIN_OBJ_DIR) ] && rmdir --ignore-fail-on-non-empty $(WIN_OBJ_DIR)
 
 .PHONY: all clean default
 
