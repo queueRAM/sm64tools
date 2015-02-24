@@ -37,6 +37,9 @@ $(OBJ_DIR)/%.o: %.c
 $(TARGET): $(OBJ_FILES)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+mio0: libmio0.c libmio0.h
+	$(CC) -DMIO0_TEST $(CFLAGS) -o $@ $<
+
 clean:
 	rm -f $(TARGET) $(OBJ_FILES) $(DEP_FILES)
 	@rmdir --ignore-fail-on-non-empty $(OBJ_DIR)
