@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -290,12 +289,10 @@ void sm64_decompress_mio0(const sm64_config_t *config,
          // align output address
          out_addr = (out_addr + align_add) & align_mask;
          length = mio0_decode(&in_buf[in_addr], &out_buf[out_addr], &end);
-         assert(length > 0);
-         // 0x1A commands and ASM references need fake MIO0 header
-         // relocate data and add MIO0 header with all uncompressed data
-         switch (ptr_table[i].command) {
-            case 0x1A:
-            case 0xFF: // ASM reference
+         if (length > 0) {
+            // 0x1A commands and ASM references need fake MIO0 header
+            // relocate data and add MIO0 header with all uncompressed data
+            if (ptr_table[i].command == 0x1A || ptr_table[i].command == 0xFF) {
                // TODO: this + 2 isn't needed, but mimic M64 ROM Extender 1.3b
                bit_length = (length + 7) / 8 + 2;
                move_offset = MIO0_HEADER_LENGTH + bit_length + COMPRESSED_LENGTH;
@@ -308,18 +305,20 @@ void sm64_decompress_mio0(const sm64_config_t *config,
                memset(&out_buf[out_addr + head.comp_offset], 0x0, 2);
                length += head.uncomp_offset;
                is_mio0 = 1;
-               break;
+            }
+            INFO("MIO0 file from %08X is decompressed at %08X to %08X as raw data%s\n",
+                  in_addr, out_addr, out_addr + length, is_mio0 ? " with a MIO0 header" : "");
+            if (config->fill) {
+               INFO("Filling old MIO0 with 0x01 from %X length %X\n", in_addr, end);
+               memset(&out_buf[in_addr], 0x01, end);
+            }
+            // keep track of new pointers
+            ptr_table[i].new = out_addr;
+            ptr_table[i].new_end = out_addr + length;
+            out_addr += length + config->padding;
+         } else {
+            ERROR("Error decoding MIO0 block at %X\n", in_addr);
          }
-         INFO("MIO0 file from %08X is decompressed at %08X to %08X as raw data%s\n",
-               in_addr, out_addr, out_addr + length, is_mio0 ? " with a MIO0 header" : "");
-         if (config->fill) {
-            INFO("Filling old MIO0 with 0x01 from %X length %X\n", in_addr, end);
-            memset(&out_buf[in_addr], 0x01, end);
-         }
-         // keep track of new pointers
-         ptr_table[i].new = out_addr;
-         ptr_table[i].new_end = out_addr + length;
-         out_addr += length + config->padding;
       }
    }
 
