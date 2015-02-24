@@ -21,28 +21,20 @@ static const sm64_config_t default_config =
 
 static void print_usage(void)
 {
-   ERROR("sm64extend v" SM64EXTEND_VERSION " is a Super Mario 64 ROM extender\n"
+   ERROR("Usage: sm64extend [-s SIZE] [-p PADDING] [-a ALIGNMENT] [-f] [-v] FILE [EXT_FILE]\n"
          "\n"
-         "Usage: sm64extend [options] <input file> [output file]\n"
+         "sm64extend v" SM64EXTEND_VERSION ": Super Mario 64 ROM extender\n"
          "\n"
-         "Options:\n"
-         "-s <size>\n"
-         "\tThe desired size of the extended ROM in MB (default = %d).\n"
+         "Optional arguments:\n"
+         " -s SIZE      size of the extended ROM in MB (default: %d)\n"
+         " -p PADDING   padding to insert between MIO0 blocks in KB (default: %d)\n"
+         " -a ALIGNMENT byte boundary to align MIO0 blocks (default: %d)\n"
+         " -f           fill old MIO0 blocks with 0x01\n"
+         " -v           verbose progress output\n"
          "\n"
-         "-p <padding>\n"
-         "\tPadding to insert between MIO0 files in KB (default = %d).\n"
-         "\n"
-         "-a <alignment>\n"
-         "\tByte boundary to align MIO0 files (default = %d).\n"
-         "\n"
-         "-f\n"
-         "\tFill old MIO0 blocks with 0x01.\n"
-         "\n"
-         "-v\n"
-         "\tVerbose output.\n"
-         "\n"
-         "Output file:\n"
-         "\tIf unspecified, it is constructed by replacing file extension of input file with .ext.z64\n",
+         "File arguments:\n"
+         " FILE         input ROM file\n"
+         " EXT_FILE     output extended ROM file (default: replaces input extension with .ext.z64)\n",
          default_config.ext_size, default_config.padding, default_config.alignment);
    exit(1);
 }
