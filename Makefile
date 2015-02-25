@@ -3,8 +3,8 @@
 TARGET     := sm64extend
 
 SRC_FILES  := libmio0.c    \
-              main.c       \
-              sm64_tools.c \
+              libsm64.c    \
+              sm64extend.c \
               utils.c
 
 OBJ_DIR     = ./obj

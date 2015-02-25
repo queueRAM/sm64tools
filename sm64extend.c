@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "libmio0.h"
-#include "sm64_tools.h"
+#include "libsm64.h"
 #include "utils.h"
 
 #define SM64EXTEND_VERSION "0.2"
