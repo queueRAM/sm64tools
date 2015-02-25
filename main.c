@@ -43,7 +43,7 @@ static void print_usage(void)
 // file extension with .ext.z64
 static void generate_filename(const char *in_name, char *out_name)
 {
-   char tmp_name[256];
+   char tmp_name[FILENAME_MAX];
    int len;
    int i;
    strcpy(tmp_name, in_name);
@@ -126,7 +126,7 @@ static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
 
 int main(int argc, char *argv[])
 {
-   char ext_filename[256];
+   char ext_filename[FILENAME_MAX];
    sm64_config_t config;
    unsigned char *in_buf = NULL;
    unsigned char *out_buf = NULL;
