@@ -11,15 +11,17 @@ OBJ_DIR     = ./obj
 
 ##################### Compiler Options #######################
 
-WIN_CROSS = i686-w64-mingw32-
+WIN64_CROSS = x86_64-w64-mingw32-
+WIN32_CROSS = i686-w64-mingw32-
+CROSS     = $(WIN32_CROSS)
 CC        = gcc
 LD        = $(CC)
 
 INCLUDES  = 
 DEFS      = 
-CFLAGS    = -Wall -Wextra -O2 $(INCLUDES) $(DEFS) -MMD
+CFLAGS    = -Wall -Wextra -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(DEFS) -MMD
 
-LDFLAGS   = -s
+LDFLAGS   = -s -Wl,--gc-sections
 LIBS      = 
 
 OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(SRC_FILES:.c=.o))
@@ -40,19 +42,19 @@ $(OBJ_DIR)/%.o: %.c
 
 $(WIN_OBJ_DIR)/%.o: %.c
 	@[ -d $(WIN_OBJ_DIR) ] || mkdir -p $(WIN_OBJ_DIR)
-	$(WIN_CROSS)$(CC) $(CFLAGS) -o $@ -c $<
+	$(CROSS)$(CC) $(CFLAGS) -o $@ -c $<
 
 $(TARGET): $(OBJ_FILES)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(TARGET).exe: $(WIN_OBJ_FILES)
-	$(WIN_CROSS)$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(CROSS)$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 mio0: libmio0.c libmio0.h
 	$(CC) -DMIO0_TEST $(CFLAGS) -o $@ $<
 
 clean:
-	rm -f $(TARGET) $(TARGET).exe $(OBJ_FILES) $(WIN_OBJ_FILES) $(DEP_FILES)
+	rm -f $(TARGET) $(TARGET).exe $(OBJ_FILES) $(WIN_OBJ_FILES) $(DEP_FILES) $(WIN_DEP_FILES)
 	-@[ -d $(OBJ_DIR) ] && rmdir --ignore-fail-on-non-empty $(OBJ_DIR)
 	-@[ -d $(WIN_OBJ_DIR) ] && rmdir --ignore-fail-on-non-empty $(WIN_OBJ_DIR)
 
