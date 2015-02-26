@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "libmio0.h"
 #include "libsm64.h"
 #include "utils.h"
 
@@ -37,27 +36,6 @@ static void print_usage(void)
          " EXT_FILE     output extended ROM file (default: replaces input extension with .ext.z64)\n",
          default_config.ext_size, default_config.padding, default_config.alignment);
    exit(1);
-}
-
-// generate an output file name from input name by replacing
-// file extension with .ext.z64
-static void generate_filename(const char *in_name, char *out_name)
-{
-   char tmp_name[FILENAME_MAX];
-   int len;
-   int i;
-   strcpy(tmp_name, in_name);
-   len = strlen(tmp_name);
-   for (i = len - 1; i > 0; i--) {
-      if (tmp_name[i] == '.') {
-         break;
-      }
-   }
-   if (i <= 0) {
-      i = len;
-   }
-   tmp_name[i] = '\0';
-   sprintf(out_name, "%s.ext.z64", tmp_name);
 }
 
 // parse command line arguments
@@ -138,7 +116,7 @@ int main(int argc, char *argv[])
    parse_arguments(argc, argv, &config);
    if (config.ext_filename == NULL) {
       config.ext_filename = ext_filename;
-      generate_filename(config.in_filename, config.ext_filename);
+      generate_filename(config.in_filename, config.ext_filename, "ext.z64");
    }
    config.ext_size *= MB;
    config.padding *= KB;

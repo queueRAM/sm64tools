@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "utils.h"
 
@@ -73,5 +74,24 @@ long write_file(const char *file_name, unsigned char *data, long length)
    bytes_written = fwrite(data, 1, length, out);
    fclose(out);
    return bytes_written;
+}
+
+void generate_filename(const char *in_name, char *out_name, char *extension)
+{
+   char tmp_name[FILENAME_MAX];
+   int len;
+   int i;
+   strcpy(tmp_name, in_name);
+   len = strlen(tmp_name);
+   for (i = len - 1; i > 0; i--) {
+      if (tmp_name[i] == '.') {
+         break;
+      }
+   }
+   if (i <= 0) {
+      i = len;
+   }
+   tmp_name[i] = '\0';
+   sprintf(out_name, "%s.%s", tmp_name, extension);
 }
 

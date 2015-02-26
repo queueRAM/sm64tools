@@ -44,6 +44,10 @@ extern int g_verbosity;
 
 // functions
 
+// determine if value is power of 2
+// returns 1 if val is power of 2, 0 otherwise
+int is_power2(unsigned int val);
+
 // print buffer as hex bytes
 // buf: buffer to read bytes from
 // length: length of buffer to print
@@ -60,8 +64,10 @@ long read_file(const char *file_name, unsigned char **data);
 // returns number of bytes written out or -1 on failure
 long write_file(const char *file_name, unsigned char *data, long length);
 
-// determine if value is power of 2
-// returns 1 if val is power of 2, 0 otherwise
-int is_power2(unsigned int val);
+// generate an output file name from input name by replacing file extension
+// in_name: input file name
+// out_name: buffer to write output name in
+// extension: new file extension to use
+void generate_filename(const char *in_name, char *out_name, char *extension);
 
 #endif // UTILS_H_
