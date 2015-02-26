@@ -34,8 +34,8 @@ int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end);
 // encode MIO0 data in memory
 // in: buffer containing raw data
 // out: buffer for MIO0 data allocated by this function
-// returns size of output buffer
-int mio0_encode(const unsigned char *in, unsigned int length, unsigned char **out);
+// returns size of compressed data in out, including MIO0 header
+int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out);
 
 int mio0_decode_file(const char *in_file, unsigned long offset, const char *out_file);
 

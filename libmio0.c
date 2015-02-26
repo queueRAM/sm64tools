@@ -26,26 +26,49 @@ static void PUT_BIT(unsigned char *buf, int bit, int val)
 // returns max length of matching stream (0 if none found)
 static int find_longest(const unsigned char *buf, int start_offset, int max_search, int *found_offset)
 {
-   int length = 0;
+   int best_length = 0;
    int best_offset = 0;
-   int i, j;
+   int cur_length;
+   int search_len;
+   int off, i;
+
+   // buf
+   //  |    off        start                  max
+   //  V     |+i->       |+i->                 |
+   //  |--------------raw-data-----------------|
+   //        |+i->       |      |+i->
+   //                       +cur_length
 
    // check at most the past 4096 values
-   for (i = MAX(start_offset - 4096, 0); i <= start_offset - 2; i++) {
-      for (j = 0; j < MIN(max_search, start_offset - i); j++) {
-         if (buf[start_offset + j] != buf[i + j]) {
+   for (off = MAX(start_offset - 4096, 0); off < start_offset; off++) {
+      // check at most requested max or up until start
+      search_len = MIN(max_search, start_offset - off);
+      for (i = 0; i < search_len; i++) {
+         if (buf[start_offset + i] != buf[off + i]) {
             break;
          }
       }
-      if (j > length) {
-         best_offset = start_offset - i;
-         length = j;
+      cur_length = i;
+      // if matched up until start, continue matching in already matched parts
+      if (cur_length == search_len) {
+         // check at most requested max less current length
+         search_len = max_search - cur_length;
+         for (i = 0; i < search_len; i++) {
+            if (buf[start_offset + cur_length + i] != buf[off + i]) {
+               break;
+            }
+         }
+         cur_length += i;
+      }
+      if (cur_length > best_length) {
+         best_offset = start_offset - off;
+         best_length = cur_length;
       }
    }
 
    // return best reverse offset and length (may be 0)
    *found_offset = best_offset;
-   return length;
+   return best_length;
 }
 
 // decode MIO0 header
@@ -101,7 +124,7 @@ int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end)
 
    // decode data
    while (bytes_written < head.dest_size) {
-      if (GET_BIT(&in[16], bit_idx)) {
+      if (GET_BIT(&in[MIO0_HEADER_LENGTH], bit_idx)) {
          // 1 - pull uncompressed data
          out[bytes_written] = in[head.uncomp_offset + uncomp_idx];
          bytes_written++;
@@ -133,12 +156,11 @@ int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end)
 // in: buffer containing raw data
 // out: buffer for MIO0 data allocated by this function
 // returns size of output buffer
-int mio0_encode(const unsigned char *in, unsigned int length, unsigned char **out)
+int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out)
 {
    unsigned char *bit_buf;
    unsigned char *comp_buf;
    unsigned char *uncomp_buf;
-   unsigned char *out_buf;
    unsigned int comp_offset;
    unsigned int uncomp_offset;
    unsigned int bytes_proc = 0;
@@ -154,12 +176,11 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char **ou
 
    // encode data
    while (bytes_proc < length) {
-      // special case for first 2 bytes
-      if (bytes_proc < 2) {
-         memcpy(&uncomp_buf[uncomp_idx], in, 2);
-         uncomp_idx += 2;
-         bytes_proc += 2;
-         PUT_BIT(bit_buf, bit_idx++, 1);
+      // special case for first byte
+      if (bytes_proc < 1) {
+         uncomp_buf[uncomp_idx] = in[0];
+         uncomp_idx += 1;
+         bytes_proc += 1;
          PUT_BIT(bit_buf, bit_idx++, 1);
       } else {
          int offset;
@@ -191,17 +212,19 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char **ou
    bytes_written = uncomp_offset + uncomp_idx;
 
    // output header
-   out_buf = malloc(bytes_written);
-   memcpy(out_buf, "MIO0", 4);
-   write_u32_be(&out_buf[4], length);
-   write_u32_be(&out_buf[8], comp_offset);
-   write_u32_be(&out_buf[12], uncomp_offset);
+   memcpy(out, "MIO0", 4);
+   write_u32_be(&out[4], length);
+   write_u32_be(&out[8], comp_offset);
+   write_u32_be(&out[12], uncomp_offset);
    // output data
-   memcpy(&out_buf[MIO0_HEADER_LENGTH], bit_buf, ((bit_idx + 7) / 8));
-   memcpy(&out_buf[comp_offset], comp_buf, comp_idx);
-   memcpy(&out_buf[uncomp_offset], uncomp_buf, uncomp_idx);
+   memcpy(&out[MIO0_HEADER_LENGTH], bit_buf, ((bit_idx + 7) / 8));
+   memcpy(&out[comp_offset], comp_buf, comp_idx);
+   memcpy(&out[uncomp_offset], uncomp_buf, uncomp_idx);
 
-   *out = out_buf;
+   // free allocated buffers
+   free(bit_buf);
+   free(comp_buf);
+   free(uncomp_buf);
 
    return bytes_written;
 }
@@ -254,7 +277,7 @@ int mio0_decode_file(const char *in_file, unsigned long offset, const char *out_
    }
 
    // open output file
-   out = fopen(out_file, "w");
+   out = fopen(out_file, "wb");
    if (out == NULL) {
       ret_val = 4;
       goto free_all;
@@ -310,8 +333,11 @@ int mio0_encode_file(const char *in_file, const char *out_file)
       goto free_all;
    }
 
+   // allocate worst case length
+   out_buf = malloc(MIO0_HEADER_LENGTH + ((file_size+7)/8) + file_size);
+
    // compress data in MIO0 format
-   bytes_encoded = mio0_encode(in_buf, file_size, &out_buf);
+   bytes_encoded = mio0_encode(in_buf, file_size, out_buf);
 
    // open output file
    out = fopen(out_file, "wb");
