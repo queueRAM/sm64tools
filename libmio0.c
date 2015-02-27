@@ -161,6 +161,7 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
    unsigned char *bit_buf;
    unsigned char *comp_buf;
    unsigned char *uncomp_buf;
+   unsigned int bit_length;
    unsigned int comp_offset;
    unsigned int uncomp_offset;
    unsigned int bytes_proc = 0;
@@ -170,7 +171,7 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
    int uncomp_idx = 0;
 
    // allocate some temporary buffers worst case size
-   bit_buf = malloc(length / 8); // 1-bit/byte
+   bit_buf = malloc((length + 7) / 8); // 1-bit/byte
    comp_buf = malloc(length); // 16-bits/2bytes
    uncomp_buf = malloc(length); // all uncompressed
 
@@ -184,16 +185,16 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
          PUT_BIT(bit_buf, bit_idx++, 1);
       } else {
          int offset;
-         int longest_string;
-         longest_string = find_longest(in, bytes_proc, MIN(length - bytes_proc, 18), &offset);
-         if (longest_string > 2) {
+         int longest_match;
+         longest_match = find_longest(in, bytes_proc, MIN(length - bytes_proc, 18), &offset);
+         if (longest_match > 2) {
             // compress
-            comp_buf[comp_idx] = (((longest_string - 3) & 0x0F) << 4) | 
+            comp_buf[comp_idx] = (((longest_match - 3) & 0x0F) << 4) |
                                  (((offset - 1) >> 8) & 0x0F);
             comp_buf[comp_idx + 1] = (offset - 1) & 0xFF;
             comp_idx += 2;
             PUT_BIT(bit_buf, bit_idx, 0);
-            bytes_proc += longest_string;
+            bytes_proc += longest_match;
          } else {
             // uncompress
             uncomp_buf[uncomp_idx] = in[bytes_proc];
@@ -207,7 +208,9 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
 
    // compute final sizes and offsets
    // +7 so int division accounts for all bits
-   comp_offset = ((bit_idx + 7) / 8) + MIO0_HEADER_LENGTH;
+   bit_length = ((bit_idx + 7) / 8);
+   // compressed data >= 2 bytes after bits and aligned to 4-byte boundary
+   comp_offset = ALIGN(MIO0_HEADER_LENGTH + bit_length + 2, 4);
    uncomp_offset = comp_offset + comp_idx;
    bytes_written = uncomp_offset + uncomp_idx;
 
@@ -217,7 +220,7 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
    write_u32_be(&out[8], comp_offset);
    write_u32_be(&out[12], uncomp_offset);
    // output data
-   memcpy(&out[MIO0_HEADER_LENGTH], bit_buf, ((bit_idx + 7) / 8));
+   memcpy(&out[MIO0_HEADER_LENGTH], bit_buf, bit_length);
    memcpy(&out[comp_offset], comp_buf, comp_idx);
    memcpy(&out[uncomp_offset], uncomp_buf, uncomp_idx);
 

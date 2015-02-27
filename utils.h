@@ -12,6 +12,9 @@
 #define MIN(A_, B_) ((A_) < (B_) ? (A_) : (B_))
 #define MAX(A_, B_) ((A_) > (B_) ? (A_) : (B_))
 
+// align value to N-byte boundary
+#define ALIGN(VAL_, ALIGNMENT_) (((VAL_) + ((ALIGNMENT_) - 1)) & ~((ALIGNMENT_) - 1))
+
 // read/write u32/16 big/little endian
 #define read_u32_be(buf) (unsigned int)(((buf)[0] << 24) + ((buf)[1] << 16) + ((buf)[2] << 8) + ((buf)[3]))
 #define read_u32_le(buf) (unsigned int)(((buf)[1] << 24) + ((buf)[0] << 16) + ((buf)[3] << 8) + ((buf)[2]))
