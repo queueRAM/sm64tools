@@ -1,11 +1,16 @@
 ################ Target Executable and Sources ###############
 
-TARGET     := sm64extend
+EXTEND_TARGET := sm64extend
+SHRINK_TARGET := sm64shrink
+SM64_LIB      := libsm64.a
 
-SRC_FILES  := libmio0.c    \
-              libsm64.c    \
-              sm64extend.c \
-              utils.c
+LIB_SRC_FILES  := libmio0.c    \
+                  libsm64.c    \
+                  utils.c
+
+EXTEND_SRC_FILES := sm64extend.c
+
+SHRINK_SRC_FILES := sm64shrink.c
 
 OBJ_DIR     = ./obj
 
@@ -13,9 +18,10 @@ OBJ_DIR     = ./obj
 
 WIN64_CROSS = x86_64-w64-mingw32-
 WIN32_CROSS = i686-w64-mingw32-
-CROSS     = $(WIN32_CROSS)
-CC        = gcc
+#CROSS     = $(WIN32_CROSS)
+CC        = $(CROSS)gcc
 LD        = $(CC)
+AR        = $(CROSS)ar
 
 INCLUDES  = 
 DEFS      = 
@@ -24,39 +30,40 @@ CFLAGS    = -Wall -Wextra -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(
 LDFLAGS   = -s -Wl,--gc-sections
 LIBS      = 
 
-OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(SRC_FILES:.c=.o))
+LIB_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(LIB_SRC_FILES:.c=.o))
+EXTEND_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(EXTEND_SRC_FILES:.c=.o))
+SHRINK_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(SHRINK_SRC_FILES:.c=.o))
+OBJ_FILES = $(LIB_OBJ_FILES) $(EXTEND_OBJ_FILES) $(SHRINK_OBJ_FILES)
 DEP_FILES = $(OBJ_FILES:.o=.d)
 
-WIN_OBJ_DIR = $(OBJ_DIR)_win
-WIN_OBJ_FILES = $(addprefix $(WIN_OBJ_DIR)/,$(SRC_FILES:.c=.o))
-WIN_DEP_FILES = $(WIN_OBJ_FILES:.o=.d)
 ######################## Targets #############################
 
 default: all
 
-all: $(TARGET)
+all: $(EXTEND_TARGET) $(SHRINK_TARGET)
 
 $(OBJ_DIR)/%.o: %.c
 	@[ -d $(OBJ_DIR) ] || mkdir -p $(OBJ_DIR)
 	$(CC) $(CFLAGS) -o $@ -c $<
 
-$(WIN_OBJ_DIR)/%.o: %.c
-	@[ -d $(WIN_OBJ_DIR) ] || mkdir -p $(WIN_OBJ_DIR)
-	$(CROSS)$(CC) $(CFLAGS) -o $@ -c $<
-
-$(TARGET): $(OBJ_FILES)
+$(EXTEND_TARGET): $(EXTEND_OBJ_FILES) $(SM64_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-$(TARGET).exe: $(WIN_OBJ_FILES)
-	$(CROSS)$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+$(SHRINK_TARGET): $(SHRINK_OBJ_FILES) $(SM64_LIB)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+$(SM64_LIB): $(LIB_OBJ_FILES)
+	rm -f $@
+	$(AR) rcs $@ $^
 
 mio0: libmio0.c libmio0.h
 	$(CC) -DMIO0_TEST $(CFLAGS) -o $@ $<
 
 clean:
-	rm -f $(TARGET) $(TARGET).exe $(OBJ_FILES) $(WIN_OBJ_FILES) $(DEP_FILES) $(WIN_DEP_FILES)
+	rm -f $(OBJ_FILES) $(DEP_FILES) $(SM64_LIB) mio0
+	rm -f $(EXTEND_TARGET) $(EXTEND_TARGET).exe
+	rm -f $(SHRINK_TARGET) $(SHRINK_TARGET).exe
 	-@[ -d $(OBJ_DIR) ] && rmdir --ignore-fail-on-non-empty $(OBJ_DIR)
-	-@[ -d $(WIN_OBJ_DIR) ] && rmdir --ignore-fail-on-non-empty $(WIN_OBJ_DIR)
 
 .PHONY: all clean default
 

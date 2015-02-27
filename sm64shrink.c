@@ -5,37 +5,35 @@
 #include "libsm64.h"
 #include "utils.h"
 
-#define SM64EXTEND_VERSION "0.2"
+#define SM64SHRINK_VERSION "0.1"
 
 // default configuration
 static const sm64_config_t default_config = 
 {
    NULL, // input filename
-   NULL, // extended filename
-   64,   // extended size
-   32,   // MIO0 padding
-   1,    // MIO0 alignment
-   0,    // fill old MIO0 blocks
-   0,    // compress: unused in extend
+   NULL, // output filename
+   0,    // output size: unused in shrink
+   0,    // MIO0 padding: unused in shrink
+   16,   // MIO0 alignment
+   0,    // TODO: fill old MIO0 blocks
+   0,    // compress all MIO0 blocks
 };
 
 static void print_usage(void)
 {
-   ERROR("Usage: sm64extend [-s SIZE] [-p PADDING] [-a ALIGNMENT] [-f] [-v] FILE [EXT_FILE]\n"
+   ERROR("Usage: sm64shrink [-c] [-v] FILE [OUT_FILE]\n"
          "\n"
-         "sm64extend v" SM64EXTEND_VERSION ": Super Mario 64 ROM extender\n"
+         "sm64shrink v" SM64SHRINK_VERSION ": Super Mario 64 ROM shrinker\n"
          "\n"
          "Optional arguments:\n"
-         " -s SIZE      size of the extended ROM in MB (default: %d)\n"
-         " -p PADDING   padding to insert between MIO0 blocks in KB (default: %d)\n"
          " -a ALIGNMENT byte boundary to align MIO0 blocks (default: %d)\n"
-         " -f           fill old MIO0 blocks with 0x01\n"
+         " -c           compress all blocks using MIO0\n"
          " -v           verbose progress output\n"
          "\n"
          "File arguments:\n"
          " FILE         input ROM file\n"
-         " EXT_FILE     output extended ROM file (default: replaces input extension with .ext.z64)\n",
-         default_config.ext_size, default_config.padding, default_config.alignment);
+         " OUT_FILE     output shrunk ROM file (default: replaces input extension with .out.z64)\n",
+         default_config.alignment);
    exit(1);
 }
 
@@ -61,20 +59,8 @@ static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
                   exit(2);
                }
                break;
-            case 'f':
-               config->fill = 1;
-               break;
-            case 'p':
-               if (++i >= argc) {
-                  print_usage();
-               }
-               config->padding = strtoul(argv[i], NULL, 0);
-               break;
-            case 's':
-               if (++i >= argc) {
-                  print_usage();
-               }
-               config->ext_size = strtoul(argv[i], NULL, 0);
+            case 'c':
+               config->compress = 1;
                break;
             case 'v':
                g_verbosity = 1;
@@ -111,52 +97,41 @@ int main(int argc, char *argv[])
    unsigned char *out_buf = NULL;
    long in_size;
    long bytes_written;
+   int out_size;
 
    // get configuration from arguments
    config = default_config;
    parse_arguments(argc, argv, &config);
    if (config.ext_filename == NULL) {
       config.ext_filename = ext_filename;
-      generate_filename(config.in_filename, config.ext_filename, "ext.z64");
+      generate_filename(config.in_filename, config.ext_filename, "out.z64");
    }
-   config.ext_size *= MB;
-   config.padding *= KB;
 
    // read input file into memory
    in_size = read_file(config.in_filename, &in_buf);
    if (in_size <= 0) {
       ERROR("Error reading input file \"%s\"\n", config.in_filename);
       exit(1);
-   } else if (in_size > 8 * MB) {
-      // TODO: better checks to see if it has been extended
-      ERROR("This ROM is already extended!\n");
-      exit(1);
    }
 
    // TODO: confirm valid SM64
-   // if necessary, swap bytes
-   if (in_buf[0] == 0x37)  {
-      swap_bytes(in_buf, in_size);
-   }
 
    // allocate output memory
-   out_buf = malloc(config.ext_size);
+   out_buf = malloc(in_size);
 
-   // copy file from input to output
-   memcpy(out_buf, in_buf, in_size);
+   // copy base file from input to output
+   // TODO: hardcoded length
+   memcpy(out_buf, in_buf, 8*MB);
 
-   // fill new space with 0x01
-   memset(&out_buf[in_size], 0x01, config.ext_size - in_size);
-
-   // decode SM64 MIO0 files and adjust pointers
-   sm64_decompress_mio0(&config, in_buf, in_size, out_buf);
+   // compact the SM64 MIO0 files and adjust pointers
+   out_size = sm64_compress_mio0(&config, in_buf, in_size, out_buf);
 
    // update N64 header CRC
    sm64_update_checksums(out_buf);
 
    // write to output file
-   bytes_written = write_file(config.ext_filename, out_buf, config.ext_size);
-   if (bytes_written < (long)config.ext_size) {
+   bytes_written = write_file(config.ext_filename, out_buf, out_size);
+   if (bytes_written < out_size) {
       ERROR("Error writing bytes to output file \"%s\"\n", config.ext_filename);
       exit(1);
    }
