@@ -38,8 +38,8 @@
     putchar(' '); \
   } while(0)
 
-// Visual Studio compatibility
-#if defined _MSC_VER
+// Windows compatibility
+#if defined(_MSC_VER) || defined(__MINGW32__)
   #include <direct.h>
   #define mkdir(DIR_, PERM_) _mkdir(DIR_)
 #endif
