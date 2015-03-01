@@ -60,7 +60,7 @@ mio0tool: libmio0.c libmio0.h
 	$(CC) -DMIO0_TEST $(CFLAGS) -o $@ $<
 
 clean:
-	rm -f $(OBJ_FILES) $(DEP_FILES) $(SM64_LIB) mio0
+	rm -f $(OBJ_FILES) $(DEP_FILES) $(SM64_LIB) mio0tool
 	rm -f $(EXTEND_TARGET) $(EXTEND_TARGET).exe
 	rm -f $(SHRINK_TARGET) $(SHRINK_TARGET).exe
 	-@[ -d $(OBJ_DIR) ] && rmdir --ignore-fail-on-non-empty $(OBJ_DIR)
