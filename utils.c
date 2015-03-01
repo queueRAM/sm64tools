@@ -49,13 +49,19 @@ long read_file(const char *file_name, unsigned char **data)
    // allocate buffer to read from offset to end of file
    fseek(in, 0, SEEK_END);
    file_size = ftell(in);
+
+   // sanity check
+   if (file_size > 256*MB) {
+      return -2;
+   }
+
    in_buf = malloc(file_size);
    fseek(in, 0, SEEK_SET);
 
    // read bytes
    bytes_read = fread(in_buf, 1, file_size, in);
    if (bytes_read != file_size) {
-      return -2;
+      return -3;
    }
 
    fclose(in);

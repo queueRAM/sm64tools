@@ -297,6 +297,23 @@ static void sm64_calc_checksums(unsigned char *buf, unsigned int cksum[]) {
    cksum[1] = s0;
 }
 
+int sm64_rom_type(unsigned char *buf, unsigned int length)
+{
+   const unsigned char bs[] = {0x37, 0x80, 0x40, 0x12};
+   const unsigned char be[] = {0x80, 0x37, 0x12, 0x40};
+   if (!memcmp(buf, bs, sizeof(bs)) && length == (8*MB)) {
+      return 1; // byte-swapped
+   }
+   if (!memcmp(buf, be, sizeof(be))) {
+      if (length == 8*MB) {
+         return 2; // big-endian
+      } else if (length > 8*MB) {
+         return 0; // already extended
+      }
+   }
+   return -1; // invalid
+}
+
 void sm64_decompress_mio0(const sm64_config_t *config,
                           unsigned char *in_buf,
                           unsigned int in_length,

@@ -1,5 +1,5 @@
-#ifndef SM64_MODS_H_
-#define SM64_MODS_H_
+#ifndef LIBSM64_H_
+#define LIBSM64_H_
 
 #define MIO0_DIR "./mio0/"
 
@@ -15,6 +15,16 @@ typedef struct
    char compress;
    char dump;
 } sm64_config_t;
+
+// determine ROM type based on data
+// buf: buffer containing raw SM64 ROM file data
+// length: length of in
+// returns values:
+//   -1: not a valid SM64 ROM
+//    0: already extended SM64 ROM
+//    1: SM64 ROM in byte-swapped (BADC) format
+//    2: SM64 ROM in big-endian (ABCD) format
+int sm64_rom_type(unsigned char *buf, unsigned int length);
 
 // find and decompress all MIO0 blocks
 // config: configuration to determine alignment, padding and size
@@ -42,4 +52,4 @@ int sm64_compress_mio0(const sm64_config_t *config,
 // checksums are written into the buffer
 void sm64_update_checksums(unsigned char *buf);
 
-#endif // SM64_MODS_H_
+#endif // LIBSM64_H_

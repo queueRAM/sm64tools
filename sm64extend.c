@@ -22,7 +22,7 @@ static const sm64_config_t default_config =
 
 static void print_usage(void)
 {
-   ERROR("Usage: sm64extend [-s SIZE] [-p PADDING] [-a ALIGNMENT] [-d] [-f] [-v] FILE [EXT_FILE]\n"
+   ERROR("Usage: sm64extend [-s SIZE] [-p PADDING] [-a ALIGNMENT] [-d] [-f] [-v] FILE [OUT_FILE]\n"
          "\n"
          "sm64extend v" SM64EXTEND_VERSION ": Super Mario 64 ROM extender\n"
          "\n"
@@ -35,8 +35,8 @@ static void print_usage(void)
          " -v           verbose progress output\n"
          "\n"
          "File arguments:\n"
-         " FILE         input ROM file\n"
-         " EXT_FILE     output extended ROM file (default: replaces input extension with .ext.z64)\n",
+         " FILE        input ROM file\n"
+         " OUT_FILE    output ROM file (default: replaces FILE extension with .ext.z64)\n",
          default_config.ext_size, default_config.padding, default_config.alignment);
    exit(1);
 }
@@ -116,6 +116,7 @@ int main(int argc, char *argv[])
    unsigned char *out_buf = NULL;
    long in_size;
    long bytes_written;
+   int rom_type;
 
    // get configuration from arguments
    config = default_config;
@@ -137,15 +138,19 @@ int main(int argc, char *argv[])
    if (in_size <= 0) {
       ERROR("Error reading input file \"%s\"\n", config.in_filename);
       exit(1);
-   } else if (in_size > 8 * MB) {
-      // TODO: better checks to see if it has been extended
-      ERROR("This ROM is already extended!\n");
-      exit(1);
    }
 
-   // TODO: confirm valid SM64
-   // if necessary, swap bytes
-   if (in_buf[0] == 0x37)  {
+   // confirm valid SM64
+   rom_type = sm64_rom_type(in_buf, in_size);
+   if (rom_type < 1) {
+      ERROR("This does not appear to be a valid SM64 ROM\n");
+      exit(1);
+   } else if (rom_type == 0) {
+      ERROR("This ROM is already extended!\n");
+      exit(1);
+   } else if (rom_type == 1) {
+      // byte-swapped BADC format, swap to big-endian ABCD format for processing
+      INFO("Byte-swapping ROM\n");
       swap_bytes(in_buf, in_size);
    }
 
