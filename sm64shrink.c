@@ -17,17 +17,19 @@ static const sm64_config_t default_config =
    16,   // MIO0 alignment
    0,    // TODO: fill old MIO0 blocks
    0,    // compress all MIO0 blocks
+   0,    // TODO: dump
 };
 
 static void print_usage(void)
 {
-   ERROR("Usage: sm64shrink [-c] [-v] FILE [OUT_FILE]\n"
+   ERROR("Usage: sm64shrink [-c] [-d] [-v] FILE [OUT_FILE]\n"
          "\n"
          "sm64shrink v" SM64SHRINK_VERSION ": Super Mario 64 ROM shrinker\n"
          "\n"
          "Optional arguments:\n"
          " -a ALIGNMENT byte boundary to align MIO0 blocks (default: %d)\n"
          " -c           compress all blocks using MIO0\n"
+         " -d           dump MIO0 blocks to files in mio0 directory\n"
          " -v           verbose progress output\n"
          "\n"
          "File arguments:\n"
@@ -61,6 +63,9 @@ static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
                break;
             case 'c':
                config->compress = 1;
+               break;
+            case 'd':
+               config->dump = 1;
                break;
             case 'v':
                g_verbosity = 1;

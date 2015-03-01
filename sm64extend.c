@@ -17,11 +17,12 @@ static const sm64_config_t default_config =
    1,    // MIO0 alignment
    0,    // fill old MIO0 blocks
    0,    // compress: unused in extend
+   0,    // dump MIO0 blocks to files
 };
 
 static void print_usage(void)
 {
-   ERROR("Usage: sm64extend [-s SIZE] [-p PADDING] [-a ALIGNMENT] [-f] [-v] FILE [EXT_FILE]\n"
+   ERROR("Usage: sm64extend [-s SIZE] [-p PADDING] [-a ALIGNMENT] [-d] [-f] [-v] FILE [EXT_FILE]\n"
          "\n"
          "sm64extend v" SM64EXTEND_VERSION ": Super Mario 64 ROM extender\n"
          "\n"
@@ -29,6 +30,7 @@ static void print_usage(void)
          " -s SIZE      size of the extended ROM in MB (default: %d)\n"
          " -p PADDING   padding to insert between MIO0 blocks in KB (default: %d)\n"
          " -a ALIGNMENT byte boundary to align MIO0 blocks (default: %d)\n"
+         " -d           dump MIO0 blocks to files in mio0 directory\n"
          " -f           fill old MIO0 blocks with 0x01\n"
          " -v           verbose progress output\n"
          "\n"
@@ -60,6 +62,9 @@ static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
                   ERROR("Error: Alignment must be power of 2\n");
                   exit(2);
                }
+               break;
+            case 'd':
+               config->dump = 1;
                break;
             case 'f':
                config->fill = 1;
@@ -121,6 +126,11 @@ int main(int argc, char *argv[])
    }
    config.ext_size *= MB;
    config.padding *= KB;
+
+   // generate MIO0 directory
+   if (config.dump) {
+      make_dir(MIO0_DIR);
+   }
 
    // read input file into memory
    in_size = read_file(config.in_filename, &in_buf);

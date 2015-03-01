@@ -56,7 +56,7 @@ $(SM64_LIB): $(LIB_OBJ_FILES)
 	rm -f $@
 	$(AR) rcs $@ $^
 
-mio0: libmio0.c libmio0.h
+mio0tool: libmio0.c libmio0.h
 	$(CC) -DMIO0_TEST $(CFLAGS) -o $@ $<
 
 clean:

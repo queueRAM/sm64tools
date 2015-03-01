@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "utils.h"
 
@@ -95,3 +97,10 @@ void generate_filename(const char *in_name, char *out_name, char *extension)
    sprintf(out_name, "%s.%s", tmp_name, extension);
 }
 
+void make_dir(const char *dir_name)
+{
+   struct stat st = {0};
+   if (stat(dir_name, &st) == -1) {
+      mkdir(dir_name, 0755);
+   }
+}

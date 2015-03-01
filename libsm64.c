@@ -331,6 +331,14 @@ void sm64_decompress_mio0(const sm64_config_t *config,
          out_addr = (out_addr + align_add) & align_mask;
          length = mio0_decode(&in_buf[in_addr], &out_buf[out_addr], &end);
          if (length > 0) {
+            // dump MIO0 data and decompressed data to file
+            if (config->dump) {
+               char filename[FILENAME_MAX];
+               sprintf(filename, MIO0_DIR "/%08X.mio", in_addr);
+               write_file(filename, &in_buf[in_addr], end);
+               sprintf(filename, MIO0_DIR "/%08X", in_addr);
+               write_file(filename, &out_buf[out_addr], length);
+            }
             // 0x1A commands and ASM references need fake MIO0 header
             // relocate data and add MIO0 header with all uncompressed data
             if (ptr_table[i].command == 0x1A || ptr_table[i].command == 0xFF) {

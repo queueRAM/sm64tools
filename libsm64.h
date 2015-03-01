@@ -1,6 +1,8 @@
 #ifndef SM64_MODS_H_
 #define SM64_MODS_H_
 
+#define MIO0_DIR "./mio0/"
+
 // typedefs
 typedef struct
 {
@@ -11,6 +13,7 @@ typedef struct
    unsigned int alignment;
    char fill;
    char compress;
+   char dump;
 } sm64_config_t;
 
 // find and decompress all MIO0 blocks

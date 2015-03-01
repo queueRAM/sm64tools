@@ -73,4 +73,8 @@ long write_file(const char *file_name, unsigned char *data, long length);
 // extension: new file extension to use
 void generate_filename(const char *in_name, char *out_name, char *extension);
 
+// make a directory if it doesn't exist
+// dir_name: name of the directory
+void make_dir(const char *dir_name);
+
 #endif // UTILS_H_
