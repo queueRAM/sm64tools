@@ -38,6 +38,12 @@
     putchar(' '); \
   } while(0)
 
+// Visual Studio compatibility
+#if defined _MSC_VER
+  #include <direct.h>
+  #define mkdir(DIR_, PERM_) _mkdir(DIR_)
+#endif
+
 // global verbosity setting
 extern int g_verbosity;
 
