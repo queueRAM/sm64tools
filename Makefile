@@ -1,7 +1,7 @@
 ################ Target Executable and Sources ###############
 
 EXTEND_TARGET := sm64extend
-SHRINK_TARGET := sm64shrink
+COMPRESS_TARGET := sm64compress
 MIO0_TARGET   := mio0
 SM64_LIB      := libsm64.a
 
@@ -11,7 +11,7 @@ LIB_SRC_FILES  := libmio0.c    \
 
 EXTEND_SRC_FILES := sm64extend.c
 
-SHRINK_SRC_FILES := sm64shrink.c
+COMPRESS_SRC_FILES := sm64compress.c
 
 OBJ_DIR     = ./obj
 
@@ -33,15 +33,15 @@ LIBS      =
 
 LIB_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(LIB_SRC_FILES:.c=.o))
 EXTEND_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(EXTEND_SRC_FILES:.c=.o))
-SHRINK_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(SHRINK_SRC_FILES:.c=.o))
-OBJ_FILES = $(LIB_OBJ_FILES) $(EXTEND_OBJ_FILES) $(SHRINK_OBJ_FILES)
+COMPRESS_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(COMPRESS_SRC_FILES:.c=.o))
+OBJ_FILES = $(LIB_OBJ_FILES) $(EXTEND_OBJ_FILES) $(COMPRESS_OBJ_FILES)
 DEP_FILES = $(OBJ_FILES:.o=.d)
 
 ######################## Targets #############################
 
 default: all
 
-all: $(EXTEND_TARGET) $(SHRINK_TARGET) $(MIO0_TARGET)
+all: $(EXTEND_TARGET) $(COMPRESS_TARGET) $(MIO0_TARGET)
 
 $(OBJ_DIR)/%.o: %.c
 	@[ -d $(OBJ_DIR) ] || mkdir -p $(OBJ_DIR)
@@ -50,7 +50,7 @@ $(OBJ_DIR)/%.o: %.c
 $(EXTEND_TARGET): $(EXTEND_OBJ_FILES) $(SM64_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-$(SHRINK_TARGET): $(SHRINK_OBJ_FILES) $(SM64_LIB)
+$(COMPRESS_TARGET): $(COMPRESS_OBJ_FILES) $(SM64_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(SM64_LIB): $(LIB_OBJ_FILES)
@@ -63,7 +63,7 @@ $(MIO0_TARGET): libmio0.c libmio0.h
 clean:
 	rm -f $(OBJ_FILES) $(DEP_FILES) $(SM64_LIB) $(MIO0_TARGET)
 	rm -f $(EXTEND_TARGET) $(EXTEND_TARGET).exe
-	rm -f $(SHRINK_TARGET) $(SHRINK_TARGET).exe
+	rm -f $(COMPRESS_TARGET) $(COMPRESS_TARGET).exe
 	rm -f $(MIO0_TARGET) $(MIO0_TARGET).exe
 	-@[ -d $(OBJ_DIR) ] && rmdir --ignore-fail-on-non-empty $(OBJ_DIR)
 

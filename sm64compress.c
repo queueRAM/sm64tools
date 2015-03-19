@@ -5,15 +5,15 @@
 #include "libsm64.h"
 #include "utils.h"
 
-#define SM64SHRINK_VERSION "0.1"
+#define SM64COMPRESS_VERSION "0.1"
 
 // default configuration
 static const sm64_config_t default_config = 
 {
    NULL, // input filename
    NULL, // output filename
-   0,    // output size: unused in shrink
-   0,    // MIO0 padding: unused in shrink
+   0,    // output size: unused in compress
+   0,    // MIO0 padding: unused in compress
    16,   // MIO0 alignment
    0,    // TODO: fill old MIO0 blocks
    0,    // compress all MIO0 blocks
@@ -22,9 +22,9 @@ static const sm64_config_t default_config =
 
 static void print_usage(void)
 {
-   ERROR("Usage: sm64shrink [-c] [-d] [-v] FILE [OUT_FILE]\n"
+   ERROR("Usage: sm64compress [-c] [-d] [-v] FILE [OUT_FILE]\n"
          "\n"
-         "sm64shrink v" SM64SHRINK_VERSION ": Super Mario 64 ROM shrinker\n"
+         "sm64compress v" SM64COMPRESS_VERSION ": Super Mario 64 ROM compressor\n"
          "\n"
          "Optional arguments:\n"
          " -a ALIGNMENT byte boundary to align MIO0 blocks (default: %d)\n"

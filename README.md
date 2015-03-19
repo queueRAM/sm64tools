@@ -51,7 +51,7 @@ Pad 64 KB between blocks, align blocks to 16-byte boundaries, fill old MIO0 bloc
 sm64extend -p 64 -a 16 -f sm64.z64
 ```
 
-## sm64shrink
+## sm64compress
 Experimental Super Mario 64 ROM alignment and compression tool
  - packs all MIO0 blocks together, reducing unused space
  - optionally compresses MIO0 blocks (and converts 0x17 commands to 0x18)
@@ -59,9 +59,10 @@ Experimental Super Mario 64 ROM alignment and compression tool
  - reduces output ROM size to 4 MB boundary
  - updates assembly reference to MIO0 blocks
  - recalculates ROM header checksums
+
 ### Usage
 ```
-sm64shrink [-a ALIGNMENT] [-c] [-d] [-v] FILE [OUT_FILE]
+sm64compress [-a ALIGNMENT] [-c] [-d] [-v] FILE [OUT_FILE]
 ```
 Options:
  - <code>-a alignment</code> Byte boundary to align MIO0 blocks (default = 16).
