@@ -1,7 +1,7 @@
 #ifndef LIBSM64_H_
 #define LIBSM64_H_
 
-#define MIO0_DIR "./mio0/"
+#define MIO0_DIR "mio0files"
 
 // typedefs
 typedef struct

@@ -30,7 +30,7 @@ static void print_usage(void)
          " -s SIZE      size of the extended ROM in MB (default: %d)\n"
          " -p PADDING   padding to insert between MIO0 blocks in KB (default: %d)\n"
          " -a ALIGNMENT byte boundary to align MIO0 blocks (default: %d)\n"
-         " -d           dump MIO0 blocks to files in mio0 directory\n"
+         " -d           dump MIO0 blocks to files in 'mio0files' directory\n"
          " -f           fill old MIO0 blocks with 0x01\n"
          " -v           verbose progress output\n"
          "\n"

@@ -2,6 +2,7 @@
 
 EXTEND_TARGET := sm64extend
 SHRINK_TARGET := sm64shrink
+MIO0_TARGET   := mio0
 SM64_LIB      := libsm64.a
 
 LIB_SRC_FILES  := libmio0.c    \
@@ -40,7 +41,7 @@ DEP_FILES = $(OBJ_FILES:.o=.d)
 
 default: all
 
-all: $(EXTEND_TARGET) $(SHRINK_TARGET)
+all: $(EXTEND_TARGET) $(SHRINK_TARGET) $(MIO0_TARGET)
 
 $(OBJ_DIR)/%.o: %.c
 	@[ -d $(OBJ_DIR) ] || mkdir -p $(OBJ_DIR)
@@ -56,13 +57,14 @@ $(SM64_LIB): $(LIB_OBJ_FILES)
 	rm -f $@
 	$(AR) rcs $@ $^
 
-mio0tool: libmio0.c libmio0.h
-	$(CC) -DMIO0_TEST $(CFLAGS) -o $@ $<
+$(MIO0_TARGET): libmio0.c libmio0.h
+	$(CC) -DMIO0_TEST $(CFLAGS) $(LDFLAGS) -o $@ $<
 
 clean:
-	rm -f $(OBJ_FILES) $(DEP_FILES) $(SM64_LIB) mio0tool
+	rm -f $(OBJ_FILES) $(DEP_FILES) $(SM64_LIB) $(MIO0_TARGET)
 	rm -f $(EXTEND_TARGET) $(EXTEND_TARGET).exe
 	rm -f $(SHRINK_TARGET) $(SHRINK_TARGET).exe
+	rm -f $(MIO0_TARGET) $(MIO0_TARGET).exe
 	-@[ -d $(OBJ_DIR) ] && rmdir --ignore-fail-on-non-empty $(OBJ_DIR)
 
 .PHONY: all clean default
