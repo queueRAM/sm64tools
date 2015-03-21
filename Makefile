@@ -25,7 +25,7 @@ LD        = $(CC)
 AR        = $(CROSS)ar
 
 INCLUDES  = 
-DEFS      = -DMIO0_STATS
+DEFS      = 
 CFLAGS    = -Wall -Wextra -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(DEFS) -MMD
 
 LDFLAGS   = -s -Wl,--gc-sections
