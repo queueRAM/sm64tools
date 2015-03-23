@@ -1,7 +1,9 @@
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "utils.h"
 
@@ -16,12 +18,28 @@ int is_power2(unsigned int val)
    return (val == 1);
 }
 
-void print_hex(unsigned char *buf, int length)
+void fprint_hex(FILE *fp, unsigned char *buf, int length)
 {
    int i;
    for (i = 0; i < length; i++) {
-      print_byte(buf[i]);
+      fprint_byte(fp, buf[i]);
+      fputc(' ', fp);
    }
+}
+
+void fprint_hex_source(FILE *fp, unsigned char *buf, int length)
+{
+   int i;
+   for (i = 0; i < length; i++) {
+      if (i > 0) fputs(", ", fp);
+      fputs("0x", fp);
+      fprint_byte(fp, buf[i]);
+   }
+}
+
+void print_hex(unsigned char *buf, int length)
+{
+   fprint_hex(stdout, buf, length);
 }
 
 void swap_bytes(unsigned char *data, long length)
@@ -32,6 +50,27 @@ void swap_bytes(unsigned char *data, long length)
       tmp = data[i];
       data[i] = data[i+1];
       data[i+1] = tmp;
+   }
+}
+
+long filesize(const char *filename)
+{
+   struct stat st;
+
+   if (stat(filename, &st) == 0) {
+      return st.st_size;
+   }
+
+   return -1;
+}
+
+void touch_file(const char *filename)
+{
+   int fd;
+   fd = open(filename, O_WRONLY|O_CREAT|O_NOCTTY|O_NONBLOCK, 0666);
+   if (fd >= 0) {
+      utimensat(AT_FDCWD, filename, NULL, 0);
+      close(fd);
    }
 }
 
@@ -76,6 +115,7 @@ long write_file(const char *file_name, unsigned char *data, long length)
    // open output file
    out = fopen(file_name, "wb");
    if (out == NULL) {
+      perror(file_name);
       return -1;
    }
    bytes_written = fwrite(data, 1, length, out);

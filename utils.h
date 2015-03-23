@@ -31,12 +31,13 @@
 } while(0)
 
 // print nibbles and bytes
-#define print_nibble(NIB_) putchar((NIB_) < 10 ? ('0' + (NIB_)) : ('A' + (NIB_) - 0xA))
-#define print_byte(BYTE_) do { \
-    print_nibble((BYTE_) >> 4); \
-    print_nibble((BYTE_) & 0x0F); \
-    putchar(' '); \
+#define fprint_nibble(FP, NIB_) fputc((NIB_) < 10 ? ('0' + (NIB_)) : ('A' + (NIB_) - 0xA), FP)
+#define fprint_byte(FP, BYTE_) do { \
+    fprint_nibble(FP, (BYTE_) >> 4); \
+    fprint_nibble(FP, (BYTE_) & 0x0F); \
   } while(0)
+#define print_nibble(NIB_) fprint_nibble(stdout, NIB_)
+#define print_byte(BYTE_) fprint_byte(stdout, BYTE_)
 
 // Windows compatibility
 #if defined(_MSC_VER) || defined(__MINGW32__)
@@ -58,12 +59,22 @@ extern int g_verbosity;
 int is_power2(unsigned int val);
 
 // print buffer as hex bytes
+// fp: file pointer
 // buf: buffer to read bytes from
 // length: length of buffer to print
+void fprint_hex(FILE *fp, unsigned char *buf, int length);
+void fprint_hex_source(FILE *fp, unsigned char *buf, int length);
 void print_hex(unsigned char *buf, int length);
 
 // perform byteswapping to convert from v64 to z64 ordering
 void swap_bytes(unsigned char *data, long length);
+
+// get size of file without opening it;
+// returns file size or negative on error
+long filesize(const char *file_name);
+
+// update file timestamp to now, creating it if it doesn't exist
+void touch_file(const char *filename);
 
 // read entire contents of file into buffer
 // returns file size or negative on error
