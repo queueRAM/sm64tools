@@ -388,3 +388,95 @@ pngfile2rgba_close:
    return img;
 }
 
+
+#ifdef N64GRAPHICS_STANDALONE
+#include <libgen.h>
+#include <string.h>
+
+static void print_usage(void)
+{
+   ERROR("n64graphics <binfile> [png files]\n");
+}
+
+// decode offset, format, and depth based on filename: <offset>.<format><depth>.png
+// default if no format/depth specified, defaults to RGBA, 16
+static void get_image_info(char *filename, int *offset, img_format *format, int *depth)
+{
+   char *stroffset;
+   char *strformat;
+   unsigned int c;
+   int mode = 0;
+
+   // defaults
+   *offset = 0;
+   *format = IMG_FORMAT_RGBA;
+   *depth = 16;
+
+   // remove file extension and leading path
+   stroffset = basename(filename);
+   strformat = stroffset;
+   for (c = 0; c < strlen(stroffset); c++) {
+      switch (mode) {
+         case 0:
+            if (stroffset[c] == '.') {
+               stroffset[c] = '\0';
+               *offset = strtoul(stroffset, NULL, 0);
+               mode = 1;
+               strformat = &stroffset[c+1];
+               stroffset[c] = '.';
+            }
+            break;
+         case 1:
+            if (stroffset[c] == '.') {
+               stroffset[c] = '\0';
+               if (!strcmp("ia8", strformat)) {
+                  *format = IMG_FORMAT_IA;
+                  *depth = 8;
+               } else if (!strcmp("ia16", strformat)) {
+                  *format = IMG_FORMAT_IA;
+                  *depth = 16;
+               }
+               mode = 2;
+            }
+            break;
+      }
+   }
+}
+
+int main(int argc, char *argv[])
+{
+   char *binfilename;
+   rgba *img;
+   img_format format;
+   int offset, depth;
+   int width, height;
+   int i;
+
+   if (argc < 3) {
+      print_usage();
+      return 1;
+   }
+
+   binfilename = argv[1];
+
+   for (i = 2; i < argc; i++) {
+      // convert each PNG image to internal RGBA format
+      img = pngfile2rgba(argv[i], &width, &height);
+      if (img) {
+         get_image_info(argv[i], &offset, &format, &depth);
+         switch (format) {
+            case IMG_FORMAT_RGBA:
+               rgba2file(img, offset, width, height, binfilename);
+               break;
+            case IMG_FORMAT_IA:
+               ia2file(img, offset, width, height, depth, binfilename);
+               break;
+         }
+      } else {
+         exit(2);
+      }
+   }
+
+   return 0;
+}
+#endif // N64GRAPHICS_STANDALONE
