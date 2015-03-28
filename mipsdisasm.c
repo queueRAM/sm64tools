@@ -112,7 +112,6 @@ static void add_proc(proc_table *procs, unsigned int addr)
    if (find_proc(procs, addr) >= 0) {
       return;
    }
-   ERROR("Adding %08X\n", addr);
    procs->procedures[procs->count].start = addr;
    procs->count++;
 }
@@ -372,12 +371,6 @@ static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datale
 }
 
 
-// ram - rom = 0x80245000
-// span in rom appears to be at least from 0x0011dc to 0x0e6330 (nagra says 0x001000 to 0x100fff (0x80246000 to 0x80340fff))
-
-// ram - rom = 0x80283280
-// span in rom appears to be at least from 0x0f7728 to 0x0ff350 (nagra says 0x0f5580 to 0x108a10 (0x80378800 to 0x8038bc90))
-
 // mipsdisasm binary [offset] [length]
 // offset default: 0
 // length default: disassemble through instruction after next jr
@@ -471,25 +464,9 @@ int main(int argc, char *argv[])
          fprintf(stdout, "\n# missing section %X-%X (%06X-%06X) [%X]\n",
                last_end, ram_address, ram_to_rom(last_end), ram_to_rom(ram_address), ram_address - last_end);
       }
-      ERROR("Disassembling %08X (%06X)\n", ram_address, rom_offset);
       disassemble_proc(stdout, data, file_len, &procs.procedures[proc_idx]);
       last_end = procs.procedures[proc_idx].end;
       proc_idx++;
-   }
-
-   for (i = 0; i < procs.count; i++) {
-      char *name;
-      unsigned int ram_address;
-      unsigned int rom_start;
-      unsigned int rom_end;
-      ram_address = procs.procedures[i].start;
-      rom_start = ram_to_rom(ram_address);
-      rom_end   = ram_to_rom(procs.procedures[i].end);
-      int known_idx = known_index(ram_address);
-      if (known_idx >= 0) {
-         name = known_labels[known_idx].label;
-         ERROR("RANGE { 0x%06X, 0x%06X, Asm,    \"%s\" };\n", rom_start, rom_end, name);
-      }
    }
 
    free(data);
