@@ -5,6 +5,7 @@ COMPRESS_TARGET := sm64compress
 MIO0_TARGET   := mio0
 F3D_TARGET    := f3d
 N64GRAPHICS_TARGET := n64graphics
+MIPSDISASM_TARGET := mipsdisasm
 SM64_LIB      := libsm64.a
 
 LIB_SRC_FILES  := libmio0.c    \
@@ -16,6 +17,9 @@ EXTEND_SRC_FILES := sm64extend.c
 COMPRESS_SRC_FILES := sm64compress.c
 
 F3D_SRC_FILES := f3d.c
+
+MIPSDISASM_SRC_FILES := mipsdisasm.c \
+                        utils.c
 
 N64GRAPHICS_SRC_FILES := n64graphics.c \
                          utils.c
@@ -70,6 +74,9 @@ $(MIO0_TARGET): libmio0.c libmio0.h
 
 $(F3D_TARGET): $(F3D_OBJ_FILES) $(SM64_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+$(MIPSDISASM_TARGET): $(MIPSDISASM_SRC_FILES)
+	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@ -lcapstone
 
 $(N64GRAPHICS_TARGET): $(N64GRAPHICS_SRC_FILES)
 	$(CC) $(CFLAGS) -DN64GRAPHICS_STANDALONE $^ $(LDFLAGS) -o $@ -lpng -lz
