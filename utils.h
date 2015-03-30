@@ -64,9 +64,9 @@ int is_power2(unsigned int val);
 // fp: file pointer
 // buf: buffer to read bytes from
 // length: length of buffer to print
-void fprint_hex(FILE *fp, unsigned char *buf, int length);
-void fprint_hex_source(FILE *fp, unsigned char *buf, int length);
-void print_hex(unsigned char *buf, int length);
+void fprint_hex(FILE *fp, const unsigned char *buf, int length);
+void fprint_hex_source(FILE *fp, const unsigned char *buf, int length);
+void print_hex(const unsigned char *buf, int length);
 
 // perform byteswapping to convert from v64 to z64 ordering
 void swap_bytes(unsigned char *data, long length);
@@ -95,5 +95,10 @@ void generate_filename(const char *in_name, char *out_name, char *extension);
 // make a directory if it doesn't exist
 // dir_name: name of the directory
 void make_dir(const char *dir_name);
+
+// copy a file from src_name to dst_name. will not make directories
+// src_name: source file name
+// dst_name: destination file name
+long copy_file(const char *src_name, const char *dst_name);
 
 #endif // UTILS_H_

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <utime.h>
 
 #include "utils.h"
 
@@ -18,7 +19,7 @@ int is_power2(unsigned int val)
    return (val == 1);
 }
 
-void fprint_hex(FILE *fp, unsigned char *buf, int length)
+void fprint_hex(FILE *fp, const unsigned char *buf, int length)
 {
    int i;
    for (i = 0; i < length; i++) {
@@ -27,7 +28,7 @@ void fprint_hex(FILE *fp, unsigned char *buf, int length)
    }
 }
 
-void fprint_hex_source(FILE *fp, unsigned char *buf, int length)
+void fprint_hex_source(FILE *fp, const unsigned char *buf, int length)
 {
    int i;
    for (i = 0; i < length; i++) {
@@ -37,7 +38,7 @@ void fprint_hex_source(FILE *fp, unsigned char *buf, int length)
    }
 }
 
-void print_hex(unsigned char *buf, int length)
+void print_hex(const unsigned char *buf, int length)
 {
    fprint_hex(stdout, buf, length);
 }
@@ -67,9 +68,10 @@ long filesize(const char *filename)
 void touch_file(const char *filename)
 {
    int fd;
-   fd = open(filename, O_WRONLY|O_CREAT|O_NOCTTY|O_NONBLOCK, 0666);
+   //fd = open(filename, O_WRONLY|O_CREAT|O_NOCTTY|O_NONBLOCK, 0666);
+   fd = open(filename, O_WRONLY|O_CREAT, 0666);
    if (fd >= 0) {
-      utimensat(AT_FDCWD, filename, NULL, 0);
+      utime(filename, NULL);
       close(fd);
    }
 }
@@ -148,4 +150,23 @@ void make_dir(const char *dir_name)
    if (stat(dir_name, &st) == -1) {
       mkdir(dir_name, 0755);
    }
+}
+
+long copy_file(const char *src_name, const char *dst_name)
+{
+   unsigned char *buf;
+   long bytes_written;
+   long bytes_read;
+
+   bytes_read = read_file(src_name, &buf);
+
+   if (bytes_read > 0) {
+      bytes_written = write_file(dst_name, buf, bytes_read);
+      if (bytes_written != bytes_read) {
+         bytes_read = -1;
+      }
+      free(buf);
+   }
+
+   return bytes_read;
 }

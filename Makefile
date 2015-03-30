@@ -2,6 +2,7 @@
 
 EXTEND_TARGET := sm64extend
 COMPRESS_TARGET := sm64compress
+SPLIT_TARGET  := n64split
 MIO0_TARGET   := mio0
 F3D_TARGET    := f3d
 N64GRAPHICS_TARGET := n64graphics
@@ -24,6 +25,12 @@ MIPSDISASM_SRC_FILES := mipsdisasm.c \
 N64GRAPHICS_SRC_FILES := n64graphics.c \
                          utils.c
 
+SPLIT_SRC_FILES := config.c \
+                   libmio0.c \
+                   n64graphics.c \
+                   n64split.c \
+                   utils.c
+
 OBJ_DIR     = ./obj
 
 ##################### Compiler Options #######################
@@ -41,10 +48,12 @@ CFLAGS    = -Wall -Wextra -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(
 
 LDFLAGS   = -s -Wl,--gc-sections
 LIBS      = 
+SPLIT_LIBS = -lcapstone -lpng
 
 LIB_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(LIB_SRC_FILES:.c=.o))
 EXTEND_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(EXTEND_SRC_FILES:.c=.o))
 COMPRESS_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(COMPRESS_SRC_FILES:.c=.o))
+SPLIT_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(SPLIT_SRC_FILES:.c=.o))
 F3D_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(F3D_SRC_FILES:.c=.o))
 OBJ_FILES = $(LIB_OBJ_FILES) $(EXTEND_OBJ_FILES) $(COMPRESS_OBJ_FILES)
 DEP_FILES = $(OBJ_FILES:.o=.d)
@@ -64,6 +73,9 @@ $(EXTEND_TARGET): $(EXTEND_OBJ_FILES) $(SM64_LIB)
 
 $(COMPRESS_TARGET): $(COMPRESS_OBJ_FILES) $(SM64_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+$(SPLIT_TARGET): $(SPLIT_OBJ_FILES)
+	$(LD) $(LDFLAGS) -o $@ $^ $(SPLIT_LIBS)
 
 $(SM64_LIB): $(LIB_OBJ_FILES)
 	rm -f $@
