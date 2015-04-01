@@ -3,6 +3,7 @@
 EXTEND_TARGET := sm64extend
 COMPRESS_TARGET := sm64compress
 SPLIT_TARGET  := n64split
+CKSUM_TARGET  := n64cksum
 MIO0_TARGET   := mio0
 F3D_TARGET    := f3d
 N64GRAPHICS_TARGET := n64graphics
@@ -21,6 +22,8 @@ F3D_SRC_FILES := f3d.c
 
 MIPSDISASM_SRC_FILES := mipsdisasm.c \
                         utils.c
+
+CKSUM_SRC_FILES := n64cksum.c
 
 N64GRAPHICS_SRC_FILES := n64graphics.c \
                          utils.c
@@ -53,6 +56,7 @@ SPLIT_LIBS = -lcapstone -lpng
 LIB_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(LIB_SRC_FILES:.c=.o))
 EXTEND_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(EXTEND_SRC_FILES:.c=.o))
 COMPRESS_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(COMPRESS_SRC_FILES:.c=.o))
+CKSUM_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(CKSUM_SRC_FILES:.c=.o))
 SPLIT_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(SPLIT_SRC_FILES:.c=.o))
 F3D_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(F3D_SRC_FILES:.c=.o))
 OBJ_FILES = $(LIB_OBJ_FILES) $(EXTEND_OBJ_FILES) $(COMPRESS_OBJ_FILES)
@@ -62,7 +66,7 @@ DEP_FILES = $(OBJ_FILES:.o=.d)
 
 default: all
 
-all: $(EXTEND_TARGET) $(COMPRESS_TARGET) $(MIO0_TARGET)
+all: $(EXTEND_TARGET) $(COMPRESS_TARGET) $(MIO0_TARGET) $(CKSUM_TARGET) $(SPLIT_TARGET) $(F3D_TARGET)
 
 $(OBJ_DIR)/%.o: %.c
 	@[ -d $(OBJ_DIR) ] || mkdir -p $(OBJ_DIR)
@@ -90,6 +94,9 @@ $(F3D_TARGET): $(F3D_OBJ_FILES) $(SM64_LIB)
 $(MIPSDISASM_TARGET): $(MIPSDISASM_SRC_FILES)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@ -lcapstone
 
+$(CKSUM_TARGET): $(CKSUM_OBJ_FILES) $(SM64_LIB)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 $(N64GRAPHICS_TARGET): $(N64GRAPHICS_SRC_FILES)
 	$(CC) $(CFLAGS) -DN64GRAPHICS_STANDALONE $^ $(LDFLAGS) -o $@ -lpng -lz
 
@@ -97,7 +104,9 @@ clean:
 	rm -f $(OBJ_FILES) $(DEP_FILES) $(SM64_LIB) $(MIO0_TARGET)
 	rm -f $(EXTEND_TARGET) $(EXTEND_TARGET).exe
 	rm -f $(COMPRESS_TARGET) $(COMPRESS_TARGET).exe
+	rm -f $(CKSUM_TARGET) $(CKSUM_TARGET).exe
 	rm -f $(MIO0_TARGET) $(MIO0_TARGET).exe
+	rm -f $(SPLIT_TARGET) $(SPLIT_TARGET).exe
 	rm -f $(F3D_TARGET) $(F3D_TARGET).exe
 	-@[ -d $(OBJ_DIR) ] && rmdir --ignore-fail-on-non-empty $(OBJ_DIR)
 

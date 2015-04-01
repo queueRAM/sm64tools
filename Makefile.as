@@ -23,7 +23,7 @@ LDFLAGS = -Tn64.ld -Map $(BUILD_DIR)/sm64.map
 
 # N64 tools
 MIO0TOOL = ./tools/mio0
-CHKSUM64 = ./tools/chksum64
+N64CKSUM = ./tools/n64cksum
 N64GRAPHICS = ./tools/n64graphics
 EMULATOR = mupen64plus
 EMU_FLAGS = --noosd --verbose
@@ -44,7 +44,10 @@ clean:
 $(MIO0_DIR)/%.mio0: $(MIO0_DIR)/%.bin
 	$(MIO0TOOL) e $< 0 $@
 
-$(BUILD_DIR)/$(TARGET).o: gen/$(TARGET).s Makefile.as $(MAKEFILE_GEN) $(MIO0_FILES) $(LEVEL_FILES)
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
+$(BUILD_DIR)/$(TARGET).o: gen/$(TARGET).s Makefile.as $(MAKEFILE_GEN) $(MIO0_FILES) $(LEVEL_FILES) | $(BUILD_DIR)
 	$(AS) $(ASFLAGS) -o $@ $<
 
 $(BUILD_DIR)/$(TARGET).elf: $(BUILD_DIR)/$(TARGET).o n64.ld
@@ -55,8 +58,7 @@ $(BUILD_DIR)/$(TARGET).bin: $(BUILD_DIR)/$(TARGET).elf
 
 # final z64 updates checksum
 $(TARGET).gen.z64: $(BUILD_DIR)/$(TARGET).bin
-	cp $< $@
-	$(CKSUM64) $@
+	$(N64CKSUM) $< $@
 
 $(BUILD_DIR)/$(TARGET).gen.hex: $(TARGET).gen.z64
 	xxd $< > $@
