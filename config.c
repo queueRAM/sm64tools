@@ -346,6 +346,8 @@ int parse_config_file(const char *filename, rom_config *config)
                         tmptext.format = FORMAT_RGBA;
                      } else if (0 == strcmp("IA", toks[3])) {
                         tmptext.format = FORMAT_IA;
+                     } else if (0 == strcmp("skybox", toks[3])) {
+                        tmptext.format = FORMAT_SKYBOX;
                      } else {
                         fprintf(stderr, "%d: Error invalid TEXTURE format \"%s\"\n", line_count, toks[3]);
                         exit(1);

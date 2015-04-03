@@ -10,6 +10,7 @@ typedef enum
 {
    IMG_FORMAT_RGBA,
    IMG_FORMAT_IA,
+   IMG_FORMAT_SKYBOX,
 } img_format;
 
 rgba *file2rgba(char *filename, int offset, int width, int height)
@@ -237,6 +238,63 @@ ia2file_close:
    return 0;
 }
 
+int sky2file(rgba *img, int offset, int width, int height, char *filename)
+{
+   FILE *fp;
+   char *raw;
+   unsigned size = 0;
+   int tx, ty;
+   int n, m;
+   int i, j;
+
+   fp = fopen(filename, "r+b");
+   if (!fp) {
+      return -1;
+   }
+
+   if (fseek(fp, offset, SEEK_SET)) {
+      ERROR("Error reading input file\n");
+      goto sky2file_close;
+   }
+
+   size = 32*32 * 2; // 16-bit
+   raw = malloc(size);
+   if (!raw) {
+      ERROR("Error allocating %u bytes\n", size);
+      goto sky2file_close;
+   }
+
+   // upscale NxM 31x31 to NxM 32x32
+   m = width / 31;
+   n = height / 31;
+   for (ty = 0; ty < n; ty++) {
+      for (tx = 0; tx < m; tx++) {
+         for (j = 0; j < 32; j++) {
+            for (i = 0; i < 32; i++) {
+               char r, g, b, a;
+               int idx = width * ((31*ty + j) % height) + ((31*tx + i) % width);
+               int out_idx = 32*j + i;
+               r = img[idx].red >> 3;
+               g = img[idx].green >> 3;
+               b = img[idx].blue >> 3;
+               a = img[idx].alpha ? 0x1 : 0x0;
+               raw[out_idx*2]   = (r << 3) | (g >> 2);
+               raw[out_idx*2+1] = ((g & 0x3) << 6) | (b << 1) | a;
+            }
+         }
+         if (fwrite(raw, 1, size, fp) != size) {
+            ERROR("Error reading input file\n");
+         }
+      }
+   }
+
+   free(raw);
+sky2file_close:
+   fclose(fp);
+
+   return 0;
+}
+
 int rgba2png(rgba *img, int width, int height, char *pngname)
 {
    png_structp png_ptr = NULL;
@@ -435,6 +493,9 @@ static void get_image_info(char *filename, int *offset, img_format *format, int 
                } else if (!strcmp("ia16", strformat)) {
                   *format = IMG_FORMAT_IA;
                   *depth = 16;
+               } else if (!strcmp("skybox", strformat)) {
+                  *format = IMG_FORMAT_SKYBOX;
+                  *depth = 16;
                }
                mode = 2;
             }
@@ -470,6 +531,9 @@ int main(int argc, char *argv[])
                break;
             case IMG_FORMAT_IA:
                ia2file(img, offset, width, height, depth, binfilename);
+               break;
+            case IMG_FORMAT_SKYBOX:
+               sky2file(img, offset, width, height, binfilename);
                break;
          }
       } else {

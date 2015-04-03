@@ -581,7 +581,7 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
          case TYPE_LEVEL:
             // TODO: some level scripts can't be relocated yet
             if ((strcmp(sec->label, "game_over_level") == 0) ||
-                (strcmp(sec->label, "menu_power_level") == 0) ||
+                (strcmp(sec->label, "main_menu_level") == 0) ||
                 (strcmp(sec->label, "main_level_scripts") == 0)) {
                fprintf(fasm, "\n.global %s\n", sec->label);
                fprintf(fasm, "\n.global %s_end\n", sec->label);
@@ -707,6 +707,39 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
                         }
                         break;
                      }
+                     case FORMAT_SKYBOX:
+                     {
+                        // read in grid of MxN 32x32 tiles and save them as M*31xN*31 image
+                        rgba *img;
+                        unsigned int sky_offset = offset;
+                        int m, n;
+                        int tx, ty;
+                        m = w/32;
+                        n = h/32;
+                        img = malloc(w*h*sizeof(rgba));
+                        w -= m; // adjust for overlap
+                        h -= n;
+                        for (ty = 0; ty < n; ty++) {
+                           for (tx = 0; tx < m; tx++) {
+                              rgba *tile = file2rgba(binfilename, sky_offset, 32, 32);
+                              int cx, cy;
+                              for (cy = 0; cy < 31; cy++) {
+                                 for (cx = 0; cx < 31; cx++) {
+                                    int out_off = 31*w*ty + 31*tx + w*cy + cx;
+                                    int in_off = 32*cy+cx;
+                                    img[out_off] = tile[in_off];
+                                 }
+                              }
+                              free(tile);
+                              sky_offset += 32*32*2;
+                           }
+                        }
+                        sprintf(outfilepath, "%s/%s/0x%05X.skybox.png", TEXTURE_DIR, sec->label, offset);
+                        rgba2png(img, w, h, outfilepath);
+                        free(img);
+                        fprintf(fmake, " %s", outfilepath);
+                        break;
+                     }
                   }
                }
                fprintf(fmake, "\n\t$(N64GRAPHICS) $@ $^\n\n");
@@ -732,7 +765,7 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
          case TYPE_LEVEL:
             // TODO: some level scripts can't be relocated yet
             if ((strcmp(sec->label, "game_over_level") != 0) &&
-                (strcmp(sec->label, "menu_power_level") != 0) &&
+                (strcmp(sec->label, "main_menu_level") != 0) &&
                 (strcmp(sec->label, "main_level_scripts") != 0)) {
                FILE *flevel;
                char levelfilename[512];
