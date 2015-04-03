@@ -34,3 +34,7 @@ coin colors and texture replacement
 Thanks to cpuHacka101 for details on this
 http://www.smwcentral.net/?p=viewthread&t=58544
 
+## Skybox
+replace water skybox with night sky from Lylat System.
+
+1. copy skybox/0x00000.skybox.png to gen/textures/water\_skybox/
