@@ -354,6 +354,7 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
       }
 
       // fill gaps between regions
+      // TODO: small gaps just .byte?
       if (sec->start != last_end) {
          sprintf(outfilename, "%s/%s.%06X.bin", BIN_DIR, config->basename, last_end);
          write_file(outfilename, &data[last_end], sec->start - last_end);
@@ -596,6 +597,10 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
             // behaviors are done below
             fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
             break;
+         default:
+            ERROR("Don't know what to do with type %d\n", sec->type);
+            exit(1);
+            break;
       }
       last_end = sec->end;
    }
@@ -740,6 +745,9 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
                         fprintf(fmake, " %s", outfilepath);
                         break;
                      }
+                     default:
+                        ERROR("Don't know what to do with type %d\n", sec->type);
+                        exit(1);
                   }
                }
                fprintf(fmake, "\n\t$(N64GRAPHICS) $@ $^\n\n");

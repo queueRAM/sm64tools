@@ -51,7 +51,7 @@ CFLAGS    = -Wall -Wextra -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(
 
 LDFLAGS   = -s -Wl,--gc-sections
 LIBS      = 
-SPLIT_LIBS = -lcapstone -lpng
+SPLIT_LIBS = -lcapstone -lpng -lconfig
 
 LIB_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(LIB_SRC_FILES:.c=.o))
 EXTEND_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(EXTEND_SRC_FILES:.c=.o))
@@ -66,7 +66,7 @@ DEP_FILES = $(OBJ_FILES:.o=.d)
 
 default: all
 
-all: $(EXTEND_TARGET) $(COMPRESS_TARGET) $(MIO0_TARGET) $(CKSUM_TARGET) $(SPLIT_TARGET) $(F3D_TARGET)
+all: $(EXTEND_TARGET) $(COMPRESS_TARGET) $(MIO0_TARGET) $(CKSUM_TARGET) $(SPLIT_TARGET) $(F3D_TARGET) $(N64GRAPHICS_TARGET)
 
 $(OBJ_DIR)/%.o: %.c
 	@[ -d $(OBJ_DIR) ] || mkdir -p $(OBJ_DIR)
