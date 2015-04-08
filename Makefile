@@ -20,7 +20,8 @@ COMPRESS_SRC_FILES := sm64compress.c
 
 F3D_SRC_FILES := f3d.c
 
-MIPSDISASM_SRC_FILES := mipsdisasm.c \
+MIPSDISASM_SRC_FILES := config.c \
+                        mipsdisasm.c \
                         utils.c
 
 CKSUM_SRC_FILES := n64cksum.c
@@ -66,7 +67,7 @@ DEP_FILES = $(OBJ_FILES:.o=.d)
 
 default: all
 
-all: $(EXTEND_TARGET) $(COMPRESS_TARGET) $(MIO0_TARGET) $(CKSUM_TARGET) $(SPLIT_TARGET) $(F3D_TARGET) $(N64GRAPHICS_TARGET)
+all: $(EXTEND_TARGET) $(COMPRESS_TARGET) $(MIO0_TARGET) $(CKSUM_TARGET) $(SPLIT_TARGET) $(F3D_TARGET) $(N64GRAPHICS_TARGET) $(MIPSDISASM_TARGET)
 
 $(OBJ_DIR)/%.o: %.c
 	@[ -d $(OBJ_DIR) ] || mkdir -p $(OBJ_DIR)
@@ -92,7 +93,7 @@ $(F3D_TARGET): $(F3D_OBJ_FILES) $(SM64_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(MIPSDISASM_TARGET): $(MIPSDISASM_SRC_FILES)
-	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@ -lcapstone
+	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@ -lcapstone -lconfig
 
 $(CKSUM_TARGET): $(CKSUM_OBJ_FILES) $(SM64_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)

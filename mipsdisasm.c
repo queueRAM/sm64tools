@@ -5,9 +5,10 @@
 
 #include <capstone/capstone.h>
 
+#include "config.h"
 #include "utils.h"
 
-#include "known_addresses.h"
+#define DEFAULT_CONFIG "sm64.config"
 
 // typedefs
 
@@ -31,26 +32,14 @@ typedef struct _proc_table
    int count;
 } proc_table;
 
-// static functions
-static unsigned int ram_table[] =
-{
-   // start     end         ram-to-rom
-   0x80064040, 0x800646CF, 0x7FB78040, // 4EC000-4EC68F    690 
-   0x8007EF50, 0x8008460F, 0x7FE65150, // 219E00-21F4BF   56C0
-   0x80169F70, 0x8016EFEF, 0x7FEFFBD0, // 26A3A0-26F41F   5080
-   0x8016F000, 0x801B99DF, 0x7FF4FB40, // 21F4C0-269E9F  4A9E0
-   0x801B52E0, 0x801C0FEF, 0x800AC8A0, // 108A40-11474F   BD10
-   0x801EE0A0, 0x801F153F, 0x7FA3D720, // 7B0980-7B3E1F   34A0
-   0x80246000, 0x80345FFF, 0x80245000, // 001000-100FFF 100000
-   0x80378800, 0x8038BC8F, 0x80283280, // 0F5580-108A0F  13490
-};
+static rom_config config;
 
 static unsigned int ram_to_rom(unsigned int ram_addr)
 {
-   unsigned i;
-   for (i = 0; i < DIM(ram_table)/3; i++) {
-      if (ram_addr >= ram_table[i*3] && ram_addr <= ram_table[i*3+1]) {
-         return ram_addr - ram_table[i*3+2];
+   int i;
+   for (i = 0; i < config.ram_count; i++) {
+      if (ram_addr >= config.ram_table[i*3] && ram_addr <= config.ram_table[i*3+1]) {
+         return ram_addr - config.ram_table[i*3+2];
       }
    }
    return ram_addr;
@@ -58,9 +47,9 @@ static unsigned int ram_to_rom(unsigned int ram_addr)
 
 static int known_index(unsigned int ram_addr)
 {
-   unsigned i;
-   for (i = 0; i < DIM(known_labels); i++) {
-      if (ram_addr == known_labels[i].ram_addr) {
+   int i;
+   for (i = 0; i < config.label_count; i++) {
+      if (ram_addr == config.labels[i].ram_addr) {
          return i;
       }
    }
@@ -268,7 +257,7 @@ static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datale
    if (known_idx < 0) {
       sprintf(sec_name, "proc_%08X", ram_address);
    } else {
-      sprintf(sec_name, "%s", known_labels[known_idx].label);
+      sprintf(sec_name, "%s", config.labels[known_idx].name);
    }
 
    // perform disassembly
@@ -328,7 +317,7 @@ static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datale
                   if (known_idx < 0) {
                      fprintf(out, "proc_%08X", addr);
                   } else {
-                     fprintf(out, "%s", known_labels[known_idx].label);
+                     fprintf(out, "%s", config.labels[known_idx].name);
                   }
                } else if (insn[i].id == MIPS_INS_MTC0 || insn[i].id == MIPS_INS_MFC0) {
                   // workaround bug in capstone/LLVM
@@ -371,9 +360,9 @@ static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datale
 }
 
 
-// mipsdisasm binary [offset] [length]
-// offset default: 0
-// length default: disassemble through instruction after next jr
+// mipsdisasm binary [-c config] [offset ...]
+// config default: sm64.config
+// offset default: all labels in config
 int main(int argc, char *argv[])
 {
    long file_len;
@@ -383,11 +372,13 @@ int main(int argc, char *argv[])
    unsigned int last_end;
    unsigned int offset;
    proc_table procs;
+   int config_loaded = 0;
    int proc_idx;
+   int arg_start;
    int i;
 
    if (argc < 2) {
-      ERROR("usage: mipsdisasm BINARY [OFFSET ...]\n");
+      ERROR("usage: mipsdisasm BINARY [-c config] [OFFSET ...]\n");
       return EXIT_FAILURE;
    }
 
@@ -400,11 +391,35 @@ int main(int argc, char *argv[])
    memset(&procs, 0, sizeof(procs));
    procs.count = 0;
 
+   // check for config file
    if (argc > 2) {
-      for (i = 2; i < argc; i++) {
+      arg_start = 2;
+      if (argv[2][0] == '-' && argv[2][1] == 'c') {
+         if (argc > 3) {
+            if (parse_config_file(argv[3], &config)) {
+               ERROR("Error parsing config file '%s'\n", argv[3]);
+               return EXIT_FAILURE;
+            }
+            config_loaded = 1;
+         }
+         arg_start += 2;
+      }
+   }
+
+   // load default config
+   if (!config_loaded) {
+      if (parse_config_file(DEFAULT_CONFIG, &config)) {
+         ERROR("Error parsing config file '%s'\n", argv[3]);
+         return EXIT_FAILURE;
+      }
+   }
+
+   if (argc > arg_start) {
+      for (i = arg_start; i < argc; i++) {
          offset = strtoul(argv[i], NULL, 0);
          if (offset >= 0x80000000) {
             ram_address = offset;
+            // TODO: use config memory
             if (offset >= 0x80246000 && offset <= 0x80340fff) {
                rom_offset = offset - 0x80245000;
             } else if (offset >= 0x80378800 && offset <= 0x8038bc90) {
@@ -414,6 +429,7 @@ int main(int argc, char *argv[])
                return EXIT_FAILURE;
             }
          } else {
+            // TODO: use config memory
             rom_offset = offset;
             if (offset >= 0x001000 && offset <= 0x100FFF) {
                ram_address = offset + 0x80245000;
@@ -428,11 +444,12 @@ int main(int argc, char *argv[])
       }
    } else {
       // populate procedure list from list of known addresses
-      unsigned i;
-      for (i = 0; i < DIM(known_labels); i++) {
-         offset = known_labels[i].ram_addr;
+      int i;
+      for (i = 0; i < config.label_count; i++) {
+         offset = config.labels[i].ram_addr;
          ram_address = offset;
          rom_offset = 0;
+         // TODO: use config memory
          if (offset >= 0x80246000 && offset <= 0x80340fff) {
             rom_offset = offset - 0x80245000;
          } else if (offset >= 0x80378800 && offset <= 0x8038bc90) {
