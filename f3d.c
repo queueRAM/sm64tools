@@ -38,32 +38,39 @@ void get_mode_string(unsigned char *data, char *description)
 void print_f3d(unsigned char *data)
 {
    char description[64];
+   char tmp[8];
    unsigned char bank;
    unsigned char bank2;
    unsigned int address;
    unsigned int val;
+   int i;
+   // default description is raw bytes
+   description[0] = '\0';
+   for (i = 0; i < 8; i++) {
+      sprintf(tmp, "%02X ", data[i]);
+      strcat(description, tmp);
+   }
    switch (data[0]) {
       case F3D_MOVEMEM:
          switch (data[1]) {
             case 0x86: sprintf(description, "light"); break;
             case 0x88: sprintf(description, "dark "); break;
-            default:   sprintf(description, "unkwn"); break;
          }
          bank = data[4];
          address = read_u24_be(&data[5]);
-         printf("%14s %s %02X %06X\n", "F3D_MOVEMEM", description, bank, address);
+         printf("%14s %s %02X %06X", "F3D_MOVEMEM", description, bank, address);
          break;
       case F3D_VTX:
          bank  = data[1];
          val = read_u24_be(&data[2]) / 0x10;
          bank2 = data[4];
          address = read_u24_be(&data[5]);
-         printf("%14s %02X %06X %02X %06X\n", "F3D_VTX", bank, val, bank2, address);
+         printf("%14s %02X %06X %02X %06X", "F3D_VTX", bank, val, bank2, address);
          break;
       case F3D_DL:
          bank = data[4];
          address = read_u24_be(&data[5]);
-         printf("%14s %02X %06X\n", "F3D_DL", bank, address);
+         printf("%14s %02X %06X", "F3D_DL", bank, address);
          break;
       case F3D_QUAD:
       {
@@ -75,24 +82,23 @@ void print_f3d(unsigned char *data)
          vertex[3] = data[5] / 0x0A;
          vertex[4] = data[6] / 0x0A;
          vertex[5] = data[7] / 0x0A;
-         printf("%14s %3d %3d %3d %3d %3d %3d\n", "F3D_QUAD",
+         printf("%14s %3d %3d %3d %3d %3d %3d", "F3D_QUAD",
                vertex[0], vertex[1], vertex[2],
                vertex[3], vertex[4], vertex[5]);
          break;
       }
       case F3D_CLRGEOMODE:
          get_mode_string(data, description);
-         printf("%14s %s\n", "F3D_CLRGEOMODE", description);
+         printf("%14s %s", "F3D_CLRGEOMODE", description);
          break;
       case F3D_SETGEOMODE:
          get_mode_string(data, description);
-         printf("%14s %s\n", "F3D_SETGEOMODE", description);
+         printf("%14s %s", "F3D_SETGEOMODE", description);
          break;
       case F3D_ENDDL:
-         printf("%14s\n", "F3D_ENDL");
+         printf("%14s %s", "F3D_ENDL", description);
          break;
       case F3D_TEXTURE:
-         sprintf(description, "unknown");
          switch (data[3]) {
             case 0x00:
                val = read_u32_be(&data[4]);
@@ -109,7 +115,7 @@ void print_f3d(unsigned char *data)
                }
                break;
          }
-         printf("%14s %s\n", "F3D_TEXTURE", description);
+         printf("%14s %s", "F3D_TEXTURE", description);
          break;
       case F3D_TRI1:
       {
@@ -117,7 +123,7 @@ void print_f3d(unsigned char *data)
          vertex[0] = data[5] / 0x0A;
          vertex[1] = data[6] / 0x0A;
          vertex[2] = data[7] / 0x0A;
-         printf("%14s %3d %3d %3d\n", "F3D_TRI1", vertex[0], vertex[1], vertex[2]);
+         printf("%14s %3d %3d %3d", "F3D_TRI1", vertex[0], vertex[1], vertex[2]);
          break;
       }
       case G_SETTILESIZE:
@@ -125,7 +131,7 @@ void print_f3d(unsigned char *data)
          unsigned short width, height;
          width  = (((data[5] << 8) | (data[6] & 0xF0)) >> 6) + 1;
          height = (((data[6] & 0x0F) << 8 | data[7]) >> 2) + 1;
-         printf("%14s %2d %2d\n", "G_SETTILESIZE", width, height);
+         printf("%14s %2d %2d", "G_SETTILESIZE", width, height);
          break;
       }
       case G_LOADBLOCK:
@@ -133,9 +139,8 @@ void print_f3d(unsigned char *data)
          switch (val) {
             case 0x077FF100: sprintf(description, "RGBA 32x64 or 64x32"); break;
             case 0x073FF100: sprintf(description, "RGBA 32x32"); break;
-            default: sprintf(description, "unknown"); break;
          }
-         printf("%14s %s\n", "G_LOADBLOCK", description);
+         printf("%14s %s", "G_LOADBLOCK", description);
          break;
       case G_SETTILE:
       {
@@ -148,20 +153,19 @@ void print_f3d(unsigned char *data)
             {{0x70, 0x10, 0x00, 0x07, 0x01, 0x40, 0x50}, "grayscale 32x32"},
          };
          unsigned i;
-         sprintf(description, "unknown");
          for (i = 0; i < DIM(table); i++) {
             if (!memcmp(table[i].data, &data[1], 7)) {
                strcpy(description, table[i].description);
             }
          }
-         printf("%14s %s\n", "G_SETTILE", description);
+         printf("%14s %s", "G_SETTILE", description);
          break;
       }
       case G_SETFOGCOLOR:
-         printf("%14s %3d, %3d, %3d, %3d\n", "G_SETFOGCOLOR", data[4], data[5], data[6], data[7]);
+         printf("%14s %3d, %3d, %3d, %3d", "G_SETFOGCOLOR", data[4], data[5], data[6], data[7]);
          break;
       case G_SETENVCOLOR:
-         printf("%14s %3d, %3d, %3d, %3d\n", "G_SETENVCOLOR", data[4], data[5], data[6], data[7]);
+         printf("%14s %3d, %3d, %3d, %3d", "G_SETENVCOLOR", data[4], data[5], data[6], data[7]);
          break;
       case G_SETCOMBINE:
       {
@@ -171,22 +175,21 @@ void print_f3d(unsigned char *data)
             {{0x12, 0x18, 0x24, 0xFF, 0x33, 0xFF, 0xFF}, "alpha RGBA"},
          };
          unsigned i;
-         sprintf(description, "unknown");
          for (i = 0; i < DIM(table); i++) {
             if (!memcmp(table[i].data, &data[1], 7)) {
                strcpy(description, table[i].description);
             }
          }
-         printf("%14s %s\n", "G_SETCOMBINE", description);
+         printf("%14s %s", "G_SETCOMBINE", description);
          break;
       }
       case G_SETTIMG:
          bank = data[4];
          address = read_u24_be(&data[5]);
-         printf("%14s %02X %06X\n", "G_SETTIMG", bank, address);
+         printf("%14s %02X %06X", "G_SETTIMG", bank, address);
          break;
       default:
-         //printf("Unkown %02X\n", data[0]);
+         printf("%14s %s", "Unknown", description);
          break;
    }
 }
@@ -212,7 +215,9 @@ int main(int argc, char *argv[])
       }
 
       for (i = 0; i < size; i += 8) {
+         printf("%05X: ", i);
          print_f3d(&data[i]);
+         printf("\n");
       }
 
       free(data);
