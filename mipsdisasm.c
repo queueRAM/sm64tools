@@ -38,11 +38,25 @@ static unsigned int ram_to_rom(unsigned int ram_addr)
 {
    int i;
    for (i = 0; i < config.ram_count; i++) {
-      if (ram_addr >= config.ram_table[i*3] && ram_addr <= config.ram_table[i*3+1]) {
-         return ram_addr - config.ram_table[i*3+2];
+      if (ram_addr >= config.ram_table[3*i] && ram_addr <= config.ram_table[3*i+1]) {
+         return ram_addr - config.ram_table[3*i+2];
       }
    }
    return ram_addr;
+}
+
+static unsigned int rom_to_ram(unsigned int rom_addr)
+{
+   int i;
+   for (i = 0; i < config.ram_count; i++) {
+      unsigned int offset = config.ram_table[3*i+2];
+      unsigned int start = config.ram_table[3*i] - offset;
+      unsigned int end   = config.ram_table[3*i+1] - offset;
+      if (rom_addr >= start && rom_addr <= end) {
+         return rom_addr + offset;
+      }
+   }
+   return rom_addr;
 }
 
 static int known_index(unsigned int ram_addr)
@@ -162,7 +176,7 @@ static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptb
                         last_label = sec_offset;
                      }
                      if (locals.count > MAX_LOCALS) {
-                        ERROR("Need more than %d locals\n", MAX_LOCALS);
+                        ERROR("Need more than %d locals for %08x\n", MAX_LOCALS, proc->start);
                      }
                   }
                }
@@ -419,23 +433,15 @@ int main(int argc, char *argv[])
          offset = strtoul(argv[i], NULL, 0);
          if (offset >= 0x80000000) {
             ram_address = offset;
-            // TODO: use config memory
-            if (offset >= 0x80246000 && offset <= 0x80340fff) {
-               rom_offset = offset - 0x80245000;
-            } else if (offset >= 0x80378800 && offset <= 0x8038bc90) {
-               rom_offset = offset - 0x80283280;
-            } else {
+            rom_offset = ram_to_rom(ram_address);
+            if (ram_address == rom_offset) {
                ERROR("Warning: offset %08X not in RAM range\n", offset);
                return EXIT_FAILURE;
             }
          } else {
-            // TODO: use config memory
             rom_offset = offset;
-            if (offset >= 0x001000 && offset <= 0x100FFF) {
-               ram_address = offset + 0x80245000;
-            } else if (offset >= 0x0F5580 && offset <= 0x108A10) {
-               ram_address = offset + 0x80283280;
-            } else {
+            ram_address = rom_to_ram(rom_offset);
+            if (rom_offset == ram_address) {
                ERROR("Warning: offset %08X not in ROM range\n", offset);
                return EXIT_FAILURE;
             }
@@ -446,17 +452,10 @@ int main(int argc, char *argv[])
       // populate procedure list from list of known addresses
       int i;
       for (i = 0; i < config.label_count; i++) {
-         offset = config.labels[i].ram_addr;
-         ram_address = offset;
-         rom_offset = 0;
-         // TODO: use config memory
-         if (offset >= 0x80246000 && offset <= 0x80340fff) {
-            rom_offset = offset - 0x80245000;
-         } else if (offset >= 0x80378800 && offset <= 0x8038bc90) {
-            rom_offset = offset - 0x80283280;
-         }
-         if (rom_offset != 0 && rom_offset < file_len) {
-            add_proc(&procs, offset);
+         ram_address = config.labels[i].ram_addr;
+         rom_offset = ram_to_rom(ram_address);
+         if (rom_offset < file_len) {
+            add_proc(&procs, ram_address);
          }
       }
    }
