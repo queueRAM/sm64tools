@@ -59,7 +59,7 @@ rgba *file2rgba(char *filename, int offset, int width, int height)
    for (i = 0; i < width * height; i++) {
       img[i].red   = SCALE_5_8((raw[i*2] & 0xF8) >> 3);
       img[i].green = SCALE_5_8(((raw[i*2] & 0x07) << 2) | ((raw[i*2+1] & 0xC0) >> 6));
-      img[i].blue  = SCALE_5_8(raw[i*2+1] & 0x3E);
+      img[i].blue  = SCALE_5_8((raw[i*2+1] & 0x3E) >> 1);
       img[i].alpha = (raw[i*2+1] & 0x01) ? 0xFF : 0x00;
    }
 
