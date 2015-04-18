@@ -245,6 +245,7 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
    bit_buf = malloc((length + 7) / 8); // 1-bit/byte
    comp_buf = malloc(length); // 16-bits/2bytes
    uncomp_buf = malloc(length); // all uncompressed
+   memset(bit_buf, 0, (length + 7) / 8);
 
    // encode data
    while (bytes_proc < length) {
