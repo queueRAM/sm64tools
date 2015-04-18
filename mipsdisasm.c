@@ -6,52 +6,29 @@
 #include <capstone/capstone.h>
 
 #include "config.h"
+#include "mipsdisasm.h"
 #include "utils.h"
 
 #define DEFAULT_CONFIG "sm64.config"
 
-// typedefs
-
-typedef struct _local_table
-{
-   unsigned int *offsets;
-   int count;
-} local_table;
-
-#define MAX_PROCEDURES 4096
-typedef struct _procedure
-{
-   unsigned int start;
-   unsigned int end;
-   local_table locals;
-} procedure;
-
-typedef struct _proc_table
-{
-   procedure procedures[MAX_PROCEDURES];
-   int count;
-} proc_table;
-
-static rom_config config;
-
-static unsigned int ram_to_rom(unsigned int ram_addr)
+static unsigned int ram_to_rom(rom_config *config, unsigned int ram_addr)
 {
    int i;
-   for (i = 0; i < config.ram_count; i++) {
-      if (ram_addr >= config.ram_table[3*i] && ram_addr <= config.ram_table[3*i+1]) {
-         return ram_addr - config.ram_table[3*i+2];
+   for (i = 0; i < config->ram_count; i++) {
+      if (ram_addr >= config->ram_table[3*i] && ram_addr <= config->ram_table[3*i+1]) {
+         return ram_addr - config->ram_table[3*i+2];
       }
    }
    return ram_addr;
 }
 
-static unsigned int rom_to_ram(unsigned int rom_addr)
+static unsigned int rom_to_ram(rom_config *config, unsigned int rom_addr)
 {
    int i;
-   for (i = 0; i < config.ram_count; i++) {
-      unsigned int offset = config.ram_table[3*i+2];
-      unsigned int start = config.ram_table[3*i] - offset;
-      unsigned int end   = config.ram_table[3*i+1] - offset;
+   for (i = 0; i < config->ram_count; i++) {
+      unsigned int offset = config->ram_table[3*i+2];
+      unsigned int start = config->ram_table[3*i] - offset;
+      unsigned int end   = config->ram_table[3*i+1] - offset;
       if (rom_addr >= start && rom_addr <= end) {
          return rom_addr + offset;
       }
@@ -59,11 +36,11 @@ static unsigned int rom_to_ram(unsigned int rom_addr)
    return rom_addr;
 }
 
-static int known_index(unsigned int ram_addr)
+static int known_index(rom_config *config, unsigned int ram_addr)
 {
    int i;
-   for (i = 0; i < config.label_count; i++) {
-      if (ram_addr == config.labels[i].ram_addr) {
+   for (i = 0; i < config->label_count; i++) {
+      if (ram_addr == config->labels[i].ram_addr) {
          return i;
       }
    }
@@ -120,7 +97,7 @@ static void add_proc(proc_table *procs, unsigned int addr)
 }
 
 // collect JALs for a given procedure
-static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptbl, int p)
+static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptbl, int p, rom_config *config)
 {
 #define MAX_LOCALS 128
 #define MAX_BYTES_PER_CALL 1024
@@ -149,7 +126,7 @@ static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptb
 
    proc = &ptbl->procedures[p];
    ram_address = proc->start;
-   rom_offset = ram_to_rom(ram_address);
+   rom_offset = ram_to_rom(config, ram_address);
 
    // find referenced JAL, local labels, and find end marked by last JR or ERET
    locals.offsets = local_offsets;
@@ -225,11 +202,11 @@ static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptb
 }
 
 // call this function with at least one procedure in procs
-static void collect_jals(unsigned char *data, long datalen, proc_table *procs)
+static void collect_jals(unsigned char *data, long datalen, proc_table *procs, rom_config *config)
 {
    int proc_idx;
    for (proc_idx = 0; proc_idx < procs->count; proc_idx++) {
-      collect_proc_jals(data, datalen, procs, proc_idx);
+      collect_proc_jals(data, datalen, procs, proc_idx, config);
    }
 }
 
@@ -240,7 +217,7 @@ static int proc_cmp(const void *a, const void *b)
    return (proca->start - procb->start);
 }
 
-static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc)
+static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config)
 {
    char sec_name[64];
    csh handle;
@@ -263,15 +240,15 @@ static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datale
    cs_option(handle, CS_OPT_SKIPDATA, CS_OPT_ON);
 
    ram_address = proc->start;
-   rom_offset = ram_to_rom(ram_address);
+   rom_offset = ram_to_rom(config, ram_address);
    length = proc->end - proc->start;
 
    // construct procedure label
-   known_idx = known_index(ram_address);
+   known_idx = known_index(config, ram_address);
    if (known_idx < 0) {
       sprintf(sec_name, "proc_%08X", ram_address);
    } else {
-      sprintf(sec_name, "%s", config.labels[known_idx].name);
+      sprintf(sec_name, "%s", config->labels[known_idx].name);
    }
 
    // perform disassembly
@@ -327,11 +304,11 @@ static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datale
                   unsigned int addr;
                   cs_mips *mips = &insn[i].detail->mips;
                   addr = (unsigned int)mips->operands[0].imm;
-                  known_idx = known_index(addr);
+                  known_idx = known_index(config, addr);
                   if (known_idx < 0) {
                      fprintf(out, "proc_%08X", addr);
                   } else {
-                     fprintf(out, "%s", config.labels[known_idx].name);
+                     fprintf(out, "%s", config->labels[known_idx].name);
                   }
                } else if (insn[i].id == MIPS_INS_MTC0 || insn[i].id == MIPS_INS_MFC0) {
                   // workaround bug in capstone/LLVM
@@ -373,21 +350,50 @@ static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datale
    return ram_address + processed;
 }
 
+void mipsdisasm_pass1(unsigned char *data, long datalen, proc_table *procs, rom_config *config)
+{
+   // collect all JALs
+   collect_jals(data, datalen, procs, config);
+
+   // sort procedures
+   qsort(procs->procedures, procs->count, sizeof(procs->procedures[0]), proc_cmp);
+}
+
+void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *procs, rom_config *config)
+{
+   // disassemble all the procedures
+   unsigned int ram_address;
+   unsigned int rom_offset;
+   unsigned int last_end = 0xFFFFFFFF;
+   int proc_idx = 0;
+   while (proc_idx < procs->count) {
+      ram_address = procs->procedures[proc_idx].start;
+      rom_offset = ram_to_rom(config, ram_address);
+      assert(rom_offset < datalen);
+      if (ram_address > last_end) {
+         fprintf(stdout, "\n# missing section %X-%X (%06X-%06X) [%X]\n",
+               last_end, ram_address, ram_to_rom(config, last_end), ram_to_rom(config, ram_address), ram_address - last_end);
+      }
+      disassemble_proc(out, data, datalen, &procs->procedures[proc_idx], config);
+      last_end = procs->procedures[proc_idx].end;
+      proc_idx++;
+   }
+
+}
 
 // mipsdisasm binary [-c config] [offset ...]
 // config default: sm64.config
 // offset default: all labels in config
 int main(int argc, char *argv[])
 {
+   rom_config config;
    long file_len;
    unsigned char *data;
    unsigned int ram_address = 0;
    unsigned int rom_offset = 0;
-   unsigned int last_end;
    unsigned int offset;
    proc_table procs;
    int config_loaded = 0;
-   int proc_idx;
    int arg_start;
    int i;
 
@@ -433,14 +439,14 @@ int main(int argc, char *argv[])
          offset = strtoul(argv[i], NULL, 0);
          if (offset >= 0x80000000) {
             ram_address = offset;
-            rom_offset = ram_to_rom(ram_address);
+            rom_offset = ram_to_rom(&config, ram_address);
             if (ram_address == rom_offset) {
                ERROR("Warning: offset %08X not in RAM range\n", offset);
                return EXIT_FAILURE;
             }
          } else {
             rom_offset = offset;
-            ram_address = rom_to_ram(rom_offset);
+            ram_address = rom_to_ram(&config, rom_offset);
             if (rom_offset == ram_address) {
                ERROR("Warning: offset %08X not in ROM range\n", offset);
                return EXIT_FAILURE;
@@ -453,37 +459,21 @@ int main(int argc, char *argv[])
       int i;
       for (i = 0; i < config.label_count; i++) {
          ram_address = config.labels[i].ram_addr;
-         rom_offset = ram_to_rom(ram_address);
+         rom_offset = ram_to_rom(&config, ram_address);
          if (rom_offset < file_len) {
             add_proc(&procs, ram_address);
          }
       }
    }
 
-   // collect all JALs
-   collect_jals(data, file_len, &procs);
-
-   // sort procedures
-   qsort(procs.procedures, procs.count, sizeof(procs.procedures[0]), proc_cmp);
+   // first pass, collect JALs and find procedure ends
+   mipsdisasm_pass1(data, file_len, &procs, &config);
 
    fprintf(stdout, ".set noat      # allow manual use of $at\n");
    fprintf(stdout, ".set noreorder # don't insert nops after branches\n\n");
 
-   // disassemble all the procedures
-   proc_idx = 0;
-   last_end = 0xFFFFFFFF;
-   while (proc_idx < procs.count) {
-      ram_address = procs.procedures[proc_idx].start;
-      rom_offset = ram_to_rom(ram_address);
-      assert(rom_offset < file_len);
-      if (ram_address > last_end) {
-         fprintf(stdout, "\n# missing section %X-%X (%06X-%06X) [%X]\n",
-               last_end, ram_address, ram_to_rom(last_end), ram_to_rom(ram_address), ram_address - last_end);
-      }
-      disassemble_proc(stdout, data, file_len, &procs.procedures[proc_idx]);
-      last_end = procs.procedures[proc_idx].end;
-      proc_idx++;
-   }
+   // second pass, disassemble all procedures
+   mipsdisasm_pass2(stdout, data, file_len, &procs, &config);
 
    free(data);
 
