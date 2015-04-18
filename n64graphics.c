@@ -9,6 +9,8 @@
 // upscale 5-bit integer to 8-bit
 #define SCALE_5_8(VAL_) (((VAL_) * 0xFF) / 0x1F)
 #define SCALE_8_5(VAL_) (((VAL_) * 0x1F) / 0xFF)
+#define SCALE_4_8(VAL_) ((VAL_) * 0x11)
+#define SCALE_8_4(VAL_) ((VAL_) / 0x11)
 
 typedef enum
 {
@@ -117,11 +119,11 @@ rgba *file2ia(char *filename, int offset, int width, int height, int depth)
          break;
       case 8:
          for (i = 0; i < width * height; i++) {
-            unsigned char val = (raw[i] & 0xF0) | ((raw[i] & 0xF0) >> 4);
+            unsigned char val = SCALE_4_8((raw[i] & 0xF0) >> 4);
             img[i].red   = val;
             img[i].green = val;
             img[i].blue  = val;
-            img[i].alpha = ((raw[i] & 0x0F) << 0x4) | (raw[i] & 0x0F);
+            img[i].alpha = SCALE_4_8(raw[i] & 0x0F);
          }
          break;
       default:
@@ -219,8 +221,8 @@ int ia2file(rgba *img, int offset, int width, int height, int depth, char *filen
             goto ia2file_close;
          }
          for (i = 0; i < width * height; i++) {
-            unsigned char val = (img[i].red >> 4) & 0x0F;
-            unsigned char alpha = (img[i].alpha >> 4) & 0x0F;
+            unsigned char val = SCALE_8_4(img[i].red);
+            unsigned char alpha = SCALE_8_4(img[i].alpha);
             raw[i] = (val << 4) | alpha;
          }
          break;
@@ -278,9 +280,9 @@ int sky2file(rgba *img, int offset, int width, int height, char *filename)
                char r, g, b, a;
                int idx = width * ((31*ty + j) % height) + ((31*tx + i) % width);
                int out_idx = 32*j + i;
-               r = img[idx].red >> 3;
-               g = img[idx].green >> 3;
-               b = img[idx].blue >> 3;
+               r = SCALE_8_5(img[idx].red);
+               g = SCALE_8_5(img[idx].green);
+               b = SCALE_8_5(img[idx].blue);
                a = img[idx].alpha ? 0x1 : 0x0;
                raw[out_idx*2]   = (r << 3) | (g >> 2);
                raw[out_idx*2+1] = ((g & 0x3) << 6) | (b << 1) | a;
