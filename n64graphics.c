@@ -6,6 +6,10 @@
 #include "n64graphics.h"
 #include "utils.h"
 
+// upscale 5-bit integer to 8-bit
+#define SCALE_5_8(VAL_) (((VAL_) * 0xFF) / 0x1F)
+#define SCALE_8_5(VAL_) (((VAL_) * 0x1F) / 0xFF)
+
 typedef enum
 {
    IMG_FORMAT_RGBA,
@@ -51,9 +55,9 @@ rgba *file2rgba(char *filename, int offset, int width, int height)
    }
 
    for (i = 0; i < width * height; i++) {
-      img[i].red   = (raw[i*2] & 0xF8);
-      img[i].green = ((raw[i*2] & 0x07) << 5) | ((raw[i*2+1] & 0xC0) >> 3);
-      img[i].blue  = (raw[i*2+1] & 0x3E) << 2;
+      img[i].red   = SCALE_5_8((raw[i*2] & 0xF8) >> 3);
+      img[i].green = SCALE_5_8(((raw[i*2] & 0x07) << 2) | ((raw[i*2+1] & 0xC0) >> 6));
+      img[i].blue  = SCALE_5_8(raw[i*2+1] & 0x3E);
       img[i].alpha = (raw[i*2+1] & 0x01) ? 0xFF : 0x00;
    }
 
@@ -159,9 +163,9 @@ int rgba2file(rgba *img, int offset, int width, int height, char *filename)
 
    for (i = 0; i < width * height; i++) {
       char r, g, b, a;
-      r = img[i].red >> 3;
-      g = img[i].green >> 3;
-      b = img[i].blue >> 3;
+      r = SCALE_8_5(img[i].red);
+      g = SCALE_8_5(img[i].green);
+      b = SCALE_8_5(img[i].blue);
       a = img[i].alpha ? 0x1 : 0x0;
       raw[i*2]   = (r << 3) | (g >> 2);
       raw[i*2+1] = ((g & 0x3) << 6) | (b << 1) | a;
