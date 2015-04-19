@@ -194,15 +194,19 @@ static int proc_cmp(const void *a, const void *b)
 
 // TODO: needs to be merged with code from n64split
 // TODO: needs to handle names from the labels list as well
-static int has_a_name(rom_config *config, unsigned int addr)
+static void fill_label(rom_config *config, unsigned int addr, char *label)
 {
    int i;
    for (i = 0; i < config->section_count; i++) {
       if (config->sections[i].start == addr) {
-         return i;
+         sprintf(label, "%s    ", config->sections[i].label);
+         return;
+      } else if (config->sections[i].end == addr) {
+         sprintf(label, "%s_end", config->sections[i].label);
+         return;
       }
    }
-   return -1;
+   sprintf(label, "0x%x", addr);
 }
 
 // interpret MIPS pseudoinstructions
@@ -220,8 +224,8 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
        * lb    $t3, 0x7d34($t3)
        */
       if (insn[0].id == MIPS_INS_LUI && (insn[1].id == MIPS_INS_LW  ||
-           insn[1].id == MIPS_INS_LH  || insn[1].id == MIPS_INS_LHU ||
-           insn[1].id == MIPS_INS_LB  || insn[1].id == MIPS_INS_LBU)) {
+          insn[1].id == MIPS_INS_LH  || insn[1].id == MIPS_INS_LHU ||
+          insn[1].id == MIPS_INS_LB  || insn[1].id == MIPS_INS_LBU)) {
          if (insn[0].detail->mips.operands[0].reg == insn[1].detail->mips.operands[0].reg && 
              insn[0].detail->mips.operands[0].reg == insn[1].detail->mips.operands[1].mem.base) {
             unsigned int addr = (unsigned int)((insn[0].detail->mips.operands[1].imm << 16)
@@ -232,42 +236,53 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
                     addr, insn[0].mnemonic, insn[0].op_str, insn[1].mnemonic, insn[1].op_str);
             retVal = 2;
          }
-      }
-      if (count >= 4) {
+      } else {
          /* lui   $a1, 0x11
           * lui   $a2, 0x11
           * addiu $a2, $a2, 0x4750
           * addiu $a1, $a1, -0x75c0
           */
-         if (insn[0].id == MIPS_INS_LUI   && insn[1].id == MIPS_INS_LUI &&
-             insn[2].id == MIPS_INS_ADDIU && insn[3].id == MIPS_INS_ADDIU) {
-            cs_mips *mips[4];
-            for (i = 0; i < 4; i++) {
-               mips[i] = &insn[i].detail->mips;
+         int luis = 0;
+         int addius;
+         // count leading LUIs
+         while (luis < count/2 && insn[luis].id == MIPS_INS_LUI) {
+            luis++;
+         }
+         if (luis > 0) {
+            // count trailing ADDIUs
+            addius = luis;
+            while (addius < count && addius < luis*2 && insn[addius].id == MIPS_INS_ADDIU) {
+               addius++;
             }
-            if (mips[0]->operands[0].reg == mips[3]->operands[0].reg &&
-                mips[1]->operands[0].reg == mips[2]->operands[0].reg) {
-               char start_label[128];
-               char end_label[128];
-               unsigned int start_addr = (unsigned int)((mips[0]->operands[1].imm << 16) + mips[3]->operands[2].imm);
-               unsigned int end_addr   = (unsigned int)((mips[1]->operands[1].imm << 16) + mips[2]->operands[2].imm);
-               int name = has_a_name(config, start_addr);
-               if (name < 0) {
-                  sprintf(start_label, "0x%X", start_addr);
-                  sprintf(end_label,   "0x%X", end_addr);
-               } else {
-                  sprintf(start_label, "%s    ", config->sections[name].label);
-                  sprintf(end_label,   "%s_end", config->sections[name].label);
+            if (addius == luis * 2) {
+               int match = 1;
+               // confirm registers match
+               for (i = 0; i < luis; i++) {
+                  if (!(insn[i].detail->mips.operands[0].reg == insn[addius-i-1].detail->mips.operands[0].reg)) {
+                     match = 0;
+                     break;
+                  }
                }
-               fprintf(out, "  la    $%s, %s # LUI/ADDIU\n", cs_reg_name(handle, mips[0]->operands[0].reg), start_label);
-               fprintf(out, "  la    $%s, %s # LUI/ADDIU", cs_reg_name(handle, mips[1]->operands[0].reg), end_label);
-               retVal = 4;
+               if (match) {
+                  char label[128];
+                  unsigned int addr;
+                  for (i = 0; i < luis; i++) {
+                     addr = (unsigned int)((insn[i].detail->mips.operands[1].imm << 16) + insn[addius-i-1].detail->mips.operands[2].imm);
+                     fill_label(config, addr, label);
+                     fprintf(out, "  la    $%s, %s # LUI/ADDIU", cs_reg_name(handle, insn[i].detail->mips.operands[0].reg), label);
+                     if (i < (luis-1)) {
+                        fprintf(out, "\n");
+                     }
+                  }
+                  retVal = addius;
+               }
             }
          }
       }
    }
    return retVal;
 }
+
 static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config)
 {
    char sec_name[64];
