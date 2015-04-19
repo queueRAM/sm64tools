@@ -87,13 +87,13 @@ $(SM64_LIB): $(LIB_OBJ_FILES)
 	$(AR) rcs $@ $^
 
 $(MIO0_TARGET): libmio0.c libmio0.h
-	$(CC) -DMIO0_TEST $(CFLAGS) $(LDFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -DMIO0_TEST $(LDFLAGS) -o $@ $<
 
 $(F3D_TARGET): $(F3D_OBJ_FILES) $(SM64_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(MIPSDISASM_TARGET): $(MIPSDISASM_SRC_FILES)
-	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@ -lcapstone -lconfig
+	$(CC) $(CFLAGS) -DMIPSDISASM_STANDALONE $^ $(LDFLAGS) -o $@ -lcapstone -lconfig
 
 $(CKSUM_TARGET): $(CKSUM_OBJ_FILES) $(SM64_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)

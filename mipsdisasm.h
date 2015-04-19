@@ -29,6 +29,24 @@ typedef struct _proc_table
 } proc_table;
 
 
+// convert from RAM address to ROM address
+// config: ROM configuration
+// ram_addr: RAM address to convert from
+// returns ROM address that maps to the RAM address
+unsigned int ram_to_rom(rom_config *config, unsigned int ram_addr);
+
+// convert from ROM offset to RAM address
+// config: ROM configuration
+// rom_addr: ROM address to convert from
+// returns RAM address that maps to the ROM address
+unsigned int rom_to_ram(rom_config *config, unsigned int rom_addr);
+
+// add procedures from config labels
+// procs: procedures list to add labels to
+// config: ROM configuration
+// file_len: file length for error checking
+void mipsdisasm_add_procs(proc_table *procs, rom_config *config, long file_len);
+
 // first pass of disassembler - collects procedures called and sorts them
 // data: buffer containing raw MIPS assembly
 // datalen: length of 'data'

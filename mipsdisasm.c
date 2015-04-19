@@ -11,31 +11,6 @@
 
 #define DEFAULT_CONFIG "sm64.config"
 
-static unsigned int ram_to_rom(rom_config *config, unsigned int ram_addr)
-{
-   int i;
-   for (i = 0; i < config->ram_count; i++) {
-      if (ram_addr >= config->ram_table[3*i] && ram_addr <= config->ram_table[3*i+1]) {
-         return ram_addr - config->ram_table[3*i+2];
-      }
-   }
-   return ram_addr;
-}
-
-static unsigned int rom_to_ram(rom_config *config, unsigned int rom_addr)
-{
-   int i;
-   for (i = 0; i < config->ram_count; i++) {
-      unsigned int offset = config->ram_table[3*i+2];
-      unsigned int start = config->ram_table[3*i] - offset;
-      unsigned int end   = config->ram_table[3*i+1] - offset;
-      if (rom_addr >= start && rom_addr <= end) {
-         return rom_addr + offset;
-      }
-   }
-   return rom_addr;
-}
-
 static int known_index(rom_config *config, unsigned int ram_addr)
 {
    int i;
@@ -349,6 +324,45 @@ static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datale
    return ram_address + processed;
 }
 
+unsigned int ram_to_rom(rom_config *config, unsigned int ram_addr)
+{
+   int i;
+   for (i = 0; i < config->ram_count; i++) {
+      if (ram_addr >= config->ram_table[3*i] && ram_addr <= config->ram_table[3*i+1]) {
+         return ram_addr - config->ram_table[3*i+2];
+      }
+   }
+   return ram_addr;
+}
+
+unsigned int rom_to_ram(rom_config *config, unsigned int rom_addr)
+{
+   int i;
+   for (i = 0; i < config->ram_count; i++) {
+      unsigned int offset = config->ram_table[3*i+2];
+      unsigned int start = config->ram_table[3*i] - offset;
+      unsigned int end   = config->ram_table[3*i+1] - offset;
+      if (rom_addr >= start && rom_addr <= end) {
+         return rom_addr + offset;
+      }
+   }
+   return rom_addr;
+}
+
+void mipsdisasm_add_procs(proc_table *procs, rom_config *config, long file_len)
+{
+   unsigned int ram_address;
+   unsigned int rom_offset;
+   int i;
+   for (i = 0; i < config->label_count; i++) {
+      ram_address = config->labels[i].ram_addr;
+      rom_offset = ram_to_rom(config, ram_address);
+      if (rom_offset < file_len) {
+         add_proc(procs, ram_address);
+      }
+   }
+}
+
 void mipsdisasm_pass1(unsigned char *data, long datalen, proc_table *procs, rom_config *config)
 {
    // collect all JALs
@@ -379,6 +393,7 @@ void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *
    }
 }
 
+#ifdef MIPSDISASM_STANDALONE
 // mipsdisasm binary [-c config] [offset ...]
 // config default: sm64.config
 // offset default: all labels in config
@@ -454,17 +469,10 @@ int main(int argc, char *argv[])
       }
    } else {
       // populate procedure list from list of known addresses
-      int i;
-      for (i = 0; i < config.label_count; i++) {
-         ram_address = config.labels[i].ram_addr;
-         rom_offset = ram_to_rom(&config, ram_address);
-         if (rom_offset < file_len) {
-            add_proc(&procs, ram_address);
-         }
-      }
+      mipsdisasm_add_procs(&procs, &config, file_len);
    }
 
-   // first pass, collect JALs and find procedure ends
+   // first pass, collect JALs, local labels, and find procedure ends
    mipsdisasm_pass1(data, file_len, &procs, &config);
 
    fprintf(stdout, ".set noat      # allow manual use of $at\n");
@@ -478,3 +486,4 @@ int main(int argc, char *argv[])
    return EXIT_SUCCESS;
 }
 
+#endif // MIPSDISASM_STANDALONE
