@@ -96,7 +96,7 @@ static void add_proc(proc_table *procs, unsigned int addr)
    procs->count++;
 }
 
-// collect JALs for a given procedure
+// collect JALs and local labels for a given procedure
 static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptbl, int p, rom_config *config)
 {
 #define MAX_LOCALS 128
@@ -164,10 +164,10 @@ static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptb
                add_proc(ptbl, addr);
             }
 
-            // if we encounter B, JR, or ERET past last local lable, end disassembly
+            // if we encounter B, JR, or ERET past last local label, end disassembly
             if (processed >= last_label) {
                switch (insn[i].id) {
-                  case MIPS_INS_B:    remaining = 2; break;
+                  case MIPS_INS_B:    remaining = 2; break; // a positive branch would update last_label above
                   case MIPS_INS_JR:   remaining = 2; break;
                   case MIPS_INS_ERET: remaining = 1; break;
                   default: break;
@@ -191,7 +191,7 @@ static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptb
 
    // sort labels
    qsort(locals.offsets, locals.count, sizeof(locals.offsets[0]), cmp_local);
-   // copy lables to procedure
+   // copy labels to procedure
    alloc_size = locals.count * sizeof(*locals.offsets);
    proc->locals.offsets = malloc(alloc_size);
    memcpy(proc->locals.offsets, locals.offsets, alloc_size);
@@ -261,8 +261,7 @@ static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datale
       count = cs_disasm(handle, &data[rom_offset + processed], cur_amount, ram_address + processed, 0, &insn);
       if (count > 0) {
          const char *spaces[] = {"      ", "     ", "    ", "   ", "  ", " "};
-         int o;
-         int i;
+         int i, o;
 
          for (i = 0; i < count && disassembling; i++) {
             // handle redirect jump instruction immediates
@@ -371,14 +370,13 @@ void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *
       rom_offset = ram_to_rom(config, ram_address);
       assert(rom_offset < datalen);
       if (ram_address > last_end) {
-         fprintf(stdout, "\n# missing section %X-%X (%06X-%06X) [%X]\n",
+         fprintf(out, "\n# missing section %X-%X (%06X-%06X) [%X]\n",
                last_end, ram_address, ram_to_rom(config, last_end), ram_to_rom(config, ram_address), ram_address - last_end);
       }
       disassemble_proc(out, data, datalen, &procs->procedures[proc_idx], config);
       last_end = procs->procedures[proc_idx].end;
       proc_idx++;
    }
-
 }
 
 // mipsdisasm binary [-c config] [offset ...]
