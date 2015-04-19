@@ -211,37 +211,58 @@ static int has_a_name(rom_config *config, unsigned int addr)
 // TODO: pseudo-instruction detection: li, la (more cases), bgt, blt
 static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, rom_config *config)
 {
+   const char *spaces[] = {"      ", "     ", "    ", "   ", "  ", " "};
    int retVal = 0;
    int i;
-   if (count >= 4) {
-      /* lui   $a1, 0x11
-       * lui   $a2, 0x11
-       * addiu $a2, $a2, 0x4750
-       * addiu $a1, $a1, -0x75c0
+   if (count >= 2) {
+      /*
+       * lui   $t3, 0x801a
+       * lb    $t3, 0x7d34($t3)
        */
-      if (insn[0].id == MIPS_INS_LUI   && insn[1].id == MIPS_INS_LUI &&
-          insn[2].id == MIPS_INS_ADDIU && insn[3].id == MIPS_INS_ADDIU) {
-         cs_mips *mips[4];
-         for (i = 0; i < 4; i++) {
-            mips[i] = &insn[i].detail->mips;
+      if (insn[0].id == MIPS_INS_LUI && (insn[1].id == MIPS_INS_LW  ||
+           insn[1].id == MIPS_INS_LH  || insn[1].id == MIPS_INS_LHU ||
+           insn[1].id == MIPS_INS_LB  || insn[1].id == MIPS_INS_LBU)) {
+         if (insn[0].detail->mips.operands[0].reg == insn[1].detail->mips.operands[0].reg && 
+             insn[0].detail->mips.operands[0].reg == insn[1].detail->mips.operands[1].mem.base) {
+            unsigned int addr = (unsigned int)((insn[0].detail->mips.operands[1].imm << 16)
+                                              + insn[1].detail->mips.operands[1].mem.disp);
+            i = MIN(strlen(insn[1].mnemonic), DIM(spaces) - 1);
+            fprintf(out, "  %s%s$%s, 0x%x # %s %s/%s %s", insn[1].mnemonic, spaces[i],
+                    cs_reg_name(handle, insn[0].detail->mips.operands[0].reg),
+                    addr, insn[0].mnemonic, insn[0].op_str, insn[1].mnemonic, insn[1].op_str);
+            retVal = 2;
          }
-         if (mips[0]->operands[0].reg == mips[3]->operands[0].reg &&
-             mips[1]->operands[0].reg == mips[2]->operands[0].reg) {
-            char start_label[128];
-            char end_label[128];
-            unsigned int start_addr = (unsigned int)((mips[0]->operands[1].imm << 16) + mips[3]->operands[2].imm);
-            unsigned int end_addr   = (unsigned int)((mips[1]->operands[1].imm << 16) + mips[2]->operands[2].imm);
-            int name = has_a_name(config, start_addr);
-            if (name < 0) {
-               sprintf(start_label, "0x%X", start_addr);
-               sprintf(end_label,   "0x%X", end_addr);
-            } else {
-               sprintf(start_label, "%s    ", config->sections[name].label);
-               sprintf(end_label,   "%s_end", config->sections[name].label);
+      }
+      if (count >= 4) {
+         /* lui   $a1, 0x11
+          * lui   $a2, 0x11
+          * addiu $a2, $a2, 0x4750
+          * addiu $a1, $a1, -0x75c0
+          */
+         if (insn[0].id == MIPS_INS_LUI   && insn[1].id == MIPS_INS_LUI &&
+             insn[2].id == MIPS_INS_ADDIU && insn[3].id == MIPS_INS_ADDIU) {
+            cs_mips *mips[4];
+            for (i = 0; i < 4; i++) {
+               mips[i] = &insn[i].detail->mips;
             }
-            fprintf(out, "  la    $%s, %s # LUI/ADDIU\n", cs_reg_name(handle, mips[0]->operands[0].reg), start_label);
-            fprintf(out, "  la    $%s, %s # LUI/ADDIU", cs_reg_name(handle, mips[1]->operands[0].reg), end_label);
-            retVal = 4;
+            if (mips[0]->operands[0].reg == mips[3]->operands[0].reg &&
+                mips[1]->operands[0].reg == mips[2]->operands[0].reg) {
+               char start_label[128];
+               char end_label[128];
+               unsigned int start_addr = (unsigned int)((mips[0]->operands[1].imm << 16) + mips[3]->operands[2].imm);
+               unsigned int end_addr   = (unsigned int)((mips[1]->operands[1].imm << 16) + mips[2]->operands[2].imm);
+               int name = has_a_name(config, start_addr);
+               if (name < 0) {
+                  sprintf(start_label, "0x%X", start_addr);
+                  sprintf(end_label,   "0x%X", end_addr);
+               } else {
+                  sprintf(start_label, "%s    ", config->sections[name].label);
+                  sprintf(end_label,   "%s_end", config->sections[name].label);
+               }
+               fprintf(out, "  la    $%s, %s # LUI/ADDIU\n", cs_reg_name(handle, mips[0]->operands[0].reg), start_label);
+               fprintf(out, "  la    $%s, %s # LUI/ADDIU", cs_reg_name(handle, mips[1]->operands[0].reg), end_label);
+               retVal = 4;
+            }
          }
       }
    }
