@@ -192,6 +192,61 @@ static int proc_cmp(const void *a, const void *b)
    return (proca->start - procb->start);
 }
 
+// TODO: needs to be merged with code from n64split
+// TODO: needs to handle names from the labels list as well
+static int has_a_name(rom_config *config, unsigned int addr)
+{
+   int i;
+   for (i = 0; i < config->section_count; i++) {
+      if (config->sections[i].start == addr) {
+         return i;
+      }
+   }
+   return -1;
+}
+
+// interpret MIPS pseudoinstructions
+// returns number of instructions consumed
+// TODO: memory operations
+// TODO: pseudo-instruction detection: li, la (more cases), bgt, blt
+static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, rom_config *config)
+{
+   int retVal = 0;
+   int i;
+   if (count >= 4) {
+      /* lui   $a1, 0x11
+       * lui   $a2, 0x11
+       * addiu $a2, $a2, 0x4750
+       * addiu $a1, $a1, -0x75c0
+       */
+      if (insn[0].id == MIPS_INS_LUI   && insn[1].id == MIPS_INS_LUI &&
+          insn[2].id == MIPS_INS_ADDIU && insn[3].id == MIPS_INS_ADDIU) {
+         cs_mips *mips[4];
+         for (i = 0; i < 4; i++) {
+            mips[i] = &insn[i].detail->mips;
+         }
+         if (mips[0]->operands[0].reg == mips[3]->operands[0].reg &&
+             mips[1]->operands[0].reg == mips[2]->operands[0].reg) {
+            char start_label[128];
+            char end_label[128];
+            unsigned int start_addr = (unsigned int)((mips[0]->operands[1].imm << 16) + mips[3]->operands[2].imm);
+            unsigned int end_addr   = (unsigned int)((mips[1]->operands[1].imm << 16) + mips[2]->operands[2].imm);
+            int name = has_a_name(config, start_addr);
+            if (name < 0) {
+               sprintf(start_label, "0x%X", start_addr);
+               sprintf(end_label,   "0x%X", end_addr);
+            } else {
+               sprintf(start_label, "%s    ", config->sections[name].label);
+               sprintf(end_label,   "%s_end", config->sections[name].label);
+            }
+            fprintf(out, "  la    $%s, %s # LUI/ADDIU\n", cs_reg_name(handle, mips[0]->operands[0].reg), start_label);
+            fprintf(out, "  la    $%s, %s # LUI/ADDIU", cs_reg_name(handle, mips[1]->operands[0].reg), end_label);
+            retVal = 4;
+         }
+      }
+   }
+   return retVal;
+}
 static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config)
 {
    char sec_name[64];
@@ -231,6 +286,7 @@ static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datale
    processed = 0;
    fprintf(out, "\n# begin %08X (%06X)\n%s:\n", ram_address, rom_offset, sec_name);
    while (disassembling) {
+      int consumed;
       cur_amount = MIN(MAX_BYTES_PER_CALL, length - processed);
       cur_amount = MIN(cur_amount, datalen - rom_offset - processed);
       count = cs_disasm(handle, &data[rom_offset + processed], cur_amount, ram_address + processed, 0, &insn);
@@ -240,14 +296,16 @@ static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datale
 
          for (i = 0; i < count && disassembling; i++) {
             // handle redirect jump instruction immediates
-            // TODO: memory operations
-            // TODO: pseudo-instruction detection: li, la, bgt, blt
             int inslen;
             int ll = find_local(&proc->locals, processed);
             if (ll >= 0) {
                fprintf(out, "L%s_%X: # %X\n", sec_name, processed, ram_address + processed);
             }
-            if (insn[i].id == MIPS_INS_INVALID) {
+            consumed = pseudoins_detected(out, handle, &insn[i], count-1, config);
+            if (consumed > 0) {
+               i += (consumed-1);
+               processed += (consumed-1) * 4;
+            } else if (insn[i].id == MIPS_INS_INVALID) {
                unsigned char *in = &data[rom_offset+processed];
                fprintf(out, ".byte 0x%02X, 0x%02X, 0x%02X, 0x%02X # Invalid: %X",
                      in[0], in[1], in[2], in[3], ram_address + processed);
