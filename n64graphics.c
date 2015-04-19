@@ -71,10 +71,10 @@ file2rgba_close:
    return img;
 }
 
-rgba *file2ia(char *filename, int offset, int width, int height, int depth)
+ia *file2ia(char *filename, int offset, int width, int height, int depth)
 {
    FILE *fp;
-   rgba *img = NULL;
+   ia *img = NULL;
    char *raw;
    unsigned size;
    unsigned img_size;
@@ -111,19 +111,14 @@ rgba *file2ia(char *filename, int offset, int width, int height, int depth)
    switch (depth) {
       case 16:
          for (i = 0; i < width * height; i++) {
-            img[i].red   = raw[i*2];
-            img[i].green = raw[i*2];
-            img[i].blue  = raw[i*2];
-            img[i].alpha = raw[i*2+1];
+            img[i].intensity = raw[i*2];
+            img[i].alpha     = raw[i*2+1];
          }
          break;
       case 8:
          for (i = 0; i < width * height; i++) {
-            unsigned char val = SCALE_4_8((raw[i] & 0xF0) >> 4);
-            img[i].red   = val;
-            img[i].green = val;
-            img[i].blue  = val;
-            img[i].alpha = SCALE_4_8(raw[i] & 0x0F);
+            img[i].intensity = SCALE_4_8((raw[i] & 0xF0) >> 4);
+            img[i].alpha     = SCALE_4_8(raw[i] & 0x0F);
          }
          break;
       default:
@@ -183,7 +178,7 @@ rgba2file_close:
    return 0;
 }
 
-int ia2file(rgba *img, int offset, int width, int height, int depth, char *filename)
+int ia2file(ia *img, int offset, int width, int height, int depth, char *filename)
 {
    FILE *fp;
    char *raw;
@@ -209,7 +204,7 @@ int ia2file(rgba *img, int offset, int width, int height, int depth, char *filen
             goto ia2file_close;
          }
          for (i = 0; i < width * height; i++) {
-            raw[i*2]   = img[i].red;
+            raw[i*2]   = img[i].intensity;
             raw[i*2+1] = img[i].alpha;
          }
          break;
@@ -221,7 +216,7 @@ int ia2file(rgba *img, int offset, int width, int height, int depth, char *filen
             goto ia2file_close;
          }
          for (i = 0; i < width * height; i++) {
-            unsigned char val = SCALE_8_4(img[i].red);
+            unsigned char val = SCALE_8_4(img[i].intensity);
             unsigned char alpha = SCALE_8_4(img[i].alpha);
             raw[i] = (val << 4) | alpha;
          }
@@ -431,10 +426,10 @@ rgba *pngfile2rgba(char *pngname, int *width, int *height)
 
    for (j = 0; j < h; j++) {
       for (i = 0; i < w; i++) {
-         img[j * w + i].red   = row_pointers[j][i*4+0];
-         img[j * w + i].green = row_pointers[j][i*4+1];
-         img[j * w + i].blue  = row_pointers[j][i*4+2];
-         img[j * w + i].alpha = row_pointers[j][i*4+3];
+         img[j * w + i].red   = row_pointers[j][4*i+0];
+         img[j * w + i].green = row_pointers[j][4*i+1];
+         img[j * w + i].blue  = row_pointers[j][4*i+2];
+         img[j * w + i].alpha = row_pointers[j][4*i+3];
       }
    }
 
@@ -445,6 +440,153 @@ rgba *pngfile2rgba(char *pngname, int *width, int *height)
    free(row_pointers);
 
 pngfile2rgba_close:
+   fclose(fp);
+
+   *width = w;
+   *height = h;
+   return img;
+}
+
+int ia2png(ia *img, int width, int height, char *pngname)
+{
+   png_structp png_ptr = NULL;
+   png_infop   info_ptr = NULL;
+   int i, j;
+   png_byte **row_pointers = NULL;
+   int depth = 8;
+   FILE *fp;
+
+   fp = fopen(pngname, "wb");
+   if (!fp) {
+      return -1;
+   }
+
+   png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+   if (png_ptr == NULL) {
+      return -1;
+   }
+
+   info_ptr = png_create_info_struct(png_ptr);
+   if (info_ptr == NULL) {
+      png_destroy_write_struct(&png_ptr, &info_ptr);
+      fclose(fp);
+      return -1;
+   }
+
+   // set up error handling
+   if (setjmp(png_jmpbuf(png_ptr))) {
+      png_destroy_write_struct(&png_ptr, &info_ptr);
+      fclose(fp);
+      return -1;
+   }
+
+   // Set image attributes
+   png_set_IHDR(png_ptr,
+         info_ptr,
+         width,
+         height,
+         depth,
+         PNG_COLOR_TYPE_GRAY_ALPHA,
+         PNG_INTERLACE_NONE,
+         PNG_COMPRESSION_TYPE_DEFAULT,
+         PNG_FILTER_TYPE_DEFAULT);
+
+   // initialize rows of png
+   row_pointers = png_malloc(png_ptr, height * sizeof(png_byte*));
+   for (j = 0; j < height; j++) {
+      png_byte *row = png_malloc(png_ptr, sizeof(png_byte) * width * 4);
+      row_pointers[j] = row;
+      for (i = 0; i < width; i++) {
+         *row++ = img[j*width+i].intensity;
+         *row++ = img[j*width+i].alpha;
+      }
+   }
+
+   // write the image data
+   png_init_io(png_ptr, fp);
+   png_set_rows(png_ptr, info_ptr, row_pointers);
+   png_write_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
+
+   for (j = 0; j < height; j++) {
+      png_free(png_ptr, row_pointers[j]);
+   }
+   png_free(png_ptr, row_pointers);
+
+   png_destroy_write_struct(&png_ptr, &info_ptr);
+   fclose(fp);
+   return 0;
+}
+
+ia *pngfile2ia(char *pngname, int *width, int *height)
+{
+   unsigned char header[8];
+   png_structp png_ptr;
+   png_infop   info_ptr;
+   png_bytep *row_pointers;
+   FILE *fp;
+   ia *img = NULL;
+   int w = 0, h = 0;
+   int i, j;
+
+   // open file and validate PNG
+   fp = fopen(pngname, "rb");
+   if (!fp) {
+      ERROR("Error opening PNG file '%s'\n", pngname);
+      return NULL;
+   }
+
+   fread(header, 1, 8, fp);
+   if (png_sig_cmp(header, 0, 8)) {
+      ERROR("File is not recognized as a PNG file\n");
+      goto pngfile2ia_close;
+   }
+
+   png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+
+   if (!png_ptr) {
+      ERROR("png_create_read_struct failed\n");
+      goto pngfile2ia_close;
+   }
+
+   info_ptr = png_create_info_struct(png_ptr);
+   if (!info_ptr) {
+      ERROR("png_create_info_struct failed\n");
+      goto pngfile2ia_close;
+   }
+
+   png_init_io(png_ptr, fp);
+   png_set_sig_bytes(png_ptr, 8);
+
+   png_read_info(png_ptr, info_ptr);
+
+   w = png_get_image_width(png_ptr, info_ptr);
+   h = png_get_image_height(png_ptr, info_ptr);
+
+   png_read_update_info(png_ptr, info_ptr);
+
+   row_pointers = (png_bytep*) malloc(sizeof(png_bytep) * h);
+   for (j = 0; j < h; j++) {
+      row_pointers[j] = (png_byte*) malloc(png_get_rowbytes(png_ptr, info_ptr));
+   }
+
+   png_read_image(png_ptr, row_pointers);
+
+   img = malloc(w * h * sizeof(*img));
+
+   for (j = 0; j < h; j++) {
+      for (i = 0; i < w; i++) {
+         img[j * w + i].intensity = row_pointers[j][2*i+0];
+         img[j * w + i].alpha     = row_pointers[j][2*i+1];
+      }
+   }
+
+   // cleanup
+   for (j = 0; j < h; j++) {
+      free(row_pointers[j]);
+   }
+   free(row_pointers);
+
+pngfile2ia_close:
    fclose(fp);
 
    *width = w;
@@ -466,6 +608,7 @@ static void print_usage(void)
 // default if no format/depth specified, defaults to RGBA, 16
 static void get_image_info(char *filename, int *offset, img_format *format, int *depth)
 {
+   char tmpname[512];
    char *stroffset;
    char *strformat;
    unsigned int c;
@@ -476,8 +619,10 @@ static void get_image_info(char *filename, int *offset, img_format *format, int 
    *format = IMG_FORMAT_RGBA;
    *depth = 16;
 
+   strcpy(tmpname, filename);
+
    // remove file extension and leading path
-   stroffset = basename(filename);
+   stroffset = basename(tmpname);
    strformat = stroffset;
    for (c = 0; c < strlen(stroffset); c++) {
       switch (mode) {
@@ -513,7 +658,8 @@ static void get_image_info(char *filename, int *offset, img_format *format, int 
 int main(int argc, char *argv[])
 {
    char *binfilename;
-   rgba *img;
+   rgba *imgr;
+   ia *imgi;
    img_format format;
    int offset, depth;
    int width, height;
@@ -527,23 +673,34 @@ int main(int argc, char *argv[])
    binfilename = argv[1];
 
    for (i = 2; i < argc; i++) {
-      // convert each PNG image to internal RGBA format
-      img = pngfile2rgba(argv[i], &width, &height);
-      if (img) {
-         get_image_info(argv[i], &offset, &format, &depth);
-         switch (format) {
-            case IMG_FORMAT_RGBA:
-               rgba2file(img, offset, width, height, binfilename);
-               break;
-            case IMG_FORMAT_IA:
-               ia2file(img, offset, width, height, depth, binfilename);
-               break;
-            case IMG_FORMAT_SKYBOX:
-               sky2file(img, offset, width, height, binfilename);
-               break;
-         }
-      } else {
-         exit(2);
+      get_image_info(argv[i], &offset, &format, &depth);
+      switch (format) {
+         case IMG_FORMAT_RGBA:
+            imgr = pngfile2rgba(argv[i], &width, &height);
+            if (imgr) {
+               rgba2file(imgr, offset, width, height, binfilename);
+            } else {
+               exit(EXIT_FAILURE);
+            }
+            break;
+         case IMG_FORMAT_IA:
+            imgi = pngfile2ia(argv[i], &width, &height);
+            if (imgi) {
+               ia2file(imgi, offset, width, height, depth, binfilename);
+            } else {
+               exit(EXIT_FAILURE);
+            }
+            break;
+         case IMG_FORMAT_SKYBOX:
+            imgr = pngfile2rgba(argv[i], &width, &height);
+            if (imgr) {
+               sky2file(imgr, offset, width, height, binfilename);
+            } else {
+               exit(EXIT_FAILURE);
+            }
+            break;
+         default:
+            exit(EXIT_FAILURE);
       }
    }
 

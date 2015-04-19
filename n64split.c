@@ -692,10 +692,10 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
                   switch (texts[t].format) {
                      case FORMAT_IA:
                      {
-                        rgba *img = file2ia(binfilename, offset, w, h, texts[t].depth);
+                        ia *img = file2ia(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
                            sprintf(outfilepath, "%s/%s/0x%05X.ia%d.png", TEXTURE_DIR, sec->label, offset, texts[t].depth);
-                           rgba2png(img, w, h, outfilepath);
+                           ia2png(img, w, h, outfilepath);
                            free(img);
                            fprintf(fmake, " %s", outfilepath);
                         }
