@@ -194,17 +194,33 @@ static int proc_cmp(const void *a, const void *b)
 
 // TODO: needs to be merged with code from n64split
 // TODO: needs to handle names from the labels list as well
-static void fill_label(rom_config *config, unsigned int addr, char *label)
+// TODO: the hint is generated based on register a1/a2 = begin/end
+static void fill_label(rom_config *config, unsigned int addr, char *label, int hint)
 {
    int i;
-   for (i = 0; i < config->section_count; i++) {
-      if (config->sections[i].start == addr) {
-         sprintf(label, "%s    ", config->sections[i].label);
-         return;
-      } else if (config->sections[i].end == addr) {
-         sprintf(label, "%s_end", config->sections[i].label);
-         return;
-      }
+   switch (hint) {
+      case 0:
+         for (i = 0; i < config->section_count; i++) {
+            if (config->sections[i].start == addr) {
+               if (config->sections[i].label[0] != '\0') {
+                  sprintf(label, "%s     # FOUND start", config->sections[i].label);
+                  return;
+               }
+            }
+         }
+         break;
+      case 1:
+         for (i = 0; i < config->section_count; i++) {
+            if (config->sections[i].end == addr) {
+               if (config->sections[i].label[0] != '\0') {
+                  sprintf(label, "%s_end # FOUND end  ", config->sections[i].label);
+                  return;
+               }
+            }
+         }
+         break;
+      default:
+         break;
    }
    sprintf(label, "0x%x", addr);
 }
@@ -268,7 +284,11 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
                   unsigned int addr;
                   for (i = 0; i < luis; i++) {
                      addr = (unsigned int)((insn[i].detail->mips.operands[1].imm << 16) + insn[addius-i-1].detail->mips.operands[2].imm);
-                     fill_label(config, addr, label);
+                     switch (insn[i].detail->mips.operands[0].reg) {
+                        case MIPS_REG_A1: fill_label(config, addr, label, 0); break;
+                        case MIPS_REG_A2: fill_label(config, addr, label, 1); break;
+                        default:          fill_label(config, addr, label, -1); break;
+                     }
                      fprintf(out, "  la    $%s, %s # LUI/ADDIU", cs_reg_name(handle, insn[i].detail->mips.operands[0].reg), label);
                      if (i < (luis-1)) {
                         fprintf(out, "\n");
@@ -283,7 +303,7 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
    return retVal;
 }
 
-static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config)
+unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config)
 {
    char sec_name[64];
    csh handle;
@@ -333,7 +353,17 @@ static unsigned int disassemble_proc(FILE *out, unsigned char *data, long datale
          for (i = 0; i < count && disassembling; i++) {
             // handle redirect jump instruction immediates
             int inslen;
-            int ll = find_local(&proc->locals, processed);
+            int ll;
+            // TODO: workaround for __osEnqueueThread, __osPopThread
+            switch (ram_address + processed) {
+               case 0x80327D10: fprintf(out, "\n# begin 80327D10 (0E2D10)\n__osEnqueueThread:\n"); break;
+               case 0x80327D58: fprintf(out, "# end __osEnqueueThread 80327D58 (0E2D58)\n\n"
+                                             "# begin 80327D58 (0E2D58)\n__osPopThread:\n"); break;
+               case 0x80327D68: fprintf(out, "# end __osPopThread 80327D68 (0E2D68)\n\n"
+                                             "# begin 80327D68 (0E2D68)\nproc_80327D68:\n"); break;
+               default: break;
+            }
+            ll = find_local(&proc->locals, processed);
             if (ll >= 0) {
                fprintf(out, "L%s_%X: # %X\n", sec_name, processed, ram_address + processed);
             }
@@ -488,6 +518,25 @@ void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *
 }
 
 #ifdef MIPSDISASM_STANDALONE
+static void generate_report(proc_table *procs, rom_config *config)
+{
+   unsigned int cur_start;
+   unsigned int last_end;
+   int i;
+   cur_start = procs->procedures[0].start;
+   last_end = procs->procedures[0].end;
+   for (i = 1; i < procs->count; i++) {
+      if (procs->procedures[i].start > last_end + 0x1000) {
+         fprintf(stderr, "   (0x%06X, 0x%06X, \"asm\"), // %08X - %08X\n",
+               ram_to_rom(config, cur_start), ram_to_rom(config, last_end), cur_start, last_end);
+         cur_start = procs->procedures[i].start;
+      }
+      last_end = procs->procedures[i].end;
+   }
+   fprintf(stderr, "   (0x%06X, 0x%06X, \"asm\"), // %08X - %08X\n",
+         ram_to_rom(config, cur_start), ram_to_rom(config, last_end), cur_start, last_end);
+}
+
 // mipsdisasm binary [-c config] [offset ...]
 // config default: sm64.config
 // offset default: all labels in config
@@ -574,6 +623,8 @@ int main(int argc, char *argv[])
 
    // second pass, disassemble all procedures
    mipsdisasm_pass2(stdout, data, file_len, &procs, &config);
+
+   generate_report(&procs, &config);
 
    free(data);
 

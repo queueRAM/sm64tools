@@ -8,7 +8,6 @@ typedef enum
    TYPE_BEHAVIOR,
    TYPE_BIN,
    TYPE_HEADER,
-   TYPE_LA,
    TYPE_LEVEL,
    TYPE_MIO0,
    TYPE_PTR,

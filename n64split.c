@@ -1,11 +1,11 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
-
-#include <capstone/capstone.h>
+#include <stdlib.h>
 
 #include "config.h"
 #include "libmio0.h"
+#include "mipsdisasm.h"
 #include "n64graphics.h"
 #include "utils.h"
 
@@ -43,33 +43,6 @@ static int lookup_end(split_section *sections, int section_count, unsigned int a
       }
    }
    return -1;
-}
-
-#define MAX_LOCALS 32
-typedef struct _local_label
-{
-   unsigned int offsets[MAX_LOCALS];
-   int count;
-} local_label;
-
-static int find_local(local_label *locals, unsigned int offset)
-{
-   int i;
-   for (i = 0; i < locals->count; i++) {
-      if (locals->offsets[i] == offset) {
-         return i;
-      }
-   }
-   return -1;
-}
-
-static void add_local(local_label *locals, unsigned int offset)
-{
-   if (find_local(locals, offset) >= 0) {
-      return;
-   }
-   locals->offsets[locals->count] = offset;
-   locals->count++;
 }
 
 static void print_spaces(FILE *fp, int count)
@@ -289,7 +262,58 @@ static void write_level(FILE *out, unsigned char *data, split_section *sections,
    }
 }
 
-static void split_file(unsigned char *data, unsigned int length, rom_config *config)
+static void disassemble_section(FILE *out, unsigned char *data, long len, split_section *sec, proc_table *procs, rom_config *config)
+{
+   // disassemble all the procedures
+   unsigned int ram_address;
+   unsigned int last_end;
+   unsigned int end_address;
+   int start_proc;
+   int proc_idx;
+   // find first procedure in section
+   last_end = rom_to_ram(config, sec->start);
+   for (start_proc = 0; start_proc < procs->count; start_proc++) {
+      if (procs->procedures[start_proc].start >= last_end) {
+         break;
+      }
+   }
+   // disassemble each procedure
+   end_address = rom_to_ram(config, sec->end);
+   for (proc_idx = start_proc; proc_idx < procs->count; proc_idx++) {
+      ram_address = procs->procedures[proc_idx].start;
+      if (ram_address > last_end) {
+         // TODO: put larger sections in .bins
+         fprintf(out, "\n# unknown assembly section %X-%X (%06X-%06X) [%X]",
+               last_end, ram_address, ram_to_rom(config, last_end), ram_to_rom(config, ram_address), ram_address - last_end);
+         unsigned int a = ram_to_rom(config, last_end);
+         int count = 0;
+         while (a < ram_to_rom(config, ram_address)) {
+            if ((count % 4) == 0) {
+               fprintf(out, "\n .word 0x%08x", read_u32_be(&data[a]));
+            } else {
+               fprintf(out, ", 0x%08x", read_u32_be(&data[a]));
+            }
+            a += 4;
+            count++;
+         }
+         fprintf(out, "\n# end unknown section\n");
+      } else if (ram_address < last_end) {
+         fprintf(stderr, "Warning: %08X < %08X\n", ram_address, last_end);
+      }
+      // TODO: this is a workaround for the inner procedures __osPopThread, __osEnqueueThread, proc_80327D68
+      if (procs->procedures[proc_idx].start != 0x80327D58 &&
+          procs->procedures[proc_idx].start != 0x80327D68 &&
+          procs->procedures[proc_idx].start != 0x80327D10) {
+         disassemble_proc(out, data, len, &procs->procedures[proc_idx], config);
+      }
+      last_end = procs->procedures[proc_idx].end;
+      if (last_end >= end_address) {
+         break;
+      }
+   }
+}
+
+static void split_file(unsigned char *data, unsigned int length, proc_table *procs, rom_config *config)
 {
 #define GEN_DIR     "gen"
 #define MAKEFILENAME GEN_DIR "/Makefile.gen"
@@ -313,8 +337,6 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
    unsigned int w, h;
    unsigned int last_end = 0;
    unsigned int ptr_start, ptr_end;
-   csh handle;
-   cs_insn *insn;
    int count;
    int level_alloc;
    split_section *sections = config->sections;
@@ -334,14 +356,6 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
       exit(3);
    }
    fprintf(fasm, asm_header);
-
-   // open capstone disassembler
-   if (cs_open(CS_ARCH_MIPS, CS_MODE_MIPS64 + CS_MODE_BIG_ENDIAN, &handle) != CS_ERR_OK) {
-      ERROR("Error initializing disassembler\n");
-      exit(3);
-   }
-   cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
-   cs_option(handle, CS_OPT_SKIPDATA, CS_OPT_ON);
 
    for (s = 0; s < config->section_count; s++) {
       split_section *sec = &sections[s];
@@ -365,7 +379,7 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
       switch (sec->type)
       {
          case TYPE_HEADER:
-            fprintf(fasm, ".section \"header\"\n"
+            fprintf(fasm, ".section .header\n"
                           ".byte  0x%02X", data[sec->start]);
             for (i = 1; i < 4; i++) {
                fprintf(fasm, ", 0x%02X", data[sec->start + i]);
@@ -390,6 +404,7 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
             fwrite(&data[sec->start + 0x3E], 1, 1, fasm);
             fprintf(fasm, "\"        # country\n");
             fprintf(fasm, ".byte  0x%02X       # version\n\n", data[sec->start + 0x3F]);
+            fprintf(fasm, ".text\n\n");
             break;
          case TYPE_BIN:
             if (sec->label == NULL || sec->label[0] == '\0') {
@@ -430,154 +445,16 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
             }
             fprintf(fasm, ".word %s, %s\n", start_label, end_label);
             break;
-         case TYPE_LA:
-            // TODO: more intelligent register alignment
-            // TODO: move into TYPE_ASM
-            if (OPCODE(data[sec->start])   == 0x3C && OPCODE(data[sec->start+4])  == 0x3C &&
-                OPCODE(data[sec->start+8]) == 0x24 && OPCODE(data[sec->start+12]) == 0x24) {
-               unsigned short addr_low, addr_high;
-               unsigned int reg_start, reg_end;
-               // reconstruct address
-               addr_high = read_u16_be(&data[sec->start + 0x2]);
-               addr_low = read_u16_be(&data[sec->start + 0xe]);
-               // ADDIU sign extends which causes the encoded high val to be +1 if low MSb is set
-               if (addr_low & 0x8000) {
-                  addr_high--;
-               }
-               ptr_start = (addr_high << 16) | addr_low;
-               // reconstruct end address
-               addr_high = read_u16_be(&data[sec->start + 0x6]);
-               addr_low = read_u16_be(&data[sec->start + 0xa]);
-               // ADDIU sign extends which causes the encoded high val to be +1 if low MSb is set
-               if (addr_low & 0x8000) {
-                  addr_high--;
-               }
-               ptr_end = (addr_high << 16) | addr_low;
-               i = lookup_start(sections, config->section_count, ptr_start);
-               if (i < 0) {
-                  sprintf(start_label, "L%06X", ptr_start);
-               } else {
-                  strcpy(start_label, sections[i].label);
-               }
-               i = lookup_end(sections, config->section_count, ptr_end);
-               if (i < 0) {
-                  sprintf(end_label, "L%06X", ptr_end);
-               } else {
-                  sprintf(end_label, "%s_end", sections[i].label);
-               }
-               reg_start = LUI_REG(data[sec->start+1]);
-               reg_end = LUI_REG(data[sec->start+5]);
-               fprintf(fasm, "  la    $%s, %s\n", cs_reg_name(handle, reg_start + MIPS_REG_0), start_label);
-               fprintf(fasm, "  la    $%s, %s\n", cs_reg_name(handle, reg_end + MIPS_REG_0), end_label);
-            } else {
-               fprintf(stderr, "Error: 0x%X does not appear to be an LA\n", sec->start);
-            }
-            break;
          case TYPE_ASM:
-            if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(start_label, "L%06X", sec->start);
-            } else {
-               strcpy(start_label, sec->label);
+            // TODO: this should be read from the ROM configuration
+            switch (sec->start) {
+               case 0x0F5580:
+               case 0x22412C:
+                  fprintf(fasm, "\n.section .text0x%08X, \"ax\"\n\n", rom_to_ram(config, sec->start));
+                  break;
+               default: break;
             }
-            //fprintf(fasm, "\n.org 0x%x", sec->start);
-            fprintf(fasm, "\n%s:\n", start_label);
-            count = cs_disasm(handle, &data[sec->start], sec->end - sec->start, sec->start, 0, &insn);
-            if (count > 0) {
-               local_label locals;
-               const char *spaces[] = {"      ", "     ", "    ", "   ", "  ", " "};
-               int o;
-               locals.count = 0;
-               // first find referenced local labels
-               for (i = 0; i < count; i++) {
-                  if (cs_insn_group(handle, &insn[i], MIPS_GRP_JUMP)) {
-                     cs_mips *mips = &insn[i].detail->mips;
-                     for (o = 0; o < mips->op_count; o++) {
-                        if (mips->operands[o].type == MIPS_OP_IMM) {
-                           unsigned int sec_offset = (unsigned int)mips->operands[o].imm - sec->start;
-                           add_local(&locals, sec_offset);
-                           if (locals.count > MAX_LOCALS) {
-                              ERROR("Need more then %d locals in %s\n", MAX_LOCALS, sec->label);
-                           }
-                        }
-                     }
-                  }
-               }
-
-               for (i = 0; i < count; i++) {
-                  // handle redirect jump instruction immediates
-                  // TODO: memory operations
-                  // TODO: pseudo-instruction detection: li, la, bgt, blt
-                  int inslen;
-                  int ll = find_local(&locals, i*4);
-                  if (ll >= 0) {
-                     fprintf(fasm, "L%s_0x%X:\n", start_label, i*4);
-                  }
-                  inslen = MIN(strlen(insn[i].mnemonic), DIM(spaces) - 1);
-                  fprintf(fasm, "  %s%s", insn[i].mnemonic, spaces[inslen]);
-                  if (cs_insn_group(handle, &insn[i], MIPS_GRP_JUMP)) {
-                     cs_mips *mips = &insn[i].detail->mips;
-                     for (o = 0; o < mips->op_count; o++) {
-                        if (o > 0) {
-                           fprintf(fasm, ", ");
-                        }
-                        switch (mips->operands[o].type) {
-                           case MIPS_OP_REG:
-                              fprintf(fasm, "$%s", cs_reg_name(handle, mips->operands[o].reg));
-                              break;
-                           case MIPS_OP_IMM:
-                           {
-                              unsigned int sec_offset = (unsigned int)mips->operands[o].imm - sec->start;
-                              fprintf(fasm, "L%s_0x%X", start_label, sec_offset);
-                              break;
-                           }
-                           default:
-                              break;
-                        }
-                     }
-                  } else if (insn[i].id == MIPS_INS_JAL) {
-                     char sym[128];
-                     unsigned int addr;
-                     unsigned int ram_to_rom = config->ram_offset & 0xFFFFFF;
-                     int n;
-                     cs_mips *mips = &insn[i].detail->mips;
-                     addr = (unsigned int)mips->operands[0].imm;
-                     n = lookup_start(sections, config->section_count, addr - ram_to_rom);
-                     // TODO: move this to the config file
-                     if (n < 0) {
-                        ram_to_rom = 0x80283280 & 0xFFFFFF;
-                        n = lookup_start(sections, config->section_count, addr - ram_to_rom);
-                     }
-                     if (n >= 0) {
-                        sprintf(sym, "%s # 0x%X", sections[n].label, addr);
-                     } else {
-                        sprintf(sym, "0x%X # TODO: needs label", addr); // TODO: should this be addr + 0x80000000?
-                     }
-                     fprintf(fasm, "%s", sym);
-                  } else if (insn[i].id == MIPS_INS_MTC0 || insn[i].id == MIPS_INS_MFC0) {
-                     // workaround bug in capstone/LLVM
-                     unsigned char *in = &data[sec->start + i*4];
-                     unsigned char rd;
-                     cs_mips *mips = &insn[i].detail->mips;
-                     // 31-24 23-16 15-8 7-0
-                     // 0     1     2    3
-                     //       31-26  25-21 20-16 15-11 10-0
-                     // mfc0: 010000 00000   rt    rd  00000000000
-                     // mtc0: 010000 00100   rt    rd  00000000000
-                     // rt = in[1] & 0x1F;
-                     rd = (in[2] & 0xF8) >> 3;
-                     fprintf(fasm, "$%s, $%d # ", cs_reg_name(handle, mips->operands[0].reg), rd);
-                     fprintf(fasm, "%02X%02X%02X%02X", in[0], in[1], in[2], in[3]);
-                     fprintf(fasm, " %s", insn[i].op_str);
-                  } else {
-                     fprintf(fasm, "%s", insn[i].op_str);
-                  }
-                  fprintf(fasm, "\n");
-               }
-               cs_free(insn, count);
-            } else {
-               fprintf(stderr, "ERROR: Failed to disassemble given code!\n");
-            }
-            fprintf(fasm, "# end %s\n\n", start_label);
+            disassemble_section(fasm, data, length, sec, procs, config);
             break;
          case TYPE_LEVEL:
             // TODO: some level scripts can't be relocated yet
@@ -636,7 +513,7 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
    fprintf(fmake, "TEXTURE_DIR = %s\n\n", TEXTURE_DIR);
    fprintf(fmake, "LEVEL_DIR = %s\n\n", LEVEL_DIR);
 
-   fprintf(fasm, "\n.section \"mio0\"\n");
+   fprintf(fasm, "\n.section .mio0\n");
    for (s = 0; s < config->section_count; s++) {
       split_section *sec = &sections[s];
       switch (sec->type) {
@@ -829,7 +706,6 @@ static void split_file(unsigned char *data, unsigned int length, rom_config *con
    free(makeheader_level);
    fclose(fmake);
    fclose(fasm);
-   cs_close(&handle);
 }
 
 static void print_usage(void)
@@ -840,9 +716,13 @@ static void print_usage(void)
 int main(int argc, char *argv[])
 {
    rom_config config;
+   proc_table procs;
    long len;
    unsigned char *data;
    int ret_val;
+
+   memset(&procs, 0, sizeof(procs));
+   procs.count = 0;
 
    if (argc < 3) {
       print_usage();
@@ -863,9 +743,15 @@ int main(int argc, char *argv[])
       return 3;
    }
 
+   // TODO: move to config file
    config.basename = "sm64";
 
-   split_file(data, len, &config);
+   // fill procs table from config labels
+   mipsdisasm_add_procs(&procs, &config, len);
+   // first pass disassembler
+   mipsdisasm_pass1(data, len, &procs, &config);
+
+   split_file(data, len, &procs, &config);
 
    return 0;
 }

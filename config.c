@@ -19,8 +19,6 @@ static section_type str2section(const char *type_name)
          type = TYPE_BIN;
       } else if (0 == strcmp("header", type_name)) {
          type = TYPE_HEADER;
-      } else if (0 == strcmp("la", type_name)) {
-         type = TYPE_LA;
       } else if (0 == strcmp("level", type_name)) {
          type = TYPE_LEVEL;
       } else if (0 == strcmp("mio0", type_name)) {

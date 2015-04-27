@@ -31,6 +31,7 @@ N64GRAPHICS_SRC_FILES := n64graphics.c \
 
 SPLIT_SRC_FILES := config.c \
                    libmio0.c \
+                   mipsdisasm.c \
                    n64graphics.c \
                    n64split.c \
                    utils.c
