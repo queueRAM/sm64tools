@@ -247,14 +247,6 @@ static void write_level(FILE *out, unsigned char *data, split_section *sections,
       print_spaces(out, indent);
       fprint_hex_source(out, &data[a], i);
       fprintf(out, "\n");
-      // TODO: remove this debug
-      if (sec->start == 0x269EA0) {
-         printf("%06X: ", a);
-         print_spaces(stdout, indent);
-         printf("[ ");
-         print_hex(&data[a], i);
-         printf("]\n");
-      }
       if (data[a] == 0x04) {
          indent += 2;
       }
@@ -368,12 +360,19 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
       }
 
       // fill gaps between regions
-      // TODO: small gaps just .byte?
       if (sec->start != last_end) {
-         sprintf(outfilename, "%s/%s.%06X.bin", BIN_DIR, config->basename, last_end);
-         write_file(outfilename, &data[last_end], sec->start - last_end);
+         int gap_len = sec->start - last_end;
          fprintf(fasm, "L%06X:\n", last_end);
-         fprintf(fasm, ".incbin \"%s\"\n", outfilename);
+         // for small gaps, just output bytes
+         if (gap_len <= 16) {
+            fprintf(fasm, ".byte ");
+            fprint_hex_source(fasm, &data[last_end], gap_len);
+            fprintf(fasm, "\n");
+         } else {
+            sprintf(outfilename, "%s/%s.%06X.bin", BIN_DIR, config->basename, last_end);
+            write_file(outfilename, &data[last_end], gap_len);
+            fprintf(fasm, ".incbin \"%s\"\n", outfilename);
+         }
       }
 
       switch (sec->type)
