@@ -743,9 +743,6 @@ int main(int argc, char *argv[])
       return 3;
    }
 
-   // TODO: move to config file
-   config.basename = "sm64";
-
    // fill procs table from config labels
    mipsdisasm_add_procs(&procs, &config, len);
    // first pass disassembler

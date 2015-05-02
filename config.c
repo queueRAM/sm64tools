@@ -63,15 +63,19 @@ int parse_config_file(const char *filename, rom_config *config)
       return -1;
    }
 
-   // TODO: remove this
-   config->ram_offset = 0x80245000;
-
    // get name
    if (config_lookup_string(&cfg, "name", &str)) {
-      printf("ROM name: %s\n", str);
-      // TODO: save?
+      strcpy(config->name, str);
    } else {
       ERROR("No 'name' field in config file.\n");
+   }
+
+   // get file basename
+   if (config_lookup_string(&cfg, "basename", &str)) {
+      strcpy(config->basename, str);
+   } else {
+      strcpy(config->basename, "default");
+      ERROR("No 'basename' field in config file, using default.\n");
    }
 
    // output memory mapping
@@ -244,8 +248,7 @@ void print_config(const rom_config *config)
 
 int validate_config(const rom_config *config, unsigned int max_len)
 {
-   // warn on out of order sections
-   // error on overlapped sections
+   // error on overlapped and out-of-order sections
    int i, j;
    unsigned int last_end = 0;
    for (i = 0; i < config->section_count; i++) {

@@ -48,8 +48,8 @@ typedef struct _texture
 
 typedef struct _rom_config
 {
-   char *basename;
-   unsigned int ram_offset;
+   char name[128];
+   char basename[128];
 
    unsigned int *ram_table;
    int ram_count;
