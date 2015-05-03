@@ -373,7 +373,8 @@ rgba *pngfile2rgba(char *pngname, int *width, int *height)
    unsigned char header[8];
    png_structp png_ptr;
    png_infop   info_ptr;
-   png_bytep *row_pointers;
+   png_bytep  *row_pointers;
+   png_byte    color_type;
    FILE *fp;
    rgba *img = NULL;
    int w = 0, h = 0;
@@ -412,6 +413,7 @@ rgba *pngfile2rgba(char *pngname, int *width, int *height)
 
    w = png_get_image_width(png_ptr, info_ptr);
    h = png_get_image_height(png_ptr, info_ptr);
+   color_type = png_get_color_type(png_ptr, info_ptr);
 
    png_read_update_info(png_ptr, info_ptr);
 
@@ -424,13 +426,30 @@ rgba *pngfile2rgba(char *pngname, int *width, int *height)
 
    img = malloc(w * h * sizeof(*img));
 
-   for (j = 0; j < h; j++) {
-      for (i = 0; i < w; i++) {
-         img[j * w + i].red   = row_pointers[j][4*i+0];
-         img[j * w + i].green = row_pointers[j][4*i+1];
-         img[j * w + i].blue  = row_pointers[j][4*i+2];
-         img[j * w + i].alpha = row_pointers[j][4*i+3];
-      }
+   switch (color_type) {
+      case PNG_COLOR_TYPE_RGB_ALPHA:
+         for (j = 0; j < h; j++) {
+            for (i = 0; i < w; i++) {
+               img[j*w + i].red   = row_pointers[j][4*i];
+               img[j*w + i].green = row_pointers[j][4*i+1];
+               img[j*w + i].blue  = row_pointers[j][4*i+2];
+               img[j*w + i].alpha = row_pointers[j][4*i+3];
+            }
+         }
+         break;
+      case PNG_COLOR_TYPE_GRAY_ALPHA:
+         for (j = 0; j < h; j++) {
+            for (i = 0; i < w; i++) {
+               img[j*w + i].red   = row_pointers[j][2*i];
+               img[j*w + i].green = row_pointers[j][2*i];
+               img[j*w + i].blue  = row_pointers[j][2*i];
+               img[j*w + i].alpha = row_pointers[j][2*i+1];
+            }
+         }
+         break;
+      default:
+         ERROR("Don't know how to read PNG color type: %d\n", color_type);
+         exit(1);
    }
 
    // cleanup
@@ -522,7 +541,8 @@ ia *pngfile2ia(char *pngname, int *width, int *height)
    unsigned char header[8];
    png_structp png_ptr;
    png_infop   info_ptr;
-   png_bytep *row_pointers;
+   png_bytep  *row_pointers;
+   png_byte    color_type;
    FILE *fp;
    ia *img = NULL;
    int w = 0, h = 0;
@@ -561,6 +581,7 @@ ia *pngfile2ia(char *pngname, int *width, int *height)
 
    w = png_get_image_width(png_ptr, info_ptr);
    h = png_get_image_height(png_ptr, info_ptr);
+   color_type = png_get_color_type(png_ptr, info_ptr);
 
    png_read_update_info(png_ptr, info_ptr);
 
@@ -573,11 +594,28 @@ ia *pngfile2ia(char *pngname, int *width, int *height)
 
    img = malloc(w * h * sizeof(*img));
 
-   for (j = 0; j < h; j++) {
-      for (i = 0; i < w; i++) {
-         img[j * w + i].intensity = row_pointers[j][2*i+0];
-         img[j * w + i].alpha     = row_pointers[j][2*i+1];
-      }
+   switch (color_type) {
+      case PNG_COLOR_TYPE_RGB_ALPHA:
+         ERROR("Warning: averaging RGBA PNG to create gray IA\n");
+         for (j = 0; j < h; j++) {
+            for (i = 0; i < w; i++) {
+               int sum = row_pointers[j][4*i] + row_pointers[j][4*i+1] + row_pointers[j][4*i+2];
+               img[j*w + i].intensity = sum / 3;
+               img[j*w + i].alpha = row_pointers[j][4*i+3];
+            }
+         }
+         break;
+      case PNG_COLOR_TYPE_GRAY_ALPHA:
+         for (j = 0; j < h; j++) {
+            for (i = 0; i < w; i++) {
+               img[j*w + i].intensity = row_pointers[j][2*i];
+               img[j*w + i].alpha     = row_pointers[j][2*i+1];
+            }
+         }
+         break;
+      default:
+         ERROR("Don't know how to read PNG color type: %d\n", color_type);
+         exit(1);
    }
 
    // cleanup
