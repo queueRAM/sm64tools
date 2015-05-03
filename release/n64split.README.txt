@@ -1,0 +1,60 @@
+n64split: N64 ROM splitter, texture ripper, recursive MIPS disassembler
+--------
+
+The idea behind n64split is to be able to split a ROM into various components:
+assembly code, textures, level data, audio data; and add on a build system that 
+is able to take changes made to those files and reconstruct a ROM.  The 
+resulting ROM is almost bit for bit compatible, with exception of some macro 
+instruction translation and relocation of MIO0 data.
+
+The disassembler is recursive, so it will disassemble all procedures it 
+discovers through JALs.  It also somewhat intelligently decodes instruction 
+pairs to macro instructions (like LUI/ADDIU to LA and LUI/LW pairs to LW) and 
+adds proper labels JALs and local branches.
+
+Usage:
+n64split -c sm64.config "Super Mario 64 (U).z64"
+
+This will split the ROM based on the contents of the configuration file 
+"sm64.config".  See the comments in that file if you want to addapt it.
+
+Output:
+gen/
+ +- sm64.s - top level assembly*
+ +- Makefile.gen - generated Makefile with texture and level dependencies
+ +- bin/ - raw binary data from undecoded and MIO0 blocks
+ +- levels/ - decoded level data
+ +- textures/ - all ripped textures*
+ 
+* These are the two areas of most interest.
+
+ROM Build System: build system to reconstruct ROM after making changes
+--------
+The build system relies on GNU make to detect changes in resources and 
+mips64-elf assembler and linker to rebuild the ROM.  You could of course 
+circumvent make and just build everything every time with a batch script, 
+but this is incredibly slow due to all the texture encoding and my terribly 
+inefficient MIO0 compressor.  A win32 build of make is included, but you'll 
+need to either build or obtain** mips64-elf binutils on your own if you want 
+to rebuild the image.
+
+** https://dragonminded.com/n64dev/
+
+Usage: With mips64-elf bin directory in your PATH, just run 'make' from the
+command line, and it will handle the rest.
+$ make
+mips64-elf-as -mtune=vr4300 -march=vr4300 -o build/sm64.o gen/sm64.s
+mips64-elf-ld -Tn64.ld -Map build/sm64.map -o build/sm64.elf build/sm64.o 
+mips64-elf-objcopy build/sm64.elf build/sm64.bin -O binary
+./tools/n64cksum build/sm64.bin sm64.gen.z64
+
+Output:
+build artifacts will go in build directory.
+Complete ROM is sm64.gen.z64
+
+Source is MIT licensed and available at:
+https://github.com/queueRAM/sm64tools/
+
+Changelog:
+v0.1a: Initial release
+ - supports texture ripping, level decoding, and recursive disassembler
