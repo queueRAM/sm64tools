@@ -733,7 +733,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
 
 static void print_usage(void)
 {
-   ERROR("Usage: n64split [-c CONFIG] ROM\n"
+   ERROR("Usage: n64split [-c CONFIG] [-v] ROM\n"
          "\n"
          "n64split v" N64SPLIT_VERSION ": N64 ROM splitter, texture ripper, recursive disassembler\n"
          "\n"
