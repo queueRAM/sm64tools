@@ -9,6 +9,8 @@
 #include "mipsdisasm.h"
 #include "utils.h"
 
+#define MIPSDISASM_VERSION "0.1"
+
 #define DEFAULT_CONFIG "sm64.config"
 
 static int known_index(rom_config *config, unsigned int ram_addr)
@@ -518,6 +520,24 @@ void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *
 }
 
 #ifdef MIPSDISASM_STANDALONE
+typedef struct
+{
+   unsigned int *offsets;
+   int offset_count;
+   char *input_file;
+   char *output_file;
+   char *config_file;
+} arg_config;
+
+static arg_config default_args =
+{
+   NULL,
+   0,
+   NULL,
+   NULL,
+   DEFAULT_CONFIG
+};
+
 static void generate_report(proc_table *procs, rom_config *config)
 {
    unsigned int cur_start;
@@ -527,84 +547,143 @@ static void generate_report(proc_table *procs, rom_config *config)
    last_end = procs->procedures[0].end;
    for (i = 1; i < procs->count; i++) {
       if (procs->procedures[i].start > last_end + 0x1000) {
-         fprintf(stderr, "   (0x%06X, 0x%06X, \"asm\"), // %08X - %08X\n",
+         INFO("   (0x%06X, 0x%06X, \"asm\"), // %08X - %08X\n",
                ram_to_rom(config, cur_start), ram_to_rom(config, last_end), cur_start, last_end);
          cur_start = procs->procedures[i].start;
       }
       last_end = procs->procedures[i].end;
    }
-   fprintf(stderr, "   (0x%06X, 0x%06X, \"asm\"), // %08X - %08X\n",
+   INFO("   (0x%06X, 0x%06X, \"asm\"), // %08X - %08X\n",
          ram_to_rom(config, cur_start), ram_to_rom(config, last_end), cur_start, last_end);
 }
 
-// mipsdisasm binary [-c config] [offset ...]
-// config default: sm64.config
-// offset default: all labels in config
+static void print_usage(void)
+{
+   ERROR("Usage: mipsdisasm [-c CONFIG] [-o OUTPUT] [-v] ROM [ADDRESSES]\n"
+         "\n"
+         "mipsdisasm v" MIPSDISASM_VERSION ": Recursive MIPS disassembler\n"
+         "\n"
+         "Optional arguments:\n"
+         " -c CONFIG    ROM configuration file (default: %s)\n"
+         " -o OUTPUT    output filename (default: stdout)\n"
+         " -v           verbose progress output\n"
+         "\n"
+         "Arguments:\n"
+         " FILE         input binary file to disassemble\n"
+         " [ADDRESSES]  optional list of RAM or ROM addresses (default: labels from config file)\n",
+         default_args.config_file);
+   exit(EXIT_FAILURE);
+}
+
+// parse command line arguments
+static void parse_arguments(int argc, char *argv[], arg_config *config)
+{
+   int i;
+   int file_count = 0;
+   if (argc < 2) {
+      print_usage();
+      exit(1);
+   }
+   config->offsets = malloc(argc * sizeof(*config->offsets));
+   config->offset_count = 0;
+   for (i = 1; i < argc; i++) {
+      if (argv[i][0] == '-') {
+         switch (argv[i][1]) {
+            case 'c':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               config->config_file = argv[i];
+               break;
+            case 'o':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               config->output_file = argv[i];
+               break;
+            case 'v':
+               g_verbosity = 1;
+               break;
+            default:
+               print_usage();
+               break;
+         }
+      } else {
+         if (file_count == 0) {
+            config->input_file = argv[i];
+         } else {
+            config->offsets[config->offset_count] = strtoul(argv[i], NULL, 0);
+            config->offset_count++;
+         }
+         file_count++;
+      }
+   }
+   if (file_count < 1) {
+      print_usage();
+   }
+}
+
 int main(int argc, char *argv[])
 {
    rom_config config;
+   arg_config args;
    long file_len;
    unsigned char *data;
-   unsigned int ram_address = 0;
-   unsigned int rom_offset = 0;
-   unsigned int offset;
+   unsigned int ram_address;
+   unsigned int rom_offset;
    proc_table procs;
-   int config_loaded = 0;
-   int arg_start;
+   FILE *out;
    int i;
 
-   if (argc < 2) {
-      ERROR("usage: mipsdisasm BINARY [-c config] [OFFSET ...]\n");
-      return EXIT_FAILURE;
-   }
+   // load defaults and parse arguments
+   out = stdout;
+   args = default_args;
+   parse_arguments(argc, argv, &args);
 
-   file_len = read_file(argv[1], &data);
-
+   // read input file
+   INFO("Reading input file '%s'\n", args.input_file);
+   file_len = read_file(args.input_file, &data);
    if (file_len <= 0) {
+      ERROR("Error reading input file '%s'\n", args.input_file);
       return EXIT_FAILURE;
    }
 
-   memset(&procs, 0, sizeof(procs));
-   procs.count = 0;
-
-   // check for config file
-   if (argc > 2) {
-      arg_start = 2;
-      if (argv[2][0] == '-' && argv[2][1] == 'c') {
-         if (argc > 3) {
-            if (parse_config_file(argv[3], &config)) {
-               ERROR("Error parsing config file '%s'\n", argv[3]);
-               return EXIT_FAILURE;
-            }
-            config_loaded = 1;
-         }
-         arg_start += 2;
-      }
-   }
-
-   // load default config
-   if (!config_loaded) {
-      if (parse_config_file(DEFAULT_CONFIG, &config)) {
-         ERROR("Error parsing config file '%s'\n", argv[3]);
+   // if specified, open output file
+   if (args.output_file != NULL) {
+      INFO("Opening output file '%s'\n", args.output_file);
+      out = fopen(args.output_file, "w");
+      if (out == NULL) {
+         ERROR("Error opening output file '%s'\n", args.output_file);
          return EXIT_FAILURE;
       }
    }
 
-   if (argc > arg_start) {
-      for (i = arg_start; i < argc; i++) {
-         offset = strtoul(argv[i], NULL, 0);
-         if (offset >= 0x80000000) {
-            ram_address = offset;
+   // parse config file
+   INFO("Parsing config file '%s'\n", args.config_file);
+   if (parse_config_file(args.config_file, &config)) {
+      ERROR("Error parsing config file '%s'\n", args.config_file);
+      return EXIT_FAILURE;
+   }
+
+   // add procedures from either command line offsets or from configuration labels
+   memset(&procs, 0, sizeof(procs));
+   procs.count = 0;
+   if (args.offset_count > 0) {
+      for (i = 0; i < args.offset_count; i++) {
+         if (args.offsets[i] >= 0x80000000) {
+            INFO("Adding RAM address 0x%X\n", args.offsets[i]);
+            ram_address = args.offsets[i];
             rom_offset = ram_to_rom(&config, ram_address);
             if (ram_address == rom_offset) {
-               ERROR("Warning: offset %08X not in RAM range\n", offset);
+               ERROR("Warning: offset %08X not in RAM range\n", args.offsets[i]);
                return EXIT_FAILURE;
             }
          } else {
-            rom_offset = offset;
+            INFO("Adding ROM address 0x%X\n", args.offsets[i]);
+            rom_offset = args.offsets[i];
             ram_address = rom_to_ram(&config, rom_offset);
             if (rom_offset == ram_address) {
-               ERROR("Warning: offset %08X not in ROM range\n", offset);
+               ERROR("Warning: offset %08X not in ROM range\n", args.offsets[i]);
                return EXIT_FAILURE;
             }
          }
@@ -618,11 +697,11 @@ int main(int argc, char *argv[])
    // first pass, collect JALs, local labels, and find procedure ends
    mipsdisasm_pass1(data, file_len, &procs, &config);
 
-   fprintf(stdout, ".set noat      # allow manual use of $at\n");
-   fprintf(stdout, ".set noreorder # don't insert nops after branches\n\n");
+   fprintf(out, ".set noat      # allow manual use of $at\n");
+   fprintf(out, ".set noreorder # don't insert nops after branches\n\n");
 
    // second pass, disassemble all procedures
-   mipsdisasm_pass2(stdout, data, file_len, &procs, &config);
+   mipsdisasm_pass2(out, data, file_len, &procs, &config);
 
    generate_report(&procs, &config);
 
