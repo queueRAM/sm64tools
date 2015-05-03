@@ -360,7 +360,7 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
                case 0x80327D58: fprintf(out, "# end __osEnqueueThread 80327D58 (0E2D58)\n\n"
                                              "# begin 80327D58 (0E2D58)\n__osPopThread:\n"); break;
                case 0x80327D68: fprintf(out, "# end __osPopThread 80327D68 (0E2D68)\n\n"
-                                             "# begin 80327D68 (0E2D68)\nproc_80327D68:\n"); break;
+                                             "# begin 80327D68 (0E2D68)\n__osDispatchThread:\n"); break;
                default: break;
             }
             ll = find_local(&proc->locals, processed);
