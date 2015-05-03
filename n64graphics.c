@@ -634,7 +634,6 @@ pngfile2ia_close:
 
 
 #ifdef N64GRAPHICS_STANDALONE
-#include <libgen.h>
 #include <string.h>
 
 static void print_usage(void)

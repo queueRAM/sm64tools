@@ -3,8 +3,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <unistd.h>
-#include <utime.h>
+#if defined(_MSC_VER) || defined(__MINGW32__)
+  #include <io.h>
+  #include <sys/utime.h>
+#else
+  #include <unistd.h>
+  #include <utime.h>
+#endif
 
 #include "utils.h"
 
@@ -142,6 +147,17 @@ void generate_filename(const char *in_name, char *out_name, char *extension)
    }
    tmp_name[i] = '\0';
    sprintf(out_name, "%s.%s", tmp_name, extension);
+}
+
+char *basename(const char *name)
+{
+   const char *base = name;
+   while (*name) {
+      if (*name++ == '/') {
+         base = name;
+      }
+   }
+   return (char *)base;
 }
 
 void make_dir(const char *dir_name)
