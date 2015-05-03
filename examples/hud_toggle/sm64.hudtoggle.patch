@@ -1,70 +1,63 @@
---- gen/sm64.orig.s	2015-03-30 16:39:46.795759792 +0200
-+++ gen/sm64.s	2015-03-30 16:39:37.592570791 +0200
-@@ -4684,11 +4684,11 @@
+--- gen/sm64.s.orig	2015-05-03 11:17:28.608274289 -0500
++++ gen/sm64.s	2015-05-03 11:32:18.514979484 -0500
+@@ -30350,10 +30350,10 @@
    sw    $t6, 0x30($sp)
    addiu $t7, $zero, 0xcd
    sw    $t7, 0x2c($sp)
--  lui   $t8, 0x8033
--  lh    $t8, 0x2608($t8)
--  bnez  $t8, LShowCameraStatus_0x44
+-  lh    $t8, 0x80332608 # lui $t8, 0x8033/lh $t8, 0x2608($t8)
+-  bnez  $t8, LShowCameraStatus_44
 -  nop   
--  b     LShowCameraStatus_0x1DC
-+  lui   $t8, 0x8034
-+  lb    $t8, -20575 ($t8)
+-  b     LShowCameraStatus_1DC
++  lb    $t8, 0x8033AFA1
 +  addiu $s2, $zero, 0x0010
-+  bne   $s2, $t8, LShowCameraStatus_0x1DC
++  bne   $s2, $t8, LShowCameraStatus_1DC
 +  nop
    nop   
- LShowCameraStatus_0x44:
-   lui   $t9, 0x8034
-@@ -4841,29 +4841,27 @@
-   jal   RenderHud_CannonReticle # 0x2DB08C
+ LShowCameraStatus_44: # 802E3B80
+   lw    $t9, 0x8033b06c # lui $t9, 0x8034/lw $t9, -0x4f94($t9)
+@@ -30498,29 +30498,25 @@
+   jal   RenderHud_CannonReticle
    nop   
- LRenderHud_0x74:
+ LRenderHud_74: # 802E3DA0
 -  lh    $t2, 0x1e($sp)
 -  andi  $t3, $t2, 1
--  beqz  $t3, LRenderHud_0x8C
+-  beqz  $t3, LRenderHud_8C
 -  nop   
--  jal   RenderHud_MarioLives # 0x2E3744
++  lb    $s1, 0x8033afa1
++  andi  $s2, $s1, 0x10
++  beq   $zero, $s2, LRenderHud_C0
++  lh    $s0, 0x1e($sp)
+   jal   RenderHud_MarioLives
 -  nop   
--LRenderHud_0x8C:
+-LRenderHud_8C: # 802E3DB8
 -  lh    $t4, 0x1e($sp)
 -  andi  $t5, $t4, 2
--  beqz  $t5, LRenderHud_0xA4
+-  beqz  $t5, LRenderHud_A4
 -  nop   
--  jal   RenderHud_Coins # 0x2E37A8
++  lui   $s3, 0x8033
+   jal   RenderHud_Coins
 -  nop   
--LRenderHud_0xA4:
+-LRenderHud_A4: # 802E3DD0
 -  lh    $t6, 0x1e($sp)
 -  andi  $t7, $t6, 4
--  beqz  $t7, LRenderHud_0xBC
+-  beqz  $t7, LRenderHud_BC
 -  nop   
--  jal   RenderHud_Stars # 0x2E380C
++  lb    $s1, 0x8033afdb
+   jal   RenderHud_Stars
 -  nop   
--LRenderHud_0xBC:
+-LRenderHud_BC: # 802E3DE8
 -  lh    $t8, 0x1e($sp)
 -  andi  $t9, $t8, 0x10
-+  lui   $s4, 0x8034
-+  lb    $s1, -20575 ($s4)
-+  andi  $s2, $s1, 0x0010
-+  beq   $zero, $s2, LRenderHud_0xC0
-+  lh    $s0, 0x001E ($sp)
-+  jal   RenderHud_MarioLives
-+  lui   $s3, 0x8033
-+  jal   RenderHud_Coins
-+  lb    $s1, -20517 ($s4)
-+  jal   RenderHud_Stars
-+  andi  $s2, $s1, 0x0010
-+  beq   $zero, $s2, LRenderHud_0xC0
-+  lui   $a0, 0x701A
-+  addiu $a1, $s3, 0x3F10
++  andi  $s2, $s1, 0x10
++  beq   $zero, $s2, LRenderHud_C0
++  lui   $a0, 0x701a
++  addiu $a1, $s3, 0x3f10
 +  jal   SetSound
 +  ori   $a0, $a0, 0x8081
 +  nop
 +  nop
-+  nop
-+LRenderHud_0xC0:
-+  andi  $t9, $s0, 0x0010
-   beqz  $t9, LRenderHud_0xD4
++LRenderHud_C0:
++  andi  $t9, $s0, 0x10
+   beqz  $t9, LRenderHud_D4
    nop   
-   jal   RenderHud_CannonReticle2 # 0x2E38E4
+   jal   RenderHud_CannonReticle2

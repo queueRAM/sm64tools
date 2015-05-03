@@ -28,8 +28,8 @@ https://sites.google.com/site/supermario64starroad/home/sm64-documents/skelux
 ## Coin colors
 coin colors and texture replacement
 
-1. copy 0x05780.ia16.png 0x05F80.ia16.png 0x06780.ia16.png 0x06F80.ia16.png to gen/textures/doors\_trees/
-2. Apply coin\_colors.ips IPS patch to gen/bin/doors\_trees.bin
+1. copy 0x05780.ia16.png 0x05F80.ia16.png 0x06780.ia16.png 0x06F80.ia16.png to gen/textures/doors\_trees\_coins/
+2. Apply coin\_colors.ips IPS patch to gen/bin/doors\_trees\_coins.bin
 
 Thanks to cpuHacka101 for details on this
 http://www.smwcentral.net/?p=viewthread&t=58544
