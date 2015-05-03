@@ -42,7 +42,7 @@ clean:
 	rm -f $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).o $(BUILD_DIR)/$(TARGET).bin $(TARGET).v64
 
 $(MIO0_DIR)/%.mio0: $(MIO0_DIR)/%.bin
-	$(MIO0TOOL) e $< 0 $@
+	$(MIO0TOOL) $< $@
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)

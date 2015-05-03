@@ -88,7 +88,7 @@ $(SM64_LIB): $(LIB_OBJ_FILES)
 	$(AR) rcs $@ $^
 
 $(MIO0_TARGET): libmio0.c libmio0.h
-	$(CC) $(CFLAGS) -DMIO0_TEST $(LDFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -DMIO0_STANDALONE $(LDFLAGS) -o $@ $<
 
 $(F3D_TARGET): $(F3D_OBJ_FILES) $(SM64_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)

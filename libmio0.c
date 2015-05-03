@@ -7,6 +7,8 @@
 
 // defines
 
+#define MIO0_VERSION "0.1"
+
 #define GET_BIT(buf, bit) ((buf)[(bit) / 8] & (1 << (7 - ((bit) % 8))))
 
 #ifdef MIO0_STATS
@@ -456,60 +458,128 @@ free_all:
    return ret_val;
 }
 
-#ifdef MIO0_TEST
-int main(int argc, char *argv[])
+#ifdef MIO0_STANDALONE
+typedef struct
 {
-   char out_file_name[256];
-   char *in_file = NULL;
-   char *out_file = NULL;
-   char *op;
-   unsigned long offset;
-   int ret_val;
+   char *in_filename;
+   char *out_filename;
+   unsigned int offset;
+   int compress;
+} arg_config;
 
-   if (argc < 3) {
-      ERROR("Usage: mio0 <op> <in_file> [offset] [out_file]\n");
+static arg_config default_config =
+{
+   NULL,
+   NULL,
+   0,
+   1
+};
+
+static void print_usage(void)
+{
+   ERROR("Usage: mio0 [-c / -d] [-o OFFSET] FILE [OUTPUT]\n"
+         "\n"
+         "mio0 v" MIO0_VERSION ": MIO0 compression and decompression tool\n"
+         "\n"
+         "Optional arguments:\n"
+         " -c           compress raw data into MIO0 (default: compress)\n"
+         " -d           decompress MIO0 into raw data\n"
+         " -o OFFSET    starting offset in FILE (default: 0)\n"
+         "\n"
+         "File arguments:\n"
+         " FILE        input file\n"
+         " [OUTPUT]    output file (default: FILE.out)\n");
+   exit(1);
+}
+
+// parse command line arguments
+static void parse_arguments(int argc, char *argv[], arg_config *config)
+{
+   int i;
+   int file_count = 0;
+   if (argc < 2) {
+      print_usage();
       exit(1);
    }
-
-   op = argv[1];
-   in_file = argv[2];
-   sprintf(out_file_name, "%s.out", in_file);
-   out_file = out_file_name;
-   if (argc > 3) {
-      offset = strtol(argv[3], NULL, 0);
-      if (argc > 4) {
-         out_file = argv[4];
+   for (i = 1; i < argc; i++) {
+      if (argv[i][0] == '-') {
+         switch (argv[i][1]) {
+            case 'c':
+               config->compress = 1;
+               break;
+            case 'd':
+               config->compress = 0;
+               break;
+            case 'o':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               config->offset = strtoul(argv[i], NULL, 0);
+               break;
+            default:
+               print_usage();
+               break;
+         }
+      } else {
+         switch (file_count) {
+            case 0:
+               config->in_filename = argv[i];
+               break;
+            case 1:
+               config->out_filename = argv[i];
+               break;
+            default: // too many
+               print_usage();
+               break;
+         }
+         file_count++;
       }
-   } else {
-      offset = 0;
+   }
+   if (file_count < 1) {
+      print_usage();
+   }
+}
+
+int main(int argc, char *argv[])
+{
+   char out_filename[FILENAME_MAX];
+   arg_config config;
+   int ret_val;
+
+   // get configuration from arguments
+   config = default_config;
+   parse_arguments(argc, argv, &config);
+   if (config.out_filename == NULL) {
+      config.out_filename = out_filename;
+      sprintf(config.out_filename, "%s.out", config.in_filename);
    }
 
    // operation
-   if (op[0] == 'e') {
-      ret_val = mio0_encode_file(in_file, out_file);
+   if (config.compress) {
+      ret_val = mio0_encode_file(config.in_filename, config.out_filename);
    } else {
-      ret_val = mio0_decode_file(in_file, offset, out_file);
+      ret_val = mio0_decode_file(config.in_filename, config.offset, config.out_filename);
    }
 
    switch (ret_val) {
       case 1:
-         ERROR("Error opening input file \"%s\"\n", in_file);
+         ERROR("Error opening input file \"%s\"\n", config.in_filename);
          break;
       case 2:
-         ERROR("Error reading from input file \"%s\"\n", in_file);
+         ERROR("Error reading from input file \"%s\"\n", config.in_filename);
          break;
       case 3:
-         ERROR("Error decoding MIO0 data. Wrong offset (0x%lX)?\n", offset);
+         ERROR("Error decoding MIO0 data. Wrong offset (0x%X)?\n", config.offset);
          break;
       case 4:
-         ERROR("Error opening output file \"%s\"\n", out_file);
+         ERROR("Error opening output file \"%s\"\n", config.out_filename);
          break;
       case 5:
-         ERROR("Error writing bytes to output file \"%s\"\n", out_file);
+         ERROR("Error writing bytes to output file \"%s\"\n", config.out_filename);
          break;
    }
 
    return ret_val;
 }
-#endif // MIO0_TEST
+#endif // MIO0_STANDALONE
 

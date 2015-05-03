@@ -24,7 +24,7 @@ add_executable(f3d f3d.c)
 target_link_libraries(f3d sm64)
 
 add_executable(mio0 libmio0.c)
-set_target_properties(mio0 PROPERTIES COMPILE_DEFINITIONS "MIO0_TEST")
+set_target_properties(mio0 PROPERTIES COMPILE_DEFINITIONS "MIO0_STANDALONE")
 
 add_executable(mipsdisasm config.c mipsdisasm.c utils.c)
 set_target_properties(mipsdisasm PROPERTIES COMPILE_DEFINITIONS "MIPSDISASM_STANDALONE")
