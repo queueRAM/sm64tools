@@ -3,11 +3,14 @@ cmake_minimum_required(VERSION 3.1)
 project(sm64tools C)
 
 if (MSVC)
-    # Always static linking on windows
-    add_definitions(/MT)
+   # Always static linking on windows
+   add_definitions(/MT)
 else ()
-    add_definitions(-Wextra)
+   add_definitions(-Wextra)
 endif ()
+
+set(CMAKE_C_FLAGS "${GCC_EXTRA_CFLAGS}")
+set(CMAKE_EXE_LINKER_FLAGS "${GCC_EXTRA_LDFLAGS}")
 
 include_directories("${PROJECT_SOURCE_DIR}/external/include")
 link_directories("${PROJECT_SOURCE_DIR}/external/lib")
