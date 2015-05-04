@@ -259,24 +259,29 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
           * lui   $a2, 0x11
           * addiu $a2, $a2, 0x4750
           * addiu $a1, $a1, -0x75c0
+          * lui   $t6, 0xa00
+          * lui   $t7, 0x4c0
+          * ori   $t7, $t7, 0x280
+          * ori   $t6, $t6, 0x740
           */
          int luis = 0;
-         int addius;
+         int matches;
          // count leading LUIs
          while (luis < count/2 && insn[luis].id == MIPS_INS_LUI) {
             luis++;
          }
          if (luis > 0) {
-            // count trailing ADDIUs
-            addius = luis;
-            while (addius < count && addius < luis*2 && insn[addius].id == MIPS_INS_ADDIU) {
-               addius++;
+            // count trailing ADDIUs or ORIs
+            matches = luis;
+            while (matches < count && matches < luis*2 &&
+                  (insn[matches].id == MIPS_INS_ADDIU || insn[matches].id == MIPS_INS_ORI)) {
+               matches++;
             }
-            if (addius == luis * 2) {
+            if (matches == luis * 2) {
                int match = 1;
                // confirm registers match
                for (i = 0; i < luis; i++) {
-                  if (!(insn[i].detail->mips.operands[0].reg == insn[addius-i-1].detail->mips.operands[0].reg)) {
+                  if (!(insn[i].detail->mips.operands[0].reg == insn[matches-i-1].detail->mips.operands[0].reg)) {
                      match = 0;
                      break;
                   }
@@ -285,18 +290,26 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
                   char label[128];
                   unsigned int addr;
                   for (i = 0; i < luis; i++) {
-                     addr = (unsigned int)((insn[i].detail->mips.operands[1].imm << 16) + insn[addius-i-1].detail->mips.operands[2].imm);
+                     addr = (unsigned int)((insn[i].detail->mips.operands[1].imm << 16) + insn[matches-i-1].detail->mips.operands[2].imm);
+                     // TODO: this isn't very smart to guess start/end based on register
                      switch (insn[i].detail->mips.operands[0].reg) {
                         case MIPS_REG_A1: fill_label(config, addr, label, 0); break;
                         case MIPS_REG_A2: fill_label(config, addr, label, 1); break;
                         default:          fill_label(config, addr, label, -1); break;
                      }
-                     fprintf(out, "  la    $%s, %s # LUI/ADDIU", cs_reg_name(handle, insn[i].detail->mips.operands[0].reg), label);
+                     // looks like all the ADDIU cases are addresses and ORI are immediates
+                     if (insn[matches-i-1].id == MIPS_INS_ADDIU) {
+                        fprintf(out, "  la");
+                     } else {
+                        fprintf(out, "  li");
+                     }
+                     fprintf(out, "    $%s, %s # %s %s/%s %s", cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
+                           label, insn[i].mnemonic, insn[i].op_str, insn[matches-i-1].mnemonic, insn[matches-i-1].op_str);
                      if (i < (luis-1)) {
                         fprintf(out, "\n");
                      }
                   }
-                  retVal = addius;
+                  retVal = matches;
                }
             }
          }
@@ -391,11 +404,11 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
                            fprintf(out, "$%s", cs_reg_name(handle, mips->operands[o].reg));
                            break;
                         case MIPS_OP_IMM:
-                           {
-                              unsigned int sec_offset = (unsigned int)mips->operands[o].imm - ram_address;
-                              fprintf(out, "L%s_%X", sec_name, sec_offset);
-                              break;
-                           }
+                        {
+                           unsigned int sec_offset = (unsigned int)mips->operands[o].imm - ram_address;
+                           fprintf(out, "L%s_%X", sec_name, sec_offset);
+                           break;
+                        }
                         default:
                            break;
                      }
