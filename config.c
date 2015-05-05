@@ -66,6 +66,7 @@ int parse_config_file(const char *filename, rom_config *config)
    // get name
    if (config_lookup_string(&cfg, "name", &str)) {
       strcpy(config->name, str);
+      INFO("config.name: %s\n", config->name);
    } else {
       ERROR("No 'name' field in config file.\n");
    }
@@ -73,6 +74,7 @@ int parse_config_file(const char *filename, rom_config *config)
    // get file basename
    if (config_lookup_string(&cfg, "basename", &str)) {
       strcpy(config->basename, str);
+      INFO("config.basename: %s\n", config->basename);
    } else {
       strcpy(config->basename, "default");
       ERROR("No 'basename' field in config file, using default.\n");
@@ -88,6 +90,7 @@ int parse_config_file(const char *filename, rom_config *config)
          config_destroy(&cfg);
          return -1;
       }
+      INFO("config.memory: %d entries\n", count);
       ram_table = malloc(3 * count * sizeof(*ram_table));
       for (i = 0; i < count; i++) {
          config_setting_t *mem = config_setting_get_elem(setting, i);
@@ -119,6 +122,7 @@ int parse_config_file(const char *filename, rom_config *config)
          config_destroy(&cfg);
          return -1;
       }
+      INFO("config.ranges: %d entries\n", count);
       sec = malloc(count * sizeof(*sec));
 
       for (i = 0; i < count; i++) {
@@ -191,6 +195,7 @@ int parse_config_file(const char *filename, rom_config *config)
       label *labels;
       count = config_setting_length(setting);
       labels = malloc(count * sizeof(*labels));
+      INFO("config.labels: %d entries\n", count);
 
       for (i = 0; i < count; i++) {
          config_setting_t *lab = config_setting_get_elem(setting, i);
