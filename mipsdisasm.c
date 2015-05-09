@@ -203,7 +203,8 @@ static void fill_label(rom_config *config, unsigned int addr, char *label, int h
    switch (hint) {
       case 0:
          for (i = 0; i < config->section_count; i++) {
-            if (config->sections[i].start == addr) {
+            // TODO: hack until mario_animation gets moved or AT() is used
+            if (config->sections[i].start == addr && addr != 0x4EC000) {
                if (config->sections[i].label[0] != '\0') {
                   sprintf(label, "%s     # FOUND start", config->sections[i].label);
                   return;
@@ -236,83 +237,91 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
    const char *spaces[] = {"      ", "     ", "    ", "   ", "  ", " "};
    int retVal = 0;
    int i;
+   int luis;
+   int sidx;
    if (count >= 2) {
-      /*
-       * lui   $t3, 0x801a
-       * lb    $t3, 0x7d34($t3)
+      /* lui   $a1, 0x11
+       * lui   $a2, 0x11
+       * addiu $a2, $a2, 0x4750
+       * addiu $a1, $a1, -0x75c0
+       * lui   $t6, 0xa00
+       * lui   $t7, 0x4c0
+       * ori   $t7, $t7, 0x280
+       * ori   $t6, $t6, 0x740
        */
-      if (insn[0].id == MIPS_INS_LUI && (insn[1].id == MIPS_INS_LW  ||
-          insn[1].id == MIPS_INS_LH  || insn[1].id == MIPS_INS_LHU ||
-          insn[1].id == MIPS_INS_LB  || insn[1].id == MIPS_INS_LBU)) {
-         if (insn[0].detail->mips.operands[0].reg == insn[1].detail->mips.operands[0].reg && 
-             insn[0].detail->mips.operands[0].reg == insn[1].detail->mips.operands[1].mem.base) {
-            unsigned int addr = (unsigned int)((insn[0].detail->mips.operands[1].imm << 16)
-                                              + insn[1].detail->mips.operands[1].mem.disp);
-            i = MIN(strlen(insn[1].mnemonic), DIM(spaces) - 1);
-            fprintf(out, "  %s%s$%s, 0x%x # %s %s/%s %s", insn[1].mnemonic, spaces[i],
-                    cs_reg_name(handle, insn[0].detail->mips.operands[0].reg),
-                    addr, insn[0].mnemonic, insn[0].op_str, insn[1].mnemonic, insn[1].op_str);
-            retVal = 2;
-         }
-      } else {
-         /* lui   $a1, 0x11
-          * lui   $a2, 0x11
-          * addiu $a2, $a2, 0x4750
-          * addiu $a1, $a1, -0x75c0
-          * lui   $t6, 0xa00
-          * lui   $t7, 0x4c0
-          * ori   $t7, $t7, 0x280
-          * ori   $t6, $t6, 0x740
-          */
-         int luis = 0;
-         int matches;
-         // count leading LUIs
-         while (luis < count/2 && insn[luis].id == MIPS_INS_LUI) {
-            luis++;
-         }
-         if (luis > 0) {
-            // count trailing ADDIUs or ORIs
-            matches = luis;
-            while (matches < count && matches < luis*2 &&
-                  (insn[matches].id == MIPS_INS_ADDIU || insn[matches].id == MIPS_INS_ORI)) {
-               matches++;
-            }
-            if (matches == luis * 2) {
-               int match = 1;
-               // confirm registers match
-               for (i = 0; i < luis; i++) {
-                  if (!(insn[i].detail->mips.operands[0].reg == insn[matches-i-1].detail->mips.operands[0].reg)) {
-                     match = 0;
-                     break;
+      // count leading LUIs
+      luis = 0;
+      while (luis < count/2 && insn[luis].id == MIPS_INS_LUI) {
+         luis++;
+      }
+      if (luis > 0 && 2*luis <= count) {
+         char label[128];
+         unsigned int addr[16]; // some sane max
+         // verify trailing ADDIUs, ORIs, or Loads
+         for (i = 0; i < luis; i++) {
+            int rev = 2*luis - i - 1;
+            unsigned int reg = insn[i].detail->mips.operands[0].reg;
+            switch(insn[rev].id) {
+               case MIPS_INS_ADDIU:
+               case MIPS_INS_ORI:
+                  if (reg == insn[rev].detail->mips.operands[0].reg) {
+                     addr[i] = (unsigned int)((insn[i].detail->mips.operands[1].imm << 16)
+                                             + insn[rev].detail->mips.operands[2].imm);
+                  } else {
+                     return 0;
                   }
-               }
-               if (match) {
-                  char label[128];
-                  unsigned int addr;
-                  for (i = 0; i < luis; i++) {
-                     addr = (unsigned int)((insn[i].detail->mips.operands[1].imm << 16) + insn[matches-i-1].detail->mips.operands[2].imm);
-                     // TODO: this isn't very smart to guess start/end based on register
-                     switch (insn[i].detail->mips.operands[0].reg) {
-                        case MIPS_REG_A1: fill_label(config, addr, label, 0); break;
-                        case MIPS_REG_A2: fill_label(config, addr, label, 1); break;
-                        default:          fill_label(config, addr, label, -1); break;
-                     }
-                     // looks like all the ADDIU cases are addresses and ORI are immediates
-                     if (insn[matches-i-1].id == MIPS_INS_ADDIU) {
-                        fprintf(out, "  la");
-                     } else {
-                        fprintf(out, "  li");
-                     }
-                     fprintf(out, "    $%s, %s # %s %s/%s %s", cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
-                           label, insn[i].mnemonic, insn[i].op_str, insn[matches-i-1].mnemonic, insn[matches-i-1].op_str);
-                     if (i < (luis-1)) {
-                        fprintf(out, "\n");
-                     }
+                  break;
+               case MIPS_INS_LW:
+               case MIPS_INS_LH:
+               case MIPS_INS_LHU:
+               case MIPS_INS_LB:
+               case MIPS_INS_LBU:
+                  if (reg == insn[rev].detail->mips.operands[0].reg &&
+                      reg == insn[rev].detail->mips.operands[1].mem.base) {
+                     addr[i] = (unsigned int)((insn[i].detail->mips.operands[1].imm << 16)
+                                             + insn[rev].detail->mips.operands[1].mem.disp);
+                  } else {
+                     return 0;
                   }
-                  retVal = matches;
-               }
+                  break;
+               default:
+                  return 0;
             }
          }
+         for (i = 0; i < luis; i++) {
+            int rev = 2*luis - i - 1;
+            // TODO: this isn't very smart to guess start/end based on register
+            switch (insn[i].detail->mips.operands[0].reg) {
+               case MIPS_REG_A1: fill_label(config, addr[i], label, 0); break;
+               case MIPS_REG_A2: fill_label(config, addr[i], label, 1); break;
+               default:          fill_label(config, addr[i], label, -1); break;
+            }
+            switch (insn[rev].id) {
+               // looks like all the ADDIU cases are addresses and ORI are immediates
+               case MIPS_INS_ADDIU:
+                  fprintf(out, "  la");
+                  fprintf(out, "    $%s, %s # %s %s/%s %s",
+                        cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
+                        label, insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
+                  break;
+               case MIPS_INS_ORI:
+                  fprintf(out, "  li");
+                  fprintf(out, "    $%s, %s # %s %s/%s %s",
+                        cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
+                        label, insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
+                  break;
+               default: // assume loads
+                  sidx = MIN(strlen(insn[rev].mnemonic), DIM(spaces) - 1);
+                  fprintf(out, "  %s%s$%s, 0x%x # %s %s/%s %s", insn[rev].mnemonic, spaces[sidx],
+                        cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
+                        addr[i], insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
+                  break;
+            }
+            if (i < (luis-1)) {
+               fprintf(out, "\n");
+            }
+         }
+         retVal = 2*luis;
       }
    }
    return retVal;
