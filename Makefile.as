@@ -22,9 +22,10 @@ LDFLAGS = -Tn64.ld -Map $(BUILD_DIR)/sm64.map
 ####################### Other Tools #########################
 
 # N64 tools
-MIO0TOOL = ./tools/mio0
-N64CKSUM = ./tools/n64cksum
-N64GRAPHICS = ./tools/n64graphics
+TOOLS_DIR = .
+MIO0TOOL = $(TOOLS_DIR)/mio0
+N64CKSUM = $(TOOLS_DIR)/n64cksum
+N64GRAPHICS = $(TOOLS_DIR)/n64graphics
 EMULATOR = mupen64plus
 EMU_FLAGS = --noosd --verbose
 
