@@ -5,7 +5,7 @@
 #include "libsm64.h"
 #include "utils.h"
 
-#define SM64COMPRESS_VERSION "0.1"
+#define SM64COMPRESS_VERSION "0.1.1a"
 
 // default configuration
 static const sm64_config_t default_config = 
@@ -22,14 +22,13 @@ static const sm64_config_t default_config =
 
 static void print_usage(void)
 {
-   ERROR("Usage: sm64compress [-c] [-d] [-v] FILE [OUT_FILE]\n"
+   ERROR("Usage: sm64compress [-c] [-v] FILE [OUT_FILE]\n"
          "\n"
          "sm64compress v" SM64COMPRESS_VERSION ": Super Mario 64 ROM compressor\n"
          "\n"
          "Optional arguments:\n"
          " -a ALIGNMENT byte boundary to align MIO0 blocks (default: %d)\n"
          " -c           compress all blocks using MIO0\n"
-         " -d           dump MIO0 blocks to files in mio0 directory\n"
          " -v           verbose progress output\n"
          "\n"
          "File arguments:\n"
@@ -125,8 +124,7 @@ int main(int argc, char *argv[])
    out_buf = malloc(in_size);
 
    // copy base file from input to output
-   // TODO: hardcoded length
-   memcpy(out_buf, in_buf, 8*MB);
+   memcpy(out_buf, in_buf, in_size);
 
    // compact the SM64 MIO0 files and adjust pointers
    out_size = sm64_compress_mio0(&config, in_buf, in_size, out_buf);

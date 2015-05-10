@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "libmio0.h"
@@ -20,6 +21,14 @@ typedef struct
    unsigned int addr;     // ASM address for referenced pointer
    unsigned char command; // command type: 0x1A or 0x18 (or 0xFF for ASM)
 } ptr_t;
+
+// compare function for sorting pointers
+static int cmp_ptr(const void *a, const void *b)
+{
+   const ptr_t *pa = a;
+   const ptr_t *pb = b;
+   return (pa->old - pb->old);
+}
 
 // find a pointer in the list and return index
 // ptr: address to find in table old values
@@ -141,17 +150,19 @@ static int find_ext_pointers(unsigned char *buf, unsigned int length, ptr_t tabl
    int idx;
 
    count = 0;
-   for (addr = IN_START_ADDR; addr < OUT_START_ADDR; addr += 4) {
+   for (addr = IN_START_ADDR; addr < length; addr += 4) {
       if ((buf[addr] == 0x17 || buf[addr] == 0x18 || buf[addr] == 0x1A)
-            && buf[addr+1] == 0x0C && buf[addr+2] == 0x00) {
+            && buf[addr+1] == 0x0C && buf[addr+2] < 0x02) {
          ptr = read_u32_be(&buf[addr+4]);
          if (ptr >= OUT_START_ADDR && ptr < length) {
             idx = find_ptr(ptr, table, count);
             if (idx < 0) {
                table[count].old = ptr;
                table[count].new_end = read_u32_be(&buf[addr+8]);
-               table[count].command = buf[addr];
-               count++;
+               if (table[count].new_end < length && table[count].new_end > table[count].old) {
+                  table[count].command = buf[addr];
+                  count++;
+               }
             }
          }
       }
@@ -170,7 +181,7 @@ static void sm64_adjust_pointers(unsigned char *buf, unsigned int length, ptr_t 
    unsigned int old_ptr;
    int idx;
    for (addr = IN_START_ADDR; addr < length; addr += 4) {
-      if ((buf[addr] == 0x17 || buf[addr] == 0x18 || buf[addr] == 0x1A) && buf[addr+1] == 0x0C && buf[addr+2] == 0x00) {
+      if ((buf[addr] == 0x17 || buf[addr] == 0x18 || buf[addr] == 0x1A) && buf[addr+1] == 0x0C && buf[addr+2] < 0x02) {
          old_ptr = read_u32_be(&buf[addr+4]);
          idx = find_ptr(old_ptr, table, count);
          if (idx >= 0) {
@@ -220,7 +231,7 @@ static void sm64_adjust_asm(unsigned char *buf, ptr_t table[], int count)
          write_u16_be(&buf[addr + 0xa], addr_low);
          INFO("NEW ASM reference at %X = ", addr);
          INFO_HEX(&buf[addr], 16);
-         INFO("\n");
+         INFO(" [%06X - %06X]\n", table[i].new, table[i].new_end);
       }
    }
 }
@@ -401,10 +412,7 @@ int sm64_compress_mio0(const sm64_config_t *config,
                        unsigned char *out_buf)
 {
    ptr_t ptr_table[MAX_PTRS];
-   unsigned int align_add = config->alignment - 1;
-   unsigned int align_mask = ~align_add;
    unsigned int out_addr;
-   unsigned int next_addr;
    int ptr_count;
    int out_length;
    int i;
@@ -415,11 +423,22 @@ int sm64_compress_mio0(const sm64_config_t *config,
    ptr_table[0].old = OUT_START_ADDR;
    find_asm_pointers(in_buf, ptr_table, ptr_count);
 
+   // sort the addresses
+   qsort(ptr_table, ptr_count, sizeof(ptr_table[0]), cmp_ptr);
+
+   // debug table
+   for (i = 0; i < ptr_count; i++) {
+      INFO("%02X %8X %8X %6X\n", ptr_table[i].command, ptr_table[i].old, ptr_table[i].new_end, ptr_table[i].new_end - ptr_table[i].old);
+   }
+
    out_addr = OUT_START_ADDR;
    for (i = 0; i < ptr_count; i++) {
       unsigned int in_addr = ptr_table[i].old;
       unsigned int length = ptr_table[i].new_end - in_addr;
       unsigned int comp_length = 0;
+      out_addr = ALIGN(in_addr, 16);
+      // overwrite the old data in the output buffer
+      memset(&out_buf[in_addr], 0x01, length);
       switch (ptr_table[i].command) {
          case 0x17: // 0x17 commands have raw data
             if (config->compress) {
@@ -427,6 +446,7 @@ int sm64_compress_mio0(const sm64_config_t *config,
                INFO("Compressing 0x17 from %08X to %08X\n", in_addr, out_addr);
                comp_length = mio0_encode(&in_buf[in_addr], length, &out_buf[out_addr]);
             } else {
+               INFO("Copying 0x17 from %08X to %08X (%X)\n", in_addr, out_addr, length);
                memcpy(&out_buf[out_addr], &in_buf[in_addr], length);
                comp_length = length;
             }
@@ -445,6 +465,7 @@ int sm64_compress_mio0(const sm64_config_t *config,
                INFO("Compressing 0x%02X from %08X to %08X\n", ptr_table[i].command, in_addr, out_addr);
                comp_length = mio0_encode(&in_buf[in_addr], head.dest_size, &out_buf[out_addr]);
             } else {
+               INFO("Copying 0x%02X from %08X to %08X (%X)\n", ptr_table[i].command, in_addr, out_addr, length);
                memcpy(&out_buf[out_addr], &in_buf[in_addr], length);
                comp_length = length;
             }
@@ -454,26 +475,20 @@ int sm64_compress_mio0(const sm64_config_t *config,
             break;
       }
       ptr_table[i].new = out_addr;
-      out_addr += comp_length;
-      next_addr = (out_addr + align_add) & align_mask;
-      if (config->compress) {
-         ptr_table[i].new_end = next_addr;
-      } else {
-         ptr_table[i].new_end = out_addr + comp_length;
-      }
-      if (out_addr != next_addr) {
-         memset(&out_buf[out_addr], 0x00, next_addr - out_addr);
-         out_addr = next_addr;
-      }
+      ptr_table[i].new_end = out_addr + comp_length;
    }
 
-   // round to nearest 4 MB
-   out_length = ALIGN(out_addr, 4*MB);
-   memset(&out_buf[out_addr], 0x01, out_length - out_addr);
-
    // adjust pointers and ASM pointers to new values
-   sm64_adjust_pointers(out_buf, 8*MB, ptr_table, ptr_count);
+   sm64_adjust_pointers(out_buf, in_length, ptr_table, ptr_count);
    sm64_adjust_asm(out_buf, ptr_table, ptr_count);
+
+   // detect audio patch and fix it
+   if (out_buf[0xd48b6] == 0x80 && out_buf[0xd48b7] == 0x3D) {
+      INFO("Moving sound allocation from 0x803D0000 to 0x807B0000\n");
+      out_buf[0xd48b7] = 0x7B;
+   }
+
+   out_length = in_length;
 
    return out_length;
 }
