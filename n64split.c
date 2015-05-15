@@ -441,8 +441,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                fprintf(fasm, "%s_end:\n", start_label);
             }
             break;
+         case TYPE_GEO:
          case TYPE_MIO0:
-            // fill previous MIO0 blocks
+            // fill previous geometry and MIO0 blocks
             fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
             break;
          case TYPE_PTR:
@@ -537,6 +538,21 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    for (s = 0; s < config->section_count; s++) {
       split_section *sec = &sections[s];
       switch (sec->type) {
+         case TYPE_GEO:
+            if (sec->label == NULL || sec->label[0] == '\0') {
+               sprintf(outfilename, "%s/%s.%06X.bin", BIN_DIR, config->basename, sec->start);
+               sprintf(start_label, "L%06X", sec->start);
+            } else {
+               sprintf(outfilename, "%s/%s.%06X.%s.bin", BIN_DIR, config->basename, sec->start, sec->label);
+               strcpy(start_label, sec->label);
+            }
+            write_file(outfilename, &data[sec->start], sec->end - sec->start);
+            fprintf(fasm, "\n.align 4, 0x01\n");
+            fprintf(fasm, ".global %s\n", start_label);
+            fprintf(fasm, "%s:\n", start_label);
+            fprintf(fasm, ".incbin \"%s\"\n", outfilename);
+            fprintf(fasm, "%s_end:\n", start_label);
+            break;
          case TYPE_MIO0:
          {
             char binfilename[512];
@@ -553,7 +569,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             } else {
                strcpy(start_label, sec->label);
             }
-            fprintf(fasm, ".align 4, 0x01\n");
+            fprintf(fasm, "\n.align 4, 0x01\n");
             fprintf(fasm, ".global %s\n", start_label);
             fprintf(fasm, "%s:\n", start_label);
             fprintf(fasm, ".incbin \"%s\"\n", mio0filename);
@@ -699,7 +715,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                } else {
                   strcpy(start_label, sec->label);
                }
-               fprintf(fasm, ".align 4, 0x01\n");
+               fprintf(fasm, "\n.align 4, 0x01\n");
                fprintf(fasm, ".global %s\n", start_label);
                fprintf(fasm, "%s:\n", start_label);
                fprintf(fasm, ".include \"%s\"\n", outfilename);

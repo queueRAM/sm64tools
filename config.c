@@ -17,6 +17,8 @@ static section_type str2section(const char *type_name)
          type = TYPE_BEHAVIOR;
       } else if (0 == strcmp("bin", type_name)) {
          type = TYPE_BIN;
+      } else if (0 == strcmp("geo", type_name)) {
+         type = TYPE_GEO;
       } else if (0 == strcmp("header", type_name)) {
          type = TYPE_HEADER;
       } else if (0 == strcmp("level", type_name)) {

@@ -7,6 +7,7 @@ typedef enum
    TYPE_ASM,
    TYPE_BEHAVIOR,
    TYPE_BIN,
+   TYPE_GEO,
    TYPE_HEADER,
    TYPE_LEVEL,
    TYPE_MIO0,
