@@ -549,10 +549,10 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
       switch (sec->type) {
          case TYPE_GEO:
             if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(outfilename, "%s/%s.%06X.bin", BIN_DIR, config->basename, sec->start);
+               sprintf(outfilename, "%s/%s.%06X.geo", BIN_DIR, config->basename, sec->start);
                sprintf(start_label, "L%06X", sec->start);
             } else {
-               sprintf(outfilename, "%s/%s.%06X.%s.bin", BIN_DIR, config->basename, sec->start, sec->label);
+               sprintf(outfilename, "%s/%s.geo", BIN_DIR, sec->label);
                strcpy(start_label, sec->label);
             }
             write_file(outfilename, &data[sec->start], sec->end - sec->start);
