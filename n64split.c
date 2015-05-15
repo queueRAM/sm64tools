@@ -215,7 +215,7 @@ static void write_level(FILE *out, unsigned char *data, split_section *sections,
          case 0x03:
          case 0x04:
          case 0x05:
-         case 0x09: // undocumented?
+         case 0x09:
          case 0x0B:
          case 0x0C:
          case 0x17:
@@ -229,17 +229,16 @@ static void write_level(FILE *out, unsigned char *data, split_section *sections,
          case 0x15:
          case 0x16:
          case 0x18:
-         case 0x19: // undocumented?
-         case 0x1D:
+         case 0x19:
             i = 8;
             break;
          case 0x08:
-         case 0x11: // this is a guess, looking at 0x26A170
          case 0x13:
          case 0x1C:
             i = 12;
             break;
          case 0x10:
+         case 0x1F:
             i = 16;
             break;
          case 0x0F: // Kaze has 8
@@ -251,12 +250,22 @@ static void write_level(FILE *out, unsigned char *data, split_section *sections,
                i += 4;
             }
             break;
+         case 0x11:
+         case 0x1D:
+            i = 8;
+            if (data[a+1] & 0x80) {
+               i += 4;
+            }
+            break;
          default:
             i = 4;
             ERROR("WHY? %06X %2X\n", a, data[a]);
       }
       if (data[a] == 0x05 && indent > 1) {
          indent -= 2;
+      }
+      if (data[a] == 0x01) {
+         indent = 0;
       }
       fprintf(out, ".byte ");
       print_spaces(out, indent);
