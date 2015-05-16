@@ -195,18 +195,27 @@ static int proc_cmp(const void *a, const void *b)
 }
 
 // TODO: needs to be merged with code from n64split
-// TODO: needs to handle names from the labels list as well
 // TODO: the hint is generated based on register a1/a2 = begin/end
 static void fill_label(rom_config *config, unsigned int addr, char *label, int hint)
 {
    int i;
+   // check for RAM labels
+   if (addr >= 0x80000000) {
+      for (i = 0; i < config->label_count; i++) {
+         if (config->labels[i].ram_addr == addr) {
+            sprintf(label, "%s     # 0x%X", config->labels[i].name, addr);
+            return;
+         }
+      }
+   }
+   // check for ROM offsets
    switch (hint) {
       case 0:
          for (i = 0; i < config->section_count; i++) {
             // TODO: hack until mario_animation gets moved or AT() is used
             if (config->sections[i].start == addr && addr != 0x4EC000) {
                if (config->sections[i].label[0] != '\0') {
-                  sprintf(label, "%s     # FOUND start", config->sections[i].label);
+                  sprintf(label, "%s    ", config->sections[i].label);
                   return;
                }
             }
@@ -216,7 +225,7 @@ static void fill_label(rom_config *config, unsigned int addr, char *label, int h
          for (i = 0; i < config->section_count; i++) {
             if (config->sections[i].end == addr) {
                if (config->sections[i].label[0] != '\0') {
-                  sprintf(label, "%s_end # FOUND end  ", config->sections[i].label);
+                  sprintf(label, "%s_end", config->sections[i].label);
                   return;
                }
             }
