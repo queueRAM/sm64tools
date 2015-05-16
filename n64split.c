@@ -808,6 +808,10 @@ int main(int argc, char *argv[])
    long len;
    unsigned char *data;
    int ret_val;
+   unsigned int size;
+   unsigned int asm_size;
+   float percent;
+   int i;
 
    memset(&procs, 0, sizeof(procs));
    procs.count = 0;
@@ -835,6 +839,24 @@ int main(int argc, char *argv[])
    mipsdisasm_pass1(data, len, &procs, &config);
 
    split_file(data, len, &procs, &config);
+
+   // print some stats
+   size = 0;
+   asm_size = 0;
+   for (i = 0; i < config.section_count; i++) {
+      size += config.sections[i].end - config.sections[i].start;
+      if (config.sections[i].type == TYPE_ASM) {
+         asm_size += config.sections[i].end - config.sections[i].start;
+      }
+   }
+   percent = (float)(100 * size) / (float)(len);
+   printf("Total decoded section size: %X/%lX (%.2f%%)\n", size, len, percent);
+   size = 0;
+   for (i = 0; i < procs.count; i++) {
+      size += procs.procedures[i].end - procs.procedures[i].start;
+   }
+   percent = (float)(100 * size) / (float)(asm_size);
+   printf("Total disassembled ASM size:  %X/%X (%.2f%%)\n", size, asm_size, percent);
 
    return 0;
 }
