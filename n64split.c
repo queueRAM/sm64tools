@@ -131,6 +131,7 @@ static void write_level(FILE *out, unsigned char *data, split_section *sections,
       }
       switch (data[a]) {
          case 0x00: // load and jump from ROM into a RAM segment
+         case 0x01: // load and jump from ROM into a RAM segment
          case 0x17: // copy uncompressed data from ROM to a RAM segment
          case 0x18: // decompress MIO0 data from ROM and copy it into a RAM segment
          case 0x1A: // decompress MIO0 data from ROM and copy it into a RAM segment (for texture only segments?)
@@ -486,19 +487,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             disassemble_section(fasm, data, length, sec, procs, config);
             break;
          case TYPE_LEVEL:
-            // TODO: some level scripts can't be relocated yet
-            if ((strcmp(sec->label, "game_over_level") == 0) ||
-                (strcmp(sec->label, "main_menu_level") == 0) ||
-                (strcmp(sec->label, "main_level_scripts") == 0)) {
-               INFO("Section level: %X-%X\n", sec->start, sec->end);
-               fprintf(fasm, "\n.global %s\n", sec->label);
-               fprintf(fasm, "\n.global %s_end\n", sec->label);
-               fprintf(fasm, "%s: # 0x%X\n", sec->label, sec->start);
-               write_level(fasm, data, sections, config->section_count, s);
-               fprintf(fasm, "%s_end:\n", sec->label);
-            } else {
-               fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
-            }
+            // relocate level scripts to .mio0 area
+            // TODO: these shouldn't need to be relocated if load offset can be computed
+            fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
             break;
          case TYPE_BEHAVIOR:
             // behaviors are done below
@@ -694,46 +685,43 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             break;
          }
          case TYPE_LEVEL:
-            // TODO: some level scripts can't be relocated yet
-            if ((strcmp(sec->label, "game_over_level") != 0) &&
-                (strcmp(sec->label, "main_menu_level") != 0) &&
-                (strcmp(sec->label, "main_level_scripts") != 0)) {
-               FILE *flevel;
-               char levelfilename[512];
-               INFO("Section relocated level: %X-%X\n", sec->start, sec->end);
-               if (sec->label == NULL || sec->label[0] == '\0') {
-                  sprintf(levelfilename, "%06X.s", sec->start);
-               } else {
-                  sprintf(levelfilename, "%s.s", sec->label);
-               }
-               sprintf(outfilename, "%s/%s", LEVEL_DIR, levelfilename);
-
-               // decode and write level data out
-               flevel = fopen(outfilename, "w");
-               if (flevel == NULL) {
-                  perror(outfilename);
-                  exit(1);
-               }
-
-               write_level(flevel, data, sections, config->section_count, s);
-
-               fclose(flevel);
-
-               if (sec->label == NULL || sec->label[0] == '\0') {
-                  sprintf(start_label, "L%06X", sec->start);
-               } else {
-                  strcpy(start_label, sec->label);
-               }
-               fprintf(fasm, "\n.align 4, 0x01\n");
-               fprintf(fasm, ".global %s\n", start_label);
-               fprintf(fasm, "%s:\n", start_label);
-               fprintf(fasm, ".include \"%s\"\n", outfilename);
-               fprintf(fasm, "%s_end:\n", start_label);
-               // append to Makefile
-               sprintf(maketmp, " \\\n$(LEVEL_DIR)/%s", levelfilename);
-               strcat(makeheader_level, maketmp);
+         {
+            FILE *flevel;
+            char levelfilename[512];
+            INFO("Section relocated level: %X-%X\n", sec->start, sec->end);
+            if (sec->label == NULL || sec->label[0] == '\0') {
+               sprintf(levelfilename, "%06X.s", sec->start);
+            } else {
+               sprintf(levelfilename, "%s.s", sec->label);
             }
+            sprintf(outfilename, "%s/%s", LEVEL_DIR, levelfilename);
+
+            // decode and write level data out
+            flevel = fopen(outfilename, "w");
+            if (flevel == NULL) {
+               perror(outfilename);
+               exit(1);
+            }
+
+            write_level(flevel, data, sections, config->section_count, s);
+
+            fclose(flevel);
+
+            if (sec->label == NULL || sec->label[0] == '\0') {
+               sprintf(start_label, "L%06X", sec->start);
+            } else {
+               strcpy(start_label, sec->label);
+            }
+            fprintf(fasm, "\n.align 4, 0x01\n");
+            fprintf(fasm, ".global %s\n", start_label);
+            fprintf(fasm, "%s:\n", start_label);
+            fprintf(fasm, ".include \"%s\"\n", outfilename);
+            fprintf(fasm, "%s_end:\n", start_label);
+            // append to Makefile
+            sprintf(maketmp, " \\\n$(LEVEL_DIR)/%s", levelfilename);
+            strcat(makeheader_level, maketmp);
             break;
+         }
          case TYPE_BEHAVIOR:
             INFO("Section behavior: %X-%X\n", sec->start, sec->end);
             fprintf(fasm, "\n.global %s\n", sec->label);
