@@ -297,8 +297,16 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
 void fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint)
 {
    int i;
-   // check for RAM labels
+   // check for RAM addresses
    if (addr >= 0x80000000) {
+      // first check RAM blocks
+      for (i = 0; i < config->ram_count; i++) {
+         if (config->ram_table[3*i] == addr) {
+            sprintf(label, "0x%X", addr);
+            return;
+         }
+      }
+      // second check RAM labels
       for (i = 0; i < config->label_count; i++) {
          if (config->labels[i].ram_addr == addr) {
             sprintf(label, "%s", config->labels[i].name);
