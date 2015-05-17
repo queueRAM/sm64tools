@@ -36,30 +36,6 @@ const char asm_header[] =
    "\n"
    "_start:\n";
 
-static int lookup_start(split_section *sections, int section_count, unsigned int address)
-{
-   int i;
-   // TODO: binary search
-   for (i = 0; i < section_count; i++) {
-      if (sections[i].start == address) {
-         return i;
-      }
-   }
-   return -1;
-}
-
-static int lookup_end(split_section *sections, int section_count, unsigned int address)
-{
-   int i;
-   // TODO: binary search
-   for (i = 0; i < section_count; i++) {
-      if (sections[i].end == address) {
-         return i;
-      }
-   }
-   return -1;
-}
-
 static void print_spaces(FILE *fp, int count)
 {
    int i;
@@ -108,7 +84,7 @@ static void write_behavior(FILE *out, unsigned char *data, split_section *sectio
    }
 }
 
-static void write_level(FILE *out, unsigned char *data, split_section *sections, int section_count, int s)
+static void write_level(FILE *out, unsigned char *data, rom_config *config, int s)
 {
    char start_label[128];
    char end_label[128];
@@ -121,7 +97,7 @@ static void write_level(FILE *out, unsigned char *data, split_section *sections,
    int indent;
    int i;
 
-   sec = &sections[s];
+   sec = &config->sections[s];
 
    a = sec->start;
    while (a < sec->end) {
@@ -137,18 +113,8 @@ static void write_level(FILE *out, unsigned char *data, split_section *sections,
          case 0x1A: // decompress MIO0 data from ROM and copy it into a RAM segment (for texture only segments?)
             ptr_start = read_u32_be(&data[a+4]);
             ptr_end = read_u32_be(&data[a+8]);
-            i = lookup_start(sections, section_count, ptr_start);
-            if (i < 0) {
-               sprintf(start_label, "0x%08X", ptr_start);
-            } else {
-               strcpy(start_label, sections[i].label);
-            }
-            i = lookup_end(sections, section_count, ptr_end);
-            if (i < 0) {
-               sprintf(end_label, "0x%08X", ptr_end);
-            } else {
-               sprintf(end_label, "%s_end", sections[i].label);
-            }
+            fill_addr_label(config, ptr_start, start_label, 0);
+            fill_addr_label(config,   ptr_end,   end_label, 1);
             fprintf(out, ".word 0x");
             for (i = 0; i < 4; i++) {
                fprintf(out, "%02X", data[a+i]);
@@ -166,24 +132,9 @@ static void write_level(FILE *out, unsigned char *data, split_section *sections,
             dst       = read_u32_be(&data[a+0x4]);
             ptr_start = read_u32_be(&data[a+0x8]);
             ptr_end   = read_u32_be(&data[a+0xc]);
-            i = lookup_start(sections, section_count, dst);
-            if (i < 0) {
-               sprintf(dst_label, "0x%08X", dst);
-            } else {
-               strcpy(dst_label, sections[i].label);
-            }
-            i = lookup_start(sections, section_count, ptr_start);
-            if (i < 0) {
-               sprintf(start_label, "0x%08X", ptr_start);
-            } else {
-               strcpy(start_label, sections[i].label);
-            }
-            i = lookup_end(sections, section_count, ptr_end);
-            if (i < 0) {
-               sprintf(end_label, "0x%08X", ptr_end);
-            } else {
-               sprintf(end_label, "%s_end", sections[i].label);
-            }
+            fill_addr_label(config, dst, dst_label, 0);
+            fill_addr_label(config, ptr_start, start_label, 0);
+            fill_addr_label(config, ptr_end, end_label, 1);
             fprintf(out, ".word 0x");
             for (i = 0; i < 4; i++) {
                fprintf(out, "%02X", data[a+i]);
@@ -345,16 +296,16 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    char outfilepath[512];
    char mio0filename[512];
    char start_label[256];
-   char end_label[256];
    char maketmp[256];
    char *makeheader_mio0;
    char *makeheader_level;
    FILE *fasm;
    FILE *fmake;
-   int i, j, s;
+   int s;
+   unsigned int i, j;
    unsigned int w, h;
    unsigned int last_end = 0;
-   unsigned int ptr_start, ptr_end;
+   unsigned int ptr;
    int count;
    int level_alloc;
    split_section *sections = config->sections;
@@ -458,21 +409,11 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             break;
          case TYPE_PTR:
             INFO("Section ptr: %X-%X\n", sec->start, sec->end);
-            ptr_start = read_u32_be(&data[sec->start]);
-            ptr_end = read_u32_be(&data[sec->start + 4]);
-            i = lookup_start(sections, config->section_count, ptr_start);
-            if (i < 0) {
-               sprintf(start_label, "L%06X", ptr_start);
-            } else {
-               strcpy(start_label, sections[i].label);
+            for (i = sec->start; i < sec->end; i += 4) {
+               ptr = read_u32_be(&data[i]);
+               fill_addr_label(config, ptr, start_label, -1);
+               fprintf(fasm, ".word %s\n", start_label);
             }
-            i = lookup_end(sections, config->section_count, ptr_end);
-            if (i < 0) {
-               sprintf(end_label, "L%06X", ptr_end);
-            } else {
-               sprintf(end_label, "%s_end", sections[i].label);
-            }
-            fprintf(fasm, ".word %s, %s\n", start_label, end_label);
             break;
          case TYPE_ASM:
             // TODO: this should be read from the ROM configuration
@@ -703,7 +644,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                exit(1);
             }
 
-            write_level(flevel, data, sections, config->section_count, s);
+            write_level(flevel, data, config, s);
 
             fclose(flevel);
 

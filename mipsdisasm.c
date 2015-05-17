@@ -194,49 +194,6 @@ static int proc_cmp(const void *a, const void *b)
    return (proca->start - procb->start);
 }
 
-// TODO: needs to be merged with code from n64split
-// TODO: the hint is generated based on register a1/a2 = begin/end
-static void fill_label(rom_config *config, unsigned int addr, char *label, int hint)
-{
-   int i;
-   // check for RAM labels
-   if (addr >= 0x80000000) {
-      for (i = 0; i < config->label_count; i++) {
-         if (config->labels[i].ram_addr == addr) {
-            sprintf(label, "%s     # 0x%X", config->labels[i].name, addr);
-            return;
-         }
-      }
-   }
-   // check for ROM offsets
-   switch (hint) {
-      case 0:
-         for (i = 0; i < config->section_count; i++) {
-            // TODO: hack until mario_animation gets moved or AT() is used
-            if (config->sections[i].start == addr && addr != 0x4EC000) {
-               if (config->sections[i].label[0] != '\0') {
-                  sprintf(label, "%s    ", config->sections[i].label);
-                  return;
-               }
-            }
-         }
-         break;
-      case 1:
-         for (i = 0; i < config->section_count; i++) {
-            if (config->sections[i].end == addr) {
-               if (config->sections[i].label[0] != '\0') {
-                  sprintf(label, "%s_end", config->sections[i].label);
-                  return;
-               }
-            }
-         }
-         break;
-      default:
-         break;
-   }
-   sprintf(label, "0x%x", addr);
-}
-
 // interpret MIPS pseudoinstructions
 // returns number of instructions consumed
 // TODO: memory operations
@@ -301,9 +258,9 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
             int rev = 2*luis - i - 1;
             // TODO: this isn't very smart to guess start/end based on register
             switch (insn[i].detail->mips.operands[0].reg) {
-               case MIPS_REG_A1: fill_label(config, addr[i], label, 0); break;
-               case MIPS_REG_A2: fill_label(config, addr[i], label, 1); break;
-               default:          fill_label(config, addr[i], label, -1); break;
+               case MIPS_REG_A1: fill_addr_label(config, addr[i], label, 0); break;
+               case MIPS_REG_A2: fill_addr_label(config, addr[i], label, 1); break;
+               default:          fill_addr_label(config, addr[i], label, -1); break;
             }
             switch (insn[rev].id) {
                // looks like all the ADDIU cases are addresses and ORI are immediates
@@ -334,6 +291,48 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
       }
    }
    return retVal;
+}
+
+// TODO: the hint is generated based on register a1/a2 = begin/end
+void fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint)
+{
+   int i;
+   // check for RAM labels
+   if (addr >= 0x80000000) {
+      for (i = 0; i < config->label_count; i++) {
+         if (config->labels[i].ram_addr == addr) {
+            sprintf(label, "%s", config->labels[i].name);
+            return;
+         }
+      }
+   }
+   // check for ROM offsets
+   switch (hint) {
+      case 0:
+         for (i = 0; i < config->section_count; i++) {
+            // TODO: hack until mario_animation gets moved or AT() is used
+            if (config->sections[i].start == addr && addr != 0x4EC000) {
+               if (config->sections[i].label[0] != '\0') {
+                  sprintf(label, "%s", config->sections[i].label);
+                  return;
+               }
+            }
+         }
+         break;
+      case 1:
+         for (i = 0; i < config->section_count; i++) {
+            if (config->sections[i].end == addr) {
+               if (config->sections[i].label[0] != '\0') {
+                  sprintf(label, "%s_end", config->sections[i].label);
+                  return;
+               }
+            }
+         }
+         break;
+      default:
+         break;
+   }
+   sprintf(label, "0x%x", addr);
 }
 
 unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config)

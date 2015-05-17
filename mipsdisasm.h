@@ -41,6 +41,13 @@ unsigned int ram_to_rom(rom_config *config, unsigned int ram_addr);
 // returns RAM address that maps to the ROM address
 unsigned int rom_to_ram(rom_config *config, unsigned int rom_addr);
 
+// generate stirng label for address based on config sections and labels
+// config: ROM configuration
+// addr: ROM or RAM address to use
+// label: output string
+// hint: 0=start/1=end
+void fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint);
+
 // add procedures from config labels
 // procs: procedures list to add labels to
 // config: ROM configuration
