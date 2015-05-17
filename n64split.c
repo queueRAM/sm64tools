@@ -785,7 +785,9 @@ int main(int argc, char *argv[])
    size = 0;
    asm_size = 0;
    for (i = 0; i < config.section_count; i++) {
-      size += config.sections[i].end - config.sections[i].start;
+      if (config.sections[i].type != TYPE_BIN) {
+         size += config.sections[i].end - config.sections[i].start;
+      }
       if (config.sections[i].type == TYPE_ASM) {
          asm_size += config.sections[i].end - config.sections[i].start;
       }
