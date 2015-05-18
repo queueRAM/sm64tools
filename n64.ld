@@ -23,9 +23,9 @@ SECTIONS
    }
 
    /* (0x8016F000, 0x801B99DF, 0x7FF4FB40), // 21F4C0-269E9F  4A9E0 */
-   . = 0x80173C6C;
-   .text0x80173C6C : AT(0x22412C) {
-      * (.text0x80173C6C);
+   . = 0x8016F000;
+   .text0x8016F000 : AT(0x21F4C0) {
+      * (.text0x8016F000);
    }
 
    /* run code from 80245000, but load to 0x000000 */

@@ -80,11 +80,19 @@ static void write_behavior(FILE *out, unsigned char *data, rom_config *config, i
       }
       val = read_u32_be(&data[a]);
       fprintf(out, ".word 0x%08X", val);
-      for (i = 4; i < len; i += 4) {
-         val = read_u32_be(&data[a+i]);
-         fprintf(out, ", 0x%08X", val);
+      // behavior 0x0C is a function pointer
+      if (data[a] == 0x0C) {
+         char label[128];
+         val = read_u32_be(&data[a+4]);
+         fill_addr_label(config, val, label, -1);
+         fprintf(out, ", %s\n", label);
+      } else {
+         for (i = 4; i < len; i += 4) {
+            val = read_u32_be(&data[a+i]);
+            fprintf(out, ", 0x%08X", val);
+         }
+         fprintf(out, "\n");
       }
-      fprintf(out, "\n");
       a += len;
    }
 }
@@ -424,7 +432,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             // TODO: this should be read from the ROM configuration
             switch (sec->start) {
                case 0x0F5580:
-               case 0x22412C:
+               case 0x21F4C0:
                   fprintf(fasm, "\n.section .text0x%08X, \"ax\"\n\n", rom_to_ram(config, sec->start));
                   break;
                default: break;
@@ -781,9 +789,11 @@ int main(int argc, char *argv[])
 
    // fill procs table from config labels
    mipsdisasm_add_procs(&procs, &config, len);
+
    // first pass disassembler
    mipsdisasm_pass1(data, len, &procs, &config);
 
+   // split the ROM
    split_file(data, len, &procs, &config);
 
    // print some stats
