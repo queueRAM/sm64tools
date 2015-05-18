@@ -44,13 +44,13 @@ static void print_spaces(FILE *fp, int count)
    }
 }
 
-static void write_behavior(FILE *out, unsigned char *data, split_section *sections, int section_count, int s)
+static void write_behavior(FILE *out, unsigned char *data, rom_config *config, int s)
 {
-   unsigned int a;
+   unsigned int a, i;
    unsigned int len;
+   unsigned int val;
    split_section *sec;
-   (void)section_count;
-   sec = &sections[s];
+   sec = &config->sections[s];
    a = sec->start;
    while (a < sec->end) {
       switch (data[a]) {
@@ -62,6 +62,7 @@ static void write_behavior(FILE *out, unsigned char *data, split_section *sectio
          case 0x2F:
          case 0x04:
          case 0x27:
+         case 0x37:
             len = 8;
             break;
          case 0x1C:
@@ -77,8 +78,12 @@ static void write_behavior(FILE *out, unsigned char *data, split_section *sectio
             len = 4;
             break;
       }
-      fprintf(out, ".byte ");
-      fprint_hex_source(out, &data[a], len);
+      val = read_u32_be(&data[a]);
+      fprintf(out, ".word 0x%08X", val);
+      for (i = 4; i < len; i += 4) {
+         val = read_u32_be(&data[a+i]);
+         fprintf(out, ", 0x%08X", val);
+      }
       fprintf(out, "\n");
       a += len;
    }
@@ -666,9 +671,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
          case TYPE_BEHAVIOR:
             INFO("Section behavior: %X-%X\n", sec->start, sec->end);
             fprintf(fasm, "\n.global %s\n", sec->label);
-            fprintf(fasm, "\n.global %s_end\n", sec->label);
+            fprintf(fasm, ".global %s_end\n", sec->label);
             fprintf(fasm, "%s: # 0x%X\n", sec->label, sec->start);
-            write_behavior(fasm, data, sections, config->section_count, s);
+            write_behavior(fasm, data, config, s);
             fprintf(fasm, "%s_end:\n", sec->label);
             break;
          default:
