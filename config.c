@@ -286,6 +286,21 @@ int validate_config(const rom_config *config, unsigned int max_len)
       }
       last_end = isec->end;
    }
+   // error duplicate label addresses
+   for (i = 0; i < config->label_count; i++) {
+      for (j = i+1; j < config->label_count; j++) {
+         if (config->labels[i].ram_addr == config->labels[j].ram_addr) {
+            ERROR("Error: duplication label %X \"%s\" \"%s\"\n", config->labels[i].ram_addr,
+                  config->labels[i].name, config->labels[j].name);
+            return -5;
+         }
+         if (0 == strcmp(config->labels[i].name, config->labels[j].name)) {
+            ERROR("Error: duplication label name \"%s\" %X %X\n", config->labels[i].name,
+                  config->labels[i].ram_addr, config->labels[j].ram_addr);
+            return -5;
+         }
+      }
+   }
    return 0;
 }
 
