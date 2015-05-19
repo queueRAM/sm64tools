@@ -141,6 +141,12 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
             }
             fprintf(out, "\n");
             break;
+         case 0x11: // call function
+         case 0x12: // call function
+            ptr_start = read_u32_be(&data[a+0x4]);
+            fill_addr_label(config, ptr_start, start_label, -1);
+            fprintf(out, ".word 0x%08X, %s # %08X\n", read_u32_be(&data[a]), start_label, ptr_start);
+            break;
          case 0x16: // load ASM into RAM
             dst       = read_u32_be(&data[a+0x4]);
             ptr_start = read_u32_be(&data[a+0x8]);
