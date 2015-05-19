@@ -161,8 +161,10 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
             fprintf(out, ", %s, %s, %s\n", dst_label, start_label, end_label);
             break;
          default:
-            fprintf(out, ".byte ");
-            fprint_hex_source(out, &data[a], data[a+1]);
+            fprintf(out, ".word 0x%08X", read_u32_be(&data[a]));
+            for (i = 4; i < data[a+1]; i+=4) {
+               fprintf(out, ", 0x%08X", read_u32_be(&data[a+i]));
+            }
             fprintf(out, "\n");
             break;
       }
