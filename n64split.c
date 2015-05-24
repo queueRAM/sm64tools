@@ -33,10 +33,7 @@ const char asm_header[] =
    "# assembler directives\n"
    ".set noat      # allow manual use of $at\n"
    ".set noreorder # don't insert nops after branches\n"
-   "\n"
-   ".global _start\n"
-   "\n"
-   "_start:\n";
+   "\n";
 
 static void print_spaces(FILE *fp, int count)
 {
