@@ -11,6 +11,8 @@
 
 #define N64SPLIT_VERSION "0.1a"
 
+#define GEN_DIR     "gen"
+
 typedef struct _arg_config
 {
    char input_file[FILENAME_MAX];
@@ -303,9 +305,64 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
    }
 }
 
+static void generate_ld_script(rom_config *config)
+{
+   char ldfilename[512];
+   FILE *fld;
+   int i;
+   sprintf(ldfilename, "%s/%s.ld", GEN_DIR, config->basename);
+   fld = fopen(ldfilename, "w");
+   if (fld == NULL) {
+      ERROR("Error opening %s\n", ldfilename);
+      exit(3);
+   }
+   fprintf(fld,
+"OUTPUT_FORMAT (\"elf32-bigmips\", \"elf32-bigmips\", \"elf32-littlemips\")\n"
+"OUTPUT_ARCH (mips)\n"
+"\n"
+"SECTIONS\n"
+"{\n"
+"   /* header and boot */\n"
+"   . = 0x0;\n"
+"   .header : AT(0x0) {\n"
+"      * (.header);\n"
+"      * (.boot);\n"
+"   }\n"
+"\n"
+"   /* load MIO0 and level data at 0x800000 */\n"
+"   . = 0x800000;\n"
+"   .rodata : {\n"
+"      FILL (0x01) /* fill unused with 0x01 */\n"
+"      * (.mio0);\n"
+"      * (.rodata);\n"
+"      * (.data);\n"
+"      * (.MIPS.abiflags);\n"
+"      /* default 4MB data (12MB ROM) */\n"
+"      . = 0x400000;\n"
+"   }\n"
+"\n");
+   for (i = 0; i < config->ram_count; i++) {
+      unsigned int ram_start = config->ram_table[3*i];
+      unsigned int ram_end = config->ram_table[3*i+1];
+      unsigned int ram_to_rom = config->ram_table[3*i+2];
+      unsigned int length = ram_end - ram_start + 1;
+      unsigned int rom_start = ram_start - ram_to_rom;
+      unsigned int rom_end = rom_start + length;
+      fprintf(fld,
+"   /* (0x%08X, 0x%08X, 0x%08X), // %06X-%06X [%X] */\n"
+"   . = 0x%08X;\n"
+"   .text%08X : AT(0x%06X) {\n"
+"      * (.text%08X);\n"
+"   }\n"
+"\n", ram_start, ram_end, ram_to_rom, rom_start, rom_end, length, ram_start, ram_start, rom_start, ram_start);
+   }
+   fprintf(fld, "}\n");
+
+   fclose(fld);
+}
+
 static void split_file(unsigned char *data, unsigned int length, proc_table *procs, rom_config *config)
 {
-#define GEN_DIR     "gen"
 #define MAKEFILENAME GEN_DIR "/Makefile.gen"
 #define BIN_DIR      GEN_DIR "/bin"
 #define MIO0_DIR     GEN_DIR "/bin"
@@ -374,11 +431,18 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
          }
       }
 
+      // print section header for new RAM segments
+      for (i = 0; i < config->ram_count; i++) {
+         if (sec->start == (config->ram_table[3*i] - config->ram_table[3*i+2])) {
+            fprintf(fasm, "\n.section .text%08X, \"ax\"\n\n", rom_to_ram(config, sec->start));
+         }
+      }
+
       switch (sec->type)
       {
          case TYPE_HEADER:
             INFO("Section header: %X-%X\n", sec->start, sec->end);
-            fprintf(fasm, ".section .header\n"
+            fprintf(fasm, ".section .header, \"a\"\n"
                           ".byte  0x%02X", data[sec->start]);
             for (i = 1; i < 4; i++) {
                fprintf(fasm, ", 0x%02X", data[sec->start + i]);
@@ -403,7 +467,6 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             fwrite(&data[sec->start + 0x3E], 1, 1, fasm);
             fprintf(fasm, "\"        # country\n");
             fprintf(fasm, ".byte  0x%02X       # version\n\n", data[sec->start + 0x3F]);
-            fprintf(fasm, ".text\n\n");
             break;
          case TYPE_BIN:
             if (sec->label == NULL || sec->label[0] == '\0') {
@@ -412,16 +475,14 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                sprintf(outfilename, "%s/%s.%06X.%s.bin", BIN_DIR, config->basename, sec->start, sec->label);
             }
             write_file(outfilename, &data[sec->start], sec->end - sec->start);
-            if (sec->label == NULL || sec->label[0] == '\0' || strcmp(sec->label, "header") != 0) {
-               if (sec->label == NULL || sec->label[0] == '\0') {
-                  sprintf(start_label, "L%06X", sec->start);
-               } else {
-                  strcpy(start_label, sec->label);
-               }
-               fprintf(fasm, "%s:\n", start_label);
-               fprintf(fasm, ".incbin \"%s\"\n", outfilename);
-               fprintf(fasm, "%s_end:\n", start_label);
+            if (sec->label == NULL || sec->label[0] == '\0') {
+               sprintf(start_label, "L%06X", sec->start);
+            } else {
+               strcpy(start_label, sec->label);
             }
+            fprintf(fasm, "%s:\n", start_label);
+            fprintf(fasm, ".incbin \"%s\"\n", outfilename);
+            fprintf(fasm, "%s_end:\n", start_label);
             break;
          case TYPE_GEO:
          case TYPE_MIO0:
@@ -437,14 +498,6 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             }
             break;
          case TYPE_ASM:
-            // TODO: this should be read from the ROM configuration
-            switch (sec->start) {
-               case 0x0F5580:
-               case 0x21F4C0:
-                  fprintf(fasm, "\n.section .text0x%08X, \"ax\"\n\n", rom_to_ram(config, sec->start));
-                  break;
-               default: break;
-            }
             INFO("Section asm: %X-%X\n", sec->start, sec->end);
             disassemble_section(fasm, data, length, sec, procs, config);
             break;
@@ -492,6 +545,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    sprintf(makeheader_level, "LEVEL_FILES =");
 
    fmake = fopen(MAKEFILENAME, "w");
+   fprintf(fmake, "LD_SCRIPT = %s/%s.ld\n\n", GEN_DIR, config->basename);
    fprintf(fmake, "MIO0_DIR = %s\n\n", MIO0_DIR);
    fprintf(fmake, "TEXTURE_DIR = %s\n\n", TEXTURE_DIR);
    fprintf(fmake, "LEVEL_DIR = %s\n\n", LEVEL_DIR);
@@ -704,6 +758,8 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    free(makeheader_level);
    fclose(fmake);
    fclose(fasm);
+
+   generate_ld_script(config);
 }
 
 static void print_usage(void)

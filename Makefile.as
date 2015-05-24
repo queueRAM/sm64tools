@@ -17,7 +17,7 @@ OBJDUMP = $(CROSS)objdump
 OBJCOPY = $(CROSS)objcopy
 
 ASFLAGS = -mtune=vr4300 -march=vr4300
-LDFLAGS = -Tn64.ld -Map $(BUILD_DIR)/sm64.map
+LDFLAGS = -T $(LD_SCRIPT) -Map $(BUILD_DIR)/sm64.map
 
 ####################### Other Tools #########################
 
@@ -51,7 +51,7 @@ $(BUILD_DIR):
 $(BUILD_DIR)/$(TARGET).o: gen/$(TARGET).s Makefile.as $(MAKEFILE_GEN) $(MIO0_FILES) $(LEVEL_FILES) | $(BUILD_DIR)
 	$(AS) $(ASFLAGS) -o $@ $<
 
-$(BUILD_DIR)/$(TARGET).elf: $(BUILD_DIR)/$(TARGET).o n64.ld
+$(BUILD_DIR)/$(TARGET).elf: $(BUILD_DIR)/$(TARGET).o $(LD_SCRIPT)
 	$(LD) $(LDFLAGS) -o $@ $< $(LIBS)
 
 $(BUILD_DIR)/$(TARGET).bin: $(BUILD_DIR)/$(TARGET).elf
