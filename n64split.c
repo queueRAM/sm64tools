@@ -377,7 +377,8 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    FILE *fasm;
    FILE *fmake;
    int s;
-   unsigned int i, j;
+   int i, j;
+   unsigned int a;
    unsigned int w, h;
    unsigned int last_end = 0;
    unsigned int ptr;
@@ -488,8 +489,8 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             break;
          case TYPE_PTR:
             INFO("Section ptr: %X-%X\n", sec->start, sec->end);
-            for (i = sec->start; i < sec->end; i += 4) {
-               ptr = read_u32_be(&data[i]);
+            for (a = sec->start; a < sec->end; a += 4) {
+               ptr = read_u32_be(&data[a]);
                fill_addr_label(config, ptr, start_label, -1);
                fprintf(fasm, ".word %s\n", start_label);
             }
