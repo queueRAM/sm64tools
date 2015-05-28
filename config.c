@@ -61,7 +61,6 @@ int parse_config_file(const char *filename, rom_config *config)
    // read config file, exit if problem
    if (!config_read_file(&cfg, filename)) {
       ERROR("Error %s:%d - %s\n", config_error_file(&cfg), config_error_line(&cfg), config_error_text(&cfg));
-      config_destroy(&cfg);
       return -1;
    }
 
@@ -89,7 +88,6 @@ int parse_config_file(const char *filename, rom_config *config)
       count = config_setting_length(setting);
       if (count <= 0) {
          ERROR("Error: need at least one memory: %d\n", count);
-         config_destroy(&cfg);
          return -1;
       }
       INFO("config.memory: %d entries\n", count);
@@ -106,7 +104,6 @@ int parse_config_file(const char *filename, rom_config *config)
             }
          } else {
             ERROR("Error: %s:%d - expected 3 fields for memory, got %d\n", filename, mem->line, mem_count);
-            config_destroy(&cfg);
             return -1;
          }
       }
@@ -121,7 +118,6 @@ int parse_config_file(const char *filename, rom_config *config)
       count = config_setting_length(setting);
       if (count <= 0) {
          ERROR("Error: need at least one range: %d\n", count);
-         config_destroy(&cfg);
          return -1;
       }
       INFO("config.ranges: %d entries\n", count);
@@ -136,55 +132,76 @@ int parse_config_file(const char *filename, rom_config *config)
          r_count = config_setting_length(r);
          int extra_count = 0;
          sec[i].label[0] = '\0';
-         switch (r_count) {
-            case 5:
-               // parse texture
-               e = config_setting_get_elem(r, 4);
-               extra_count = config_setting_length(e);
-               tex = malloc(extra_count * sizeof(*tex));
-               for (j = 0; j < extra_count; j++) {
-                  config_setting_t *t = config_setting_get_elem(e, j);
-                  int tex_count = config_setting_length(t);
-                  if (tex_count != 5) {
-                     ERROR("Error: %s:%d - expected 5 fields for texture, got %d\n", filename, e->line, tex_count);
-                     config_destroy(&cfg);
+         if (r_count > 2) {
+            sec[i].start = config_setting_get_int64_elem(r, 0);
+            sec[i].end   = config_setting_get_int64_elem(r, 1);
+            type = config_setting_get_string_elem(r, 2);
+            sec[i].type  = str2section(type);
+            // validate section parameter counts
+            switch (sec[i].type) {
+               case TYPE_ASM:
+               case TYPE_PTR:
+               case TYPE_BIN:
+               case TYPE_HEADER:
+               case TYPE_GEO:
+               case TYPE_LEVEL:
+                  if (r_count > 4) {
+                     ERROR("Error: %s:%d - expected 3-4 fields for section\n", filename, r->line);
                      return -1;
                   }
-                  tex[j].offset = config_setting_get_int_elem(t, 0);
-                  tex[j].depth  = config_setting_get_int_elem(t, 2);
-                  tex[j].width  = config_setting_get_int_elem(t, 3);
-                  tex[j].height = config_setting_get_int_elem(t, 4);
-                  type = config_setting_get_string_elem(t, 1);
-                  tex[j].format = str2format(type);
-                  if (tex[j].format == FORMAT_INVALID) {
-                     ERROR("Error: %s:%d - invalid texture format '%s'\n", filename, t->line, type);
-                     config_destroy(&cfg);
+                  break;
+               case TYPE_BEHAVIOR:
+               case TYPE_MIO0:
+                  if (r_count < 4 || r_count > 5) {
+                     ERROR("Error: %s:%d - expected 4-5 fields for section\n", filename, r->line);
                      return -1;
                   }
-               }
-               sec[i].extra = tex;
-               sec[i].extra_len = extra_count;
-               // fall through - no break
-            case 4:
-               label = config_setting_get_string_elem(r, 3);
-               strcpy(sec[i].label, label);
-               // fall through - no break
-            case 3:
-               sec[i].start = config_setting_get_int64_elem(r, 0);
-               sec[i].end   = config_setting_get_int64_elem(r, 1);
-               type = config_setting_get_string_elem(r, 2);
-               sec[i].type  = str2section(type);
-               if (sec[i].type == TYPE_INVALID) {
+                  break;
+               default:
                   ERROR("Error: %s:%d - invalid section type '%s'\n", filename, r->line, type);
-                  config_destroy(&cfg);
                   return -1;
-               }
-               break;
-            default:
-               ERROR("Error: %s:%d - expected 3-5 fields for range\n", filename, r->line);
-               config_destroy(&cfg);
-               return -1;
-               break;
+            }
+         } else {
+            ERROR("Error: %s:%d - expected 3-5 fields for range\n", filename, r->line);
+            return -1;
+         }
+         if (r_count > 3) {
+            label = config_setting_get_string_elem(r, 3);
+            strcpy(sec[i].label, label);
+         }
+         // extra parameters for some types
+         if (r_count > 4) {
+            switch (sec[i].type) {
+               case TYPE_MIO0:
+                  // parse texture
+                  e = config_setting_get_elem(r, 4);
+                  extra_count = config_setting_length(e);
+                  tex = malloc(extra_count * sizeof(*tex));
+                  for (j = 0; j < extra_count; j++) {
+                     config_setting_t *t = config_setting_get_elem(e, j);
+                     int tex_count = config_setting_length(t);
+                     if (tex_count != 5) {
+                        ERROR("Error: %s:%d - expected 5 fields for texture, got %d\n", filename, e->line, tex_count);
+                        return -1;
+                     }
+                     tex[j].offset = config_setting_get_int_elem(t, 0);
+                     tex[j].depth  = config_setting_get_int_elem(t, 2);
+                     tex[j].width  = config_setting_get_int_elem(t, 3);
+                     tex[j].height = config_setting_get_int_elem(t, 4);
+                     type = config_setting_get_string_elem(t, 1);
+                     tex[j].format = str2format(type);
+                     if (tex[j].format == FORMAT_INVALID) {
+                        ERROR("Error: %s:%d - invalid texture format '%s'\n", filename, t->line, type);
+                        return -1;
+                     }
+                  }
+                  sec[i].extra = tex;
+                  sec[i].extra_len = extra_count;
+                  break;
+               default:
+                  ERROR("Warning: %s:%d - extra fields for section\n", filename, r->line);
+                  break;
+            }
          }
       }
       config->section_count = count;
@@ -212,7 +229,6 @@ int parse_config_file(const char *filename, rom_config *config)
             strcpy(labels[i].name, label);
          } else {
             ERROR("Error: %s:%d - expected 2 fields for label\n", filename, setting->line);
-            config_destroy(&cfg);
             return -1;
          }
       }
