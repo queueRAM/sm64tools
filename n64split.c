@@ -48,10 +48,24 @@ static void write_behavior(FILE *out, unsigned char *data, rom_config *config, i
    unsigned int a, i;
    unsigned int len;
    unsigned int val;
+   int beh_i;
    split_section *sec;
+   behavior *beh;
    sec = &config->sections[s];
+   beh = sec->extra;
    a = sec->start;
+   beh_i = 0;
    while (a < sec->end) {
+      if (beh_i < sec->extra_len) {
+         unsigned int offset = a - sec->start;
+         if (offset == beh[beh_i].offset) {
+            fprintf(out, "%s: # %04X\n", beh[beh_i].name, beh[beh_i].offset);
+            beh_i++;
+         } else if (offset > beh[beh_i].offset) {
+            ERROR("Warning: skipped behavior %04X \"%s\"\n", beh[beh_i].offset, beh[beh_i].name);
+            beh_i++;
+         }
+      }
       switch (data[a]) {
          case 0x0C:
          case 0x2A:
