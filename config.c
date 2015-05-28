@@ -127,7 +127,6 @@ int parse_config_file(const char *filename, rom_config *config)
          config_setting_t *r = config_setting_get_elem(setting, i);
          config_setting_t *e;
          int r_count;
-         texture *tex;
          const char *type, *label;
          r_count = config_setting_length(r);
          int extra_count = 0;
@@ -173,7 +172,9 @@ int parse_config_file(const char *filename, rom_config *config)
          if (r_count > 4) {
             switch (sec[i].type) {
                case TYPE_MIO0:
+               {
                   // parse texture
+                  texture *tex;
                   e = config_setting_get_elem(r, 4);
                   extra_count = config_setting_length(e);
                   tex = malloc(extra_count * sizeof(*tex));
@@ -198,6 +199,29 @@ int parse_config_file(const char *filename, rom_config *config)
                   sec[i].extra = tex;
                   sec[i].extra_len = extra_count;
                   break;
+               }
+               case TYPE_BEHAVIOR:
+               {
+                  // parse behavior
+                  behavior *beh;
+                  e = config_setting_get_elem(r, 4);
+                  extra_count = config_setting_length(e);
+                  beh = malloc(extra_count * sizeof(*beh));
+                  for (j = 0; j < extra_count; j++) {
+                     config_setting_t *t = config_setting_get_elem(e, j);
+                     int beh_count = config_setting_length(t);
+                     if (beh_count != 2) {
+                        ERROR("Error: %s:%d - expected 2 fields for behavior, got %d\n", filename, e->line, beh_count);
+                        return -1;
+                     }
+                     beh[j].offset = config_setting_get_int_elem(t, 0);
+                     label = config_setting_get_string_elem(t, 1);
+                     strcpy(beh[j].name, label);
+                  }
+                  sec[i].extra = beh;
+                  sec[i].extra_len = extra_count;
+                  break;
+               }
                default:
                   ERROR("Warning: %s:%d - extra fields for section\n", filename, r->line);
                   break;
@@ -272,24 +296,25 @@ void print_config(const rom_config *config)
 int validate_config(const rom_config *config, unsigned int max_len)
 {
    // error on overlapped and out-of-order sections
-   int i, j;
+   int i, j, beh_i;
    unsigned int last_end = 0;
+   int ret_val = 0;
    for (i = 0; i < config->section_count; i++) {
       split_section *isec = &config->sections[i];
       if (isec->start < last_end) {
          ERROR("Error: section %d \"%s\" (%X-%X) out of order\n",
                i, isec->label, isec->start, isec->end);
-         return -2;
+         ret_val = -2;
       }
       if (isec->end > max_len) {
          ERROR("Error: section %d \"%s\" (%X-%X) past end of file (%X)\n",
                i, isec->label, isec->start, isec->end, max_len);
-         return -3;
+         ret_val = -3;
       }
       if (isec->start >= isec->end) {
          ERROR("Error: section %d \"%s\" (%X-%X) invalid range\n",
                i, isec->label, isec->start, isec->end);
-         return -4;
+         ret_val = -4;
       }
       for (j = 0; j < i; j++) {
          split_section *jsec = &config->sections[j];
@@ -297,7 +322,7 @@ int validate_config(const rom_config *config, unsigned int max_len)
             ERROR("Error: section %d \"%s\" (%X-%X) overlaps %d \"%s\" (%X-%X)\n",
                   i, isec->label, isec->start, isec->end,
                   j, jsec->label, jsec->start, jsec->end);
-            return -1;
+            ret_val = -1;
          }
       }
       last_end = isec->end;
@@ -306,17 +331,44 @@ int validate_config(const rom_config *config, unsigned int max_len)
    for (i = 0; i < config->label_count; i++) {
       for (j = i+1; j < config->label_count; j++) {
          if (config->labels[i].ram_addr == config->labels[j].ram_addr) {
-            ERROR("Error: duplication label %X \"%s\" \"%s\"\n", config->labels[i].ram_addr,
+            ERROR("Error: duplicate label %X \"%s\" \"%s\"\n", config->labels[i].ram_addr,
                   config->labels[i].name, config->labels[j].name);
-            return -5;
+            ret_val = -5;
          }
          if (0 == strcmp(config->labels[i].name, config->labels[j].name)) {
-            ERROR("Error: duplication label name \"%s\" %X %X\n", config->labels[i].name,
+            ERROR("Error: duplicate label name \"%s\" %X %X\n", config->labels[i].name,
                   config->labels[i].ram_addr, config->labels[j].ram_addr);
-            return -5;
+            ret_val = -5;
          }
       }
    }
-   return 0;
+   // error duplicate behavior addresses
+   beh_i = -1;
+   for (i = 0; i < config->section_count; i++) {
+      split_section *isec = &config->sections[i];
+      if (isec->type == TYPE_BEHAVIOR) {
+         beh_i = i;
+         break;
+      }
+   }
+   if (beh_i >= 0) {
+      behavior *beh = config->sections[beh_i].extra;
+      int extra_count = config->sections[beh_i].extra_len;
+      for (i = 0; i < extra_count; i++) {
+         for (j = i+1; j < extra_count; j++) {
+            if (beh[i].offset == beh[j].offset) {
+               ERROR("Error: duplicate behavior offset %04X \"%s\" \"%s\"\n", beh[i].offset,
+                     beh[i].name, beh[j].name);
+               ret_val = -6;
+            }
+            if (0 == strcmp(beh[i].name, beh[j].name)) {
+               ERROR("Error: duplicate behavior name \"%s\" %04X %04X\n", beh[i].name,
+                     beh[i].offset, beh[j].offset);
+               ret_val = -6;
+            }
+         }
+      }
+   }
+   return ret_val;
 }
 

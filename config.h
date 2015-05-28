@@ -47,6 +47,12 @@ typedef struct _texture
    texture_format format;
 } texture;
 
+typedef struct _behavior
+{
+   unsigned int offset;
+   char name[128];
+} behavior;
+
 typedef struct _rom_config
 {
    char name[128];
