@@ -122,9 +122,18 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
    unsigned int a;
    int indent;
    int i;
+   int beh_i;
 
    sec = &config->sections[s];
 
+   beh_i = -1;
+   // see if there is a behavior section
+   for (i = 0; i < config->section_count; i++) {
+      if (config->sections[i].type == TYPE_BEHAVIOR) {
+         beh_i = i;
+         break;
+      }
+   }
    a = sec->start;
    while (a < sec->end) {
       // length = 0 ends level script
@@ -172,6 +181,29 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
                fprintf(out, "%02X", data[a+i]);
             }
             fprintf(out, ", %s, %s, %s\n", dst_label, start_label, end_label);
+            break;
+         case 0x24: // load object with behavior
+            fprintf(out, ".word 0x%08X", read_u32_be(&data[a]));
+            for (i = 4; i < data[a+1]-4; i+=4) {
+               fprintf(out, ", 0x%08X", read_u32_be(&data[a+i]));
+            }
+            dst = read_u32_be(&data[a+i]);
+            if (beh_i >= 0) {
+               unsigned int offset = dst & 0xFFFFFF;
+               behavior *beh = config->sections[beh_i].extra;
+               for (i = 0; i < config->sections[beh_i].extra_len; i++) {
+                  if (offset == beh[i].offset) {
+                     fprintf(out, ", (0x%X << 24) | (%s - %s)", (dst >> 24), beh[i].name, config->sections[beh_i].label);
+                     break;
+                  }
+               }
+               if (i >= config->sections[beh_i].extra_len) {
+                  ERROR("Error: cannot find behavior %04X needed at offset %X\n", offset, a);
+               }
+            } else {
+               fprintf(out, ", 0x%08X", dst);
+            }
+            fprintf(out, "\n");
             break;
          default:
             fprintf(out, ".word 0x%08X", read_u32_be(&data[a]));
