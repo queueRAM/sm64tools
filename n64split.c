@@ -182,6 +182,7 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
             }
             fprintf(out, ", %s, %s, %s\n", dst_label, start_label, end_label);
             break;
+         case 0x25: // load mario object with behavior
          case 0x24: // load object with behavior
             fprintf(out, ".word 0x%08X", read_u32_be(&data[a]));
             for (i = 4; i < data[a+1]-4; i+=4) {
