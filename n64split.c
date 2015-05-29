@@ -154,7 +154,11 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
             for (i = 0; i < 4; i++) {
                fprintf(out, "%02X", data[a+i]);
             }
-            fprintf(out, ", %s, %s", start_label, end_label);
+            if (0 == strcmp("behavior_data", start_label)) {
+               fprintf(out, ", __load_%s, __load_%s", start_label, end_label);
+            } else {
+               fprintf(out, ", %s, %s", start_label, end_label);
+            }
             for (i = 12; i < data[a+1]; i++) {
                if ((i & 0x3) == 0) {
                   fprintf(out, ", 0x");
@@ -194,7 +198,7 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
                behavior *beh = config->sections[beh_i].extra;
                for (i = 0; i < config->sections[beh_i].extra_len; i++) {
                   if (offset == beh[i].offset) {
-                     fprintf(out, ", (0x%X << 24) | (%s - %s)", (dst >> 24), beh[i].name, config->sections[beh_i].label);
+                     fprintf(out, ", %s", beh[i].name);
                      break;
                   }
                }
@@ -367,23 +371,31 @@ static void generate_ld_script(rom_config *config)
 "SECTIONS\n"
 "{\n"
 "   /* header and boot */\n"
-"   . = 0x0;\n"
-"   .header : AT(0x0) {\n"
+"   .header 0x0 : AT(0x0) {\n"
 "      * (.header);\n"
 "      * (.boot);\n"
 "   }\n"
 "\n"
 "   /* load MIO0 and level data at 0x800000 */\n"
-"   . = 0x800000;\n"
-"   .rodata : {\n"
+"   .rodata 0x800000 : {\n"
 "      FILL (0x01) /* fill unused with 0x01 */\n"
 "      * (.mio0);\n"
 "      * (.rodata);\n"
 "      * (.data);\n"
 "      * (.MIPS.abiflags);\n"
-"      /* default 4MB data (12MB ROM) */\n"
-"      . = 0x400000;\n"
+"      . = ALIGN(0x10);\n"
 "   }\n"
+"\n"
+"   /* use segmented addressing for behaviors */\n"
+"   .behavior 0x13000000 : AT( LOADADDR(.rodata) + SIZEOF(.rodata) ) {\n"
+"      FILL (0x01) /* fill unused with 0x01 */\n"
+"      * (.behavior);\n"
+"      behavior_length = . - 0x13000000;\n"
+"      /* default 4MB data (12MB ROM) */\n"
+"      . = 0x400000 - SIZEOF(.rodata);\n"
+"   }\n"
+"   __load_behavior_data = LOADADDR(.behavior);\n"
+"   __load_behavior_data_end = LOADADDR(.behavior) + behavior_length;\n"
 "\n");
    for (i = 0; i < config->ram_count; i++) {
       unsigned int ram_start = config->ram_table[3*i];
@@ -394,8 +406,7 @@ static void generate_ld_script(rom_config *config)
       unsigned int rom_end = rom_start + length;
       fprintf(fld,
 "   /* (0x%08X, 0x%08X, 0x%08X), // %06X-%06X [%X] */\n"
-"   . = 0x%08X;\n"
-"   .text%08X : AT(0x%06X) {\n"
+"   .text%08X 0x%08X : AT(0x%06X) {\n"
 "      * (.text%08X);\n"
 "   }\n"
 "\n", ram_start, ram_end, ram_to_rom, rom_start, rom_end, length, ram_start, ram_start, rom_start, ram_start);
@@ -785,11 +796,12 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
          }
          case TYPE_BEHAVIOR:
             INFO("Section behavior: %X-%X\n", sec->start, sec->end);
+            fprintf(fasm, "\n.section .behavior, \"a\"\n");
             fprintf(fasm, "\n.global %s\n", sec->label);
             fprintf(fasm, ".global %s_end\n", sec->label);
             fprintf(fasm, "%s: # 0x%X\n", sec->label, sec->start);
             write_behavior(fasm, data, config, s);
-            fprintf(fasm, "%s_end:\n", sec->label);
+            fprintf(fasm, "\n\n.section .mio0\n");
             break;
          default:
             break;

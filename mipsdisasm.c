@@ -265,18 +265,15 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
             }
             // looks like all the ADDIU cases are addresses and ORI are immediates
             if (type == 1) {
-               const char *reg = cs_reg_name(handle, insn[i].detail->mips.operands[0].reg);
-               fprintf(out, "  lui   $%s, 0x1300 # %s %s/%s %s = 0x%X\n", reg,
-                     insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str, addr[i]);
-               fprintf(out, "  addiu $%s, $%s, %s", reg, reg, label);
+               fprintf(out, "  la    $%s, %s # %s %s/%s %s",
+                     cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
+                     label, insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
             } else if (MIPS_INS_ORI == insn[rev].id) {
-               fprintf(out, "  li");
-               fprintf(out, "    $%s, %s # %s %s/%s %s",
+               fprintf(out, "  li    $%s, %s # %s %s/%s %s",
                      cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
                      label, insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
             } else if (MIPS_INS_ADDIU == insn[rev].id) {
-               fprintf(out, "  la");
-               fprintf(out, "    $%s, %s # %s %s/%s %s",
+               fprintf(out, "  la    $%s, %s # %s %s/%s %s",
                      cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
                      label, insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
             } else {
@@ -329,7 +326,7 @@ int fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint
          unsigned int offset = addr & 0xFFFFFF;
          for (i = 0; i < sec_beh->extra_len; i++) {
             if (offset == beh[i].offset) {
-               sprintf(label, "(%s - %s)", beh[i].name, sec_beh->label);
+               sprintf(label, "%s", beh[i].name);
                return 1;
             }
          }
