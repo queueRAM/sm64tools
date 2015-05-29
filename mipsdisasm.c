@@ -265,11 +265,10 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
             }
             // looks like all the ADDIU cases are addresses and ORI are immediates
             if (type == 1) {
-               fprintf(out, "  lui   $%s, 0x1300 # %s %s/%s %s = 0x%X\n",
-                     cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
+               const char *reg = cs_reg_name(handle, insn[i].detail->mips.operands[0].reg);
+               fprintf(out, "  lui   $%s, 0x1300 # %s %s/%s %s = 0x%X\n", reg,
                      insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str, addr[i]);
-               fprintf(out, "  ori   $%s, %s",
-                     cs_reg_name(handle, insn[i].detail->mips.operands[0].reg), label);
+               fprintf(out, "  addiu $%s, $%s, %s", reg, reg, label);
             } else if (MIPS_INS_ORI == insn[rev].id) {
                fprintf(out, "  li");
                fprintf(out, "    $%s, %s # %s %s/%s %s",
