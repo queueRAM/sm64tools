@@ -46,7 +46,8 @@ unsigned int rom_to_ram(rom_config *config, unsigned int rom_addr);
 // addr: ROM or RAM address to use
 // label: output string
 // hint: 0=start/1=end
-void fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint);
+// returns 0 if default type, 1 if computation
+int fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint);
 
 // add procedures from config labels
 // procs: procedures list to add labels to

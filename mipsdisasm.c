@@ -256,32 +256,35 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
          }
          for (i = 0; i < luis; i++) {
             int rev = 2*luis - i - 1;
+            int type;
             // TODO: this isn't very smart to guess start/end based on register
             switch (insn[i].detail->mips.operands[0].reg) {
-               case MIPS_REG_A1: fill_addr_label(config, addr[i], label, 0); break;
-               case MIPS_REG_A2: fill_addr_label(config, addr[i], label, 1); break;
-               default:          fill_addr_label(config, addr[i], label, -1); break;
+               case MIPS_REG_A1: type = fill_addr_label(config, addr[i], label, 0); break;
+               case MIPS_REG_A2: type = fill_addr_label(config, addr[i], label, 1); break;
+               default:          type = fill_addr_label(config, addr[i], label, -1); break;
             }
-            switch (insn[rev].id) {
-               // looks like all the ADDIU cases are addresses and ORI are immediates
-               case MIPS_INS_ADDIU:
-                  fprintf(out, "  la");
-                  fprintf(out, "    $%s, %s # %s %s/%s %s",
-                        cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
-                        label, insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
-                  break;
-               case MIPS_INS_ORI:
-                  fprintf(out, "  li");
-                  fprintf(out, "    $%s, %s # %s %s/%s %s",
-                        cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
-                        label, insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
-                  break;
-               default: // assume loads
-                  sidx = MIN(strlen(insn[rev].mnemonic), DIM(spaces) - 1);
-                  fprintf(out, "  %s%s$%s, 0x%x # %s %s/%s %s", insn[rev].mnemonic, spaces[sidx],
-                        cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
-                        addr[i], insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
-                  break;
+            // looks like all the ADDIU cases are addresses and ORI are immediates
+            if (type == 1) {
+               fprintf(out, "  lui   $%s, 0x1300 # %s %s/%s %s = 0x%X\n",
+                     cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
+                     insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str, addr[i]);
+               fprintf(out, "  ori   $%s, %s",
+                     cs_reg_name(handle, insn[i].detail->mips.operands[0].reg), label);
+            } else if (MIPS_INS_ORI == insn[rev].id) {
+               fprintf(out, "  li");
+               fprintf(out, "    $%s, %s # %s %s/%s %s",
+                     cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
+                     label, insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
+            } else if (MIPS_INS_ADDIU == insn[rev].id) {
+               fprintf(out, "  la");
+               fprintf(out, "    $%s, %s # %s %s/%s %s",
+                     cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
+                     label, insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
+            } else {
+               sidx = MIN(strlen(insn[rev].mnemonic), DIM(spaces) - 1);
+               fprintf(out, "  %s%s$%s, 0x%x # %s %s/%s %s", insn[rev].mnemonic, spaces[sidx],
+                     cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
+                     addr[i], insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
             }
             if (i < (luis-1)) {
                fprintf(out, "\n");
@@ -294,7 +297,7 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
 }
 
 // TODO: the hint is generated based on register a1/a2 = begin/end
-void fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint)
+int fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint)
 {
    int i;
    // check for RAM addresses
@@ -303,14 +306,33 @@ void fill_addr_label(rom_config *config, unsigned int addr, char *label, int hin
       for (i = 0; i < config->ram_count; i++) {
          if (config->ram_table[3*i] == addr) {
             sprintf(label, "0x%X", addr);
-            return;
+            return 0;
          }
       }
       // second check RAM labels
       for (i = 0; i < config->label_count; i++) {
          if (config->labels[i].ram_addr == addr) {
             sprintf(label, "%s", config->labels[i].name);
-            return;
+            return 0;
+         }
+      }
+   }
+   if (addr >= 0x13000000 && addr < 0x14000000) {
+      split_section *sec_beh = NULL;
+      for (i = 0; i < config->section_count; i++) {
+         if (config->sections[i].type == TYPE_BEHAVIOR) {
+            sec_beh = &config->sections[i];
+            break;
+         }
+      }
+      if (sec_beh) {
+         behavior *beh = sec_beh->extra;
+         unsigned int offset = addr & 0xFFFFFF;
+         for (i = 0; i < sec_beh->extra_len; i++) {
+            if (offset == beh[i].offset) {
+               sprintf(label, "(%s - %s)", beh[i].name, sec_beh->label);
+               return 1;
+            }
          }
       }
    }
@@ -322,7 +344,7 @@ void fill_addr_label(rom_config *config, unsigned int addr, char *label, int hin
             if (config->sections[i].start == addr && addr != 0x4EC000) {
                if (config->sections[i].label[0] != '\0') {
                   sprintf(label, "%s", config->sections[i].label);
-                  return;
+                  return 0;
                }
             }
          }
@@ -332,7 +354,7 @@ void fill_addr_label(rom_config *config, unsigned int addr, char *label, int hin
             if (config->sections[i].end == addr) {
                if (config->sections[i].label[0] != '\0') {
                   sprintf(label, "%s_end", config->sections[i].label);
-                  return;
+                  return 0;
                }
             }
          }
@@ -341,6 +363,7 @@ void fill_addr_label(rom_config *config, unsigned int addr, char *label, int hin
          break;
    }
    sprintf(label, "0x%x", addr);
+   return 0;
 }
 
 unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config)
