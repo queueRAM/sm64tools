@@ -423,6 +423,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
 #define MIO0_DIR     GEN_DIR "/bin"
 #define TEXTURE_DIR  GEN_DIR "/textures"
 #define LEVEL_DIR    GEN_DIR "/levels"
+#define BEHAVIOR_DIR GEN_DIR
 
    char asmfilename[512];
    char outfilename[512];
@@ -795,14 +796,38 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             break;
          }
          case TYPE_BEHAVIOR:
-            INFO("Section behavior: %X-%X\n", sec->start, sec->end);
+         {
+            FILE *f_beh;
+            char beh_filename[512];
+            INFO("Section relocated behavior: %X-%X\n", sec->start, sec->end);
+            if (sec->label == NULL || sec->label[0] == '\0') {
+               sprintf(beh_filename, "%06X.s", sec->start);
+            } else {
+               sprintf(beh_filename, "%s.s", sec->label);
+            }
+            sprintf(outfilename, "%s/%s", BEHAVIOR_DIR, beh_filename);
+            // decode and write level data out
+            f_beh = fopen(outfilename, "w");
+            if (f_beh == NULL) {
+               perror(outfilename);
+               exit(1);
+            }
+            write_behavior(f_beh, data, config, s);
+            fclose(f_beh);
+
             fprintf(fasm, "\n.section .behavior, \"a\"\n");
             fprintf(fasm, "\n.global %s\n", sec->label);
             fprintf(fasm, ".global %s_end\n", sec->label);
-            fprintf(fasm, "%s: # 0x%X\n", sec->label, sec->start);
-            write_behavior(fasm, data, config, s);
+            fprintf(fasm, "%s:\n", sec->label);
+            fprintf(fasm, ".include \"%s\"\n", outfilename);
+            fprintf(fasm, "%s_end:\n", sec->label);
             fprintf(fasm, "\n\n.section .mio0\n");
+
+            // append to Makefile
+            sprintf(maketmp, " \\\n%s/%s", BEHAVIOR_DIR, beh_filename);
+            strcat(makeheader_level, maketmp);
             break;
+         }
          default:
             break;
       }
