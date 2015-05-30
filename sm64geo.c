@@ -30,12 +30,12 @@ static void print_spaces(FILE *fp, int count)
    }
 }
 
-void print_geo(FILE *out, unsigned char *data, long length)
+void print_geo(FILE *out, unsigned char *data, unsigned int offset, unsigned int length)
 {
-   int a = 0;
+   unsigned int a = offset;
    int indent = 0;
    int i;
-   while (a < length) {
+   while (a < offset + length) {
       switch (data[a]) {
          case 0x00: // end
          case 0x01:
@@ -67,7 +67,7 @@ void print_geo(FILE *out, unsigned char *data, long length)
          case 0x10:
             i = 16;
             break;
-         case 0x0F: // Kaze has 8
+         case 0x0F:
             i = 20;
             break;
          case 0x0A:
@@ -195,7 +195,20 @@ int main(int argc, char *argv[])
       perror("Error opening input file");
       return EXIT_FAILURE;
    }
-   print_geo(stdout, data, size);
+   if (config.length == 0) {
+      config.length = size - config.offset;
+   }
+   if (config.offset >= size) {
+      ERROR("Error: offset greater than file size (%X > %X)\n",
+            config.offset, (unsigned int)size);
+      return EXIT_FAILURE;
+   }
+   if (config.offset + config.length > size) {
+      ERROR("Warning: length goes beyond file size (%X > %X), truncating\n",
+            config.offset + config.length, (unsigned int)size);
+      config.length = size - config.offset;
+   }
+   print_geo(stdout, data, config.offset, config.length);
    free(data);
 
    if (fout != stdout) {
