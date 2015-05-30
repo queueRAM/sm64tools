@@ -4,6 +4,8 @@
 
 #include "utils.h"
 
+#define F3D_VERSION "0.2"
+
 #define read_u24_be(buf) (unsigned int)(((buf)[0] << 16) + ((buf)[1] << 8) + ((buf)[2]))
 
 #define F3D_MOVEMEM    0x03
@@ -23,7 +25,23 @@
 #define G_SETCOMBINE   0xFC
 #define G_SETTIMG      0xFD
 
-void get_mode_string(unsigned char *data, char *description)
+typedef struct
+{
+   char *in_filename;
+   char *out_filename;
+   unsigned int offset;
+   unsigned int length;
+} arg_config;
+
+static arg_config default_config =
+{
+   NULL,
+   NULL,
+   0,
+   0
+};
+
+static void get_mode_string(unsigned char *data, char *description)
 {
    unsigned int val = read_u32_be(&data[4]);
    switch (val) {
@@ -35,7 +53,7 @@ void get_mode_string(unsigned char *data, char *description)
    }
 }
 
-void print_f3d(unsigned char *data)
+static void print_f3d(FILE *fout, unsigned char *data)
 {
    char description[64];
    char tmp[8];
@@ -58,19 +76,19 @@ void print_f3d(unsigned char *data)
          }
          bank = data[4];
          address = read_u24_be(&data[5]);
-         printf("%14s %s %02X %06X", "F3D_MOVEMEM", description, bank, address);
+         fprintf(fout, "%14s %s %02X %06X", "F3D_MOVEMEM", description, bank, address);
          break;
       case F3D_VTX:
          bank  = data[1];
          val = read_u24_be(&data[2]) / 0x10;
          bank2 = data[4];
          address = read_u24_be(&data[5]);
-         printf("%14s %02X %06X %02X %06X", "F3D_VTX", bank, val, bank2, address);
+         fprintf(fout, "%14s %02X %06X %02X %06X", "F3D_VTX", bank, val, bank2, address);
          break;
       case F3D_DL:
          bank = data[4];
          address = read_u24_be(&data[5]);
-         printf("%14s %02X %06X", "F3D_DL", bank, address);
+         fprintf(fout, "%14s %02X %06X", "F3D_DL", bank, address);
          break;
       case F3D_QUAD:
       {
@@ -82,21 +100,21 @@ void print_f3d(unsigned char *data)
          vertex[3] = data[5] / 0x0A;
          vertex[4] = data[6] / 0x0A;
          vertex[5] = data[7] / 0x0A;
-         printf("%14s %3d %3d %3d %3d %3d %3d", "F3D_QUAD",
+         fprintf(fout, "%14s %3d %3d %3d %3d %3d %3d", "F3D_QUAD",
                vertex[0], vertex[1], vertex[2],
                vertex[3], vertex[4], vertex[5]);
          break;
       }
       case F3D_CLRGEOMODE:
          get_mode_string(data, description);
-         printf("%14s %s", "F3D_CLRGEOMODE", description);
+         fprintf(fout, "%14s %s", "F3D_CLRGEOMODE", description);
          break;
       case F3D_SETGEOMODE:
          get_mode_string(data, description);
-         printf("%14s %s", "F3D_SETGEOMODE", description);
+         fprintf(fout, "%14s %s", "F3D_SETGEOMODE", description);
          break;
       case F3D_ENDDL:
-         printf("%14s %s", "F3D_ENDL", description);
+         fprintf(fout, "%14s %s", "F3D_ENDL", description);
          break;
       case F3D_TEXTURE:
          switch (data[3]) {
@@ -115,7 +133,7 @@ void print_f3d(unsigned char *data)
                }
                break;
          }
-         printf("%14s %s", "F3D_TEXTURE", description);
+         fprintf(fout, "%14s %s", "F3D_TEXTURE", description);
          break;
       case F3D_TRI1:
       {
@@ -123,7 +141,7 @@ void print_f3d(unsigned char *data)
          vertex[0] = data[5] / 0x0A;
          vertex[1] = data[6] / 0x0A;
          vertex[2] = data[7] / 0x0A;
-         printf("%14s %3d %3d %3d", "F3D_TRI1", vertex[0], vertex[1], vertex[2]);
+         fprintf(fout, "%14s %3d %3d %3d", "F3D_TRI1", vertex[0], vertex[1], vertex[2]);
          break;
       }
       case G_SETTILESIZE:
@@ -131,7 +149,7 @@ void print_f3d(unsigned char *data)
          unsigned short width, height;
          width  = (((data[5] << 8) | (data[6] & 0xF0)) >> 6) + 1;
          height = (((data[6] & 0x0F) << 8 | data[7]) >> 2) + 1;
-         printf("%14s %2d %2d", "G_SETTILESIZE", width, height);
+         fprintf(fout, "%14s %2d %2d", "G_SETTILESIZE", width, height);
          break;
       }
       case G_LOADBLOCK:
@@ -140,7 +158,7 @@ void print_f3d(unsigned char *data)
             case 0x077FF100: sprintf(description, "RGBA 32x64 or 64x32"); break;
             case 0x073FF100: sprintf(description, "RGBA 32x32"); break;
          }
-         printf("%14s %s", "G_LOADBLOCK", description);
+         fprintf(fout, "%14s %s", "G_LOADBLOCK", description);
          break;
       case G_SETTILE:
       {
@@ -158,14 +176,14 @@ void print_f3d(unsigned char *data)
                strcpy(description, table[i].description);
             }
          }
-         printf("%14s %s", "G_SETTILE", description);
+         fprintf(fout, "%14s %s", "G_SETTILE", description);
          break;
       }
       case G_SETFOGCOLOR:
-         printf("%14s %3d, %3d, %3d, %3d", "G_SETFOGCOLOR", data[4], data[5], data[6], data[7]);
+         fprintf(fout, "%14s %3d, %3d, %3d, %3d", "G_SETFOGCOLOR", data[4], data[5], data[6], data[7]);
          break;
       case G_SETENVCOLOR:
-         printf("%14s %3d, %3d, %3d, %3d", "G_SETENVCOLOR", data[4], data[5], data[6], data[7]);
+         fprintf(fout, "%14s %3d, %3d, %3d, %3d", "G_SETENVCOLOR", data[4], data[5], data[6], data[7]);
          break;
       case G_SETCOMBINE:
       {
@@ -180,47 +198,134 @@ void print_f3d(unsigned char *data)
                strcpy(description, table[i].description);
             }
          }
-         printf("%14s %s", "G_SETCOMBINE", description);
+         fprintf(fout, "%14s %s", "G_SETCOMBINE", description);
          break;
       }
       case G_SETTIMG:
          bank = data[4];
          address = read_u24_be(&data[5]);
-         printf("%14s %02X %06X", "G_SETTIMG", bank, address);
+         fprintf(fout, "%14s %02X %06X", "G_SETTIMG", bank, address);
          break;
       default:
-         printf("%14s %s", "Unknown", description);
+         fprintf(fout, "%14s %s", "Unknown", description);
          break;
+   }
+}
+
+static void print_usage(void)
+{
+   ERROR("Usage: f3d [-l LENGTH] [-o OFFSET] FILE\n"
+         "\n"
+         "f3d v" F3D_VERSION ": N64 Fast3D display list decoder\n"
+         "\n"
+         "Optional arguments:\n"
+         " -l LENGTH    length of data to decode in bytes (default: length of file)\n"
+         " -o OFFSET    starting offset in FILE (default: 0)\n"
+         "\n"
+         "File arguments:\n"
+         " FILE        input file\n"
+         " [OUTPUT]    output file (default: stdout)\n");
+   exit(1);
+}
+
+// parse command line arguments
+static void parse_arguments(int argc, char *argv[], arg_config *config)
+{
+   int i;
+   int file_count = 0;
+   if (argc < 2) {
+      print_usage();
+      exit(1);
+   }
+   for (i = 1; i < argc; i++) {
+      if (argv[i][0] == '-') {
+         switch (argv[i][1]) {
+            case 'l':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               config->length = strtoul(argv[i], NULL, 0);
+               break;
+            case 'o':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               config->offset = strtoul(argv[i], NULL, 0);
+               break;
+            default:
+               print_usage();
+               break;
+         }
+      } else {
+         switch (file_count) {
+            case 0:
+               config->in_filename = argv[i];
+               break;
+            case 1:
+               config->out_filename = argv[i];
+               break;
+            default: // too many
+               print_usage();
+               break;
+         }
+         file_count++;
+      }
+   }
+   if (file_count < 1) {
+      print_usage();
    }
 }
 
 int main(int argc, char *argv[])
 {
+   arg_config config;
+   FILE *fout;
    unsigned char *data;
    long size;
-   int i;
-   int f;
-   if (argc < 2) {
-      ERROR("Usage: f3d FILE [FILES...]\n");
-      return 1;
+   unsigned int i;
+
+   // get configuration from arguments
+   config = default_config;
+   parse_arguments(argc, argv, &config);
+   if (config.out_filename == NULL) {
+      fout = stdout;
+   } else {
+      fout = fopen(config.out_filename, "w");
+      if (fout == NULL) {
+         perror("Error opening output file");
+         return EXIT_FAILURE;
+      }
    }
 
-   for (f = 1; f < argc; f++) {
-      if (argc > 2) {
-         printf("%s:\n", argv[f]);
-      }
-      size = read_file(argv[f], &data);
-      if (size < 0) {
-         return 2;
-      }
+   // operation
+   size = read_file(config.in_filename, &data);
+   if (size < 0) {
+      perror("Error opening input file");
+      return EXIT_FAILURE;
+   }
+   if (config.length == 0) {
+      config.length = size - config.offset;
+   }
+   if (config.offset >= size) {
+      ERROR("Error: offset greater than file size (%X > %X)\n",
+            config.offset, (unsigned int)size);
+      return EXIT_FAILURE;
+   }
+   if (config.offset + config.length > size) {
+      ERROR("Warning: length goes beyond file size (%X > %X), truncating\n",
+            config.offset + config.length, (unsigned int)size);
+      config.length = size - config.offset;
+   }
 
-      for (i = 0; i < size; i += 8) {
-         printf("%05X: ", i);
-         print_f3d(&data[i]);
-         printf("\n");
-      }
+   for (i = config.offset; i < config.offset + config.length; i += 8) {
+      fprintf(fout, "%05X: ", i);
+      print_f3d(fout, &data[i]);
+      fprintf(fout, "\n");
+   }
 
-      free(data);
+   free(data);
+   if (fout != stdout) {
+      fclose(fout);
    }
 
    return 0;
