@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
             config.offset + config.length, (unsigned int)size);
       config.length = size - config.offset;
    }
-   print_geo(stdout, data, config.offset, config.length);
+   print_geo(fout, data, config.offset, config.length);
    free(data);
 
    if (fout != stdout) {
