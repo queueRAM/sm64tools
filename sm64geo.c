@@ -185,12 +185,14 @@ int main(int argc, char *argv[])
       fout = fopen(config.out_filename, "w");
       if (fout == NULL) {
          perror("Error opening output file");
+         return EXIT_FAILURE;
       }
    }
 
    // operation
    size = read_file(config.in_filename, &data);
    if (size < 0) {
+      perror("Error opening input file");
       return EXIT_FAILURE;
    }
    print_geo(stdout, data, size);
