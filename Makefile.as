@@ -27,7 +27,7 @@ MIO0TOOL = $(TOOLS_DIR)/mio0
 N64CKSUM = $(TOOLS_DIR)/n64cksum
 N64GRAPHICS = $(TOOLS_DIR)/n64graphics
 EMULATOR = mupen64plus
-EMU_FLAGS = --noosd --verbose
+EMU_FLAGS = --noosd
 
 ######################## Targets #############################
 
