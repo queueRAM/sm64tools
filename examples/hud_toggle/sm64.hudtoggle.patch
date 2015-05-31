@@ -1,6 +1,6 @@
---- gen/sm64.s.orig	2015-05-03 11:17:28.608274289 -0500
-+++ gen/sm64.s	2015-05-03 11:32:18.514979484 -0500
-@@ -30350,10 +30350,10 @@
+--- gen/sm64.orig.s	2015-05-30 22:10:42.024713967 +0200
++++ gen/sm64.s	2015-05-30 22:11:06.161380917 +0200
+@@ -125954,10 +125954,10 @@
    sw    $t6, 0x30($sp)
    addiu $t7, $zero, 0xcd
    sw    $t7, 0x2c($sp)
@@ -15,7 +15,7 @@
    nop   
  LShowCameraStatus_44: # 802E3B80
    lw    $t9, 0x8033b06c # lui $t9, 0x8034/lw $t9, -0x4f94($t9)
-@@ -30498,29 +30498,25 @@
+@@ -126102,29 +126102,25 @@
    jal   RenderHud_CannonReticle
    nop   
  LRenderHud_74: # 802E3DA0
@@ -60,4 +60,4 @@
 +  andi  $t9, $s0, 0x10
    beqz  $t9, LRenderHud_D4
    nop   
-   jal   RenderHud_CannonReticle2
+   jal   proc_802E38E4
