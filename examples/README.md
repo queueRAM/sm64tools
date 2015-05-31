@@ -38,3 +38,9 @@ http://www.smwcentral.net/?p=viewthread&t=58544
 replace water skybox with night sky from Lylat System.
 
 1. copy skybox/0x00000.skybox.png to gen/textures/water\_skybox/
+
+## Behavior
+Source patch for modifying the sign posts behavior to rotate about the Y-axis
+
+1. patch -p0 < sm64.rotating\_sign.patch
+

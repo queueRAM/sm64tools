@@ -1,0 +1,11 @@
+--- gen/behavior_data.orig.s	2015-05-31 10:18:13.894941354 +0200
++++ gen/behavior_data.s	2015-05-31 10:18:08.784941132 +0200
+@@ -2819,7 +2819,7 @@
+ .word 0x08000000
+ .word 0x10050000
+ .word 0x0C000000, ProcessCollision
+-.word 0x102B0000
++.word 0x0F130100
+ .word 0x09000000
+ beh_sign_on_wall: # 3324
+ .word 0x00090000
