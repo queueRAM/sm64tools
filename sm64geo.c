@@ -52,6 +52,7 @@ void print_geo(FILE *out, unsigned char *data, unsigned int offset, unsigned int
          case 0x02:
          case 0x0D:
          case 0x0E:
+         case 0x12:
          case 0x14:
          case 0x15:
          case 0x16:

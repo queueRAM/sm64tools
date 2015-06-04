@@ -263,6 +263,7 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
          case 0x02:
          case 0x0D:
          case 0x0E:
+         case 0x12:
          case 0x14:
          case 0x15:
          case 0x16:
