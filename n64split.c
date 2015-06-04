@@ -490,17 +490,24 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
       if (sec->start != last_end) {
          int gap_len = sec->start - last_end;
          INFO("Filling gap before region %d (%d bytes)\n", s, gap_len);
-         fprintf(fasm, "L%06X:\n", last_end);
+         fprintf(fasm, "# Unknown region %06X-%06X [%X]\n", last_end, sec->start, gap_len);
          // for small gaps, just output bytes
-         if (gap_len <= 16) {
-            fprintf(fasm, ".byte ");
-            fprint_hex_source(fasm, &data[last_end], gap_len);
-            fprintf(fasm, "\n");
+         if (gap_len <= 0x80) {
+            unsigned int group_offset = last_end;
+            while (gap_len > 0) {
+               int group_len = MIN(gap_len, 0x10);
+               fprintf(fasm, ".byte ");
+               fprint_hex_source(fasm, &data[group_offset], group_len);
+               fprintf(fasm, "\n");
+               gap_len -= group_len;
+               group_offset += group_len;
+            }
          } else {
             sprintf(outfilename, "%s/%s.%06X.bin", BIN_DIR, config->basename, last_end);
             write_file(outfilename, &data[last_end], gap_len);
             fprintf(fasm, ".incbin \"%s\"\n", outfilename);
          }
+         fprintf(fasm, "\n");
       }
 
       // print section header for new RAM segments
@@ -563,11 +570,18 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             break;
          case TYPE_PTR:
             INFO("Section ptr: %X-%X\n", sec->start, sec->end);
+            if (sec->label == NULL || sec->label[0] == '\0') {
+               sprintf(start_label, "Ptr%06X", sec->start);
+            } else {
+               strcpy(start_label, sec->label);
+            }
+            fprintf(fasm, "%s:\n", start_label);
             for (a = sec->start; a < sec->end; a += 4) {
                ptr = read_u32_be(&data[a]);
                fill_addr_label(config, ptr, start_label, -1);
                fprintf(fasm, ".word %s\n", start_label);
             }
+            fprintf(fasm, "\n");
             break;
          case TYPE_ASM:
             INFO("Section asm: %X-%X\n", sec->start, sec->end);
