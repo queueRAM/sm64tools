@@ -220,6 +220,38 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
       while (luis < count/2 && insn[luis].id == MIPS_INS_LUI) {
          luis++;
       }
+      // first check for LA wrapped around JAL (LUI/JAL/ADDIU)
+      if (luis == 1 && count >= 3) {
+         unsigned int reg = insn[0].detail->mips.operands[0].reg;
+         if (insn[1].id == MIPS_INS_JAL && insn[2].id == MIPS_INS_ADDIU) {
+            // ensure addiu uses same register
+            if (insn[2].detail->mips.operands[0].reg == reg &&
+                insn[2].detail->mips.operands[1].reg == reg) {
+               char label[128];
+               const char *reg_name;
+               unsigned int jal_addr;
+               unsigned int addr;
+               unsigned int lui_imm;
+               unsigned int addiu_imm;
+               int known_idx;
+               lui_imm = (unsigned int)insn[0].detail->mips.operands[1].imm;
+               addiu_imm = (unsigned int)insn[2].detail->mips.operands[2].imm;
+               jal_addr = (unsigned int)insn[1].detail->mips.operands[0].imm;
+               addr = ((lui_imm << 16) + addiu_imm);
+               fill_addr_label(config, addr, label, -1);
+               reg_name = cs_reg_name(handle, reg);
+               fprintf(out, "  lui   $%s, %%hi(%s) # 0x%X\n", reg_name, label, lui_imm);
+               known_idx = known_index(config, jal_addr);
+               if (known_idx < 0) {
+                  fprintf(out, "  jal   proc_%08X\n", jal_addr);
+               } else {
+                  fprintf(out, "  jal   %s\n", config->labels[known_idx].name);
+               }
+               fprintf(out, "  addiu $%s, $%s, %%lo(%s) # 0x%X", reg_name, reg_name, label, addiu_imm & 0xFFFF);
+               return 3; // consume LUI/JAL/ADDIU
+            }
+         }
+      }
       if (luis > 0 && 2*luis <= count) {
          char label[128];
          unsigned int addr[16]; // some sane max
