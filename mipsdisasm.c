@@ -390,7 +390,7 @@ int fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint
       default:
          break;
    }
-   sprintf(label, "0x%x", addr);
+   sprintf(label, "0x%08x", addr);
    return 0;
 }
 

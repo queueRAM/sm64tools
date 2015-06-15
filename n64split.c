@@ -580,7 +580,16 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             for (a = sec->start; a < sec->end; a += 4) {
                ptr = read_u32_be(&data[a]);
                fill_addr_label(config, ptr, start_label, -1);
-               fprintf(fasm, ".word %s\n", start_label);
+               fprintf(fasm, ".word %s", start_label);
+               if (sec->extra_len > 0) {
+                  for (i = 1; i < sec->extra_len; i++) {
+                     a += 4;
+                     ptr = read_u32_be(&data[a]);
+                     fill_addr_label(config, ptr, start_label, -1);
+                     fprintf(fasm, ", %s", start_label);
+                  }
+               }
+               fprintf(fasm, "\n");
             }
             fprintf(fasm, "\n");
             break;

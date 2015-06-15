@@ -139,13 +139,18 @@ int parse_config_file(const char *filename, rom_config *config)
             // validate section parameter counts
             switch (sec[i].type) {
                case TYPE_ASM:
-               case TYPE_PTR:
                case TYPE_BIN:
                case TYPE_HEADER:
                case TYPE_GEO:
                case TYPE_LEVEL:
                   if (r_count > 4) {
                      ERROR("Error: %s:%d - expected 3-4 fields for section\n", filename, r->line);
+                     return -1;
+                  }
+                  break;
+               case TYPE_PTR:
+                  if (r_count > 5) {
+                     ERROR("Error: %s:%d - expected 3-5 fields for section\n", filename, r->line);
                      return -1;
                   }
                   break;
@@ -222,6 +227,9 @@ int parse_config_file(const char *filename, rom_config *config)
                   sec[i].extra_len = extra_count;
                   break;
                }
+               case TYPE_PTR:
+                  sec[i].extra_len = config_setting_get_int_elem(r, 4);
+                  break;
                default:
                   ERROR("Warning: %s:%d - extra fields for section\n", filename, r->line);
                   break;
