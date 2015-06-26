@@ -136,6 +136,7 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
    unsigned int dst;
    unsigned int a;
    int indent;
+   int len;
    int i;
    int beh_i;
 
@@ -258,7 +259,7 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
          case 0x0C:
          case 0x17:
          case 0x20:
-            i = 4;
+            len = 4;
             break;
          case 0x02:
          case 0x0D:
@@ -269,35 +270,35 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
          case 0x16:
          case 0x18:
          case 0x19:
-            i = 8;
+            len = 8;
             break;
          case 0x08:
          case 0x13:
          case 0x1C:
-            i = 12;
+            len = 12;
             break;
          case 0x10:
          case 0x1F:
-            i = 16;
+            len = 16;
             break;
          case 0x0F: // Kaze has 8
-            i = 20;
+            len = 20;
             break;
          case 0x0A:
-            i = 8;
+            len = 8;
             if (data[a+1]) {
-               i += 4;
+               len += 4;
             }
             break;
          case 0x11:
          case 0x1D:
-            i = 8;
+            len = 8;
             if (data[a+1] & 0x80) {
-               i += 4;
+               len += 4;
             }
             break;
          default:
-            i = 4;
+            len = 4;
             ERROR("WHY? %06X %2X\n", a, data[a]);
       }
       if (data[a] == 0x05 && indent > 1) {
@@ -306,14 +307,17 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
       if (data[a] == 0x01) {
          indent = 0;
       }
-      fprintf(out, ".byte ");
+      fprintf(out, ".word ");
       print_spaces(out, indent);
-      fprint_hex_source(out, &data[a], i);
+      fprintf(out, "0x%08X", read_u32_be(&data[a]));
+      for (i = 4; i < len; i+=4) {
+         fprintf(out, ", 0x%08X", read_u32_be(&data[a+i]));
+      }
       fprintf(out, "\n");
       if (data[a] == 0x04) {
          indent += 2;
       }
-      a += i;
+      a += len;
    }
 }
 
