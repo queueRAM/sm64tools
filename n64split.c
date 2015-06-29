@@ -321,6 +321,30 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
    }
 }
 
+static int disassemble_dummy(FILE *out, rom_config *config, unsigned char *data, unsigned int start, unsigned int end)
+{
+   unsigned int instr;
+   unsigned int i;
+   unsigned int len = end - start;
+   unsigned int rom_start = ram_to_rom(config, start);
+   unsigned int rom_end = ram_to_rom(config, end);
+   // ensure multiple of 8 (also takes care of < 8)
+   if (len & 0x7) return 0;
+   for (i = rom_start; i < rom_end; i += 8) {
+      instr = read_u32_be(&data[i]);
+      if (instr != 0x03e00008) return 0;
+      instr = read_u32_be(&data[i+4]);
+      if (instr != 0x0) return 0;
+   }
+   fprintf(out, "\ndummy%08X:\n", start);
+   for (i = start; i < end; i += 8) {
+      fprintf(out, "  jr    $ra\n"
+                   "  nop\n");
+   }
+   fprintf(out, "# end dummy%08X\n", start);
+   return 1;
+}
+
 static void disassemble_section(FILE *out, unsigned char *data, long len, split_section *sec, proc_table *procs, rom_config *config)
 {
    // disassemble all the procedures
@@ -341,21 +365,24 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
    for (proc_idx = start_proc; proc_idx < procs->count; proc_idx++) {
       ram_address = procs->procedures[proc_idx].start;
       if (ram_address > last_end) {
-         // TODO: put larger sections in .bins
-         fprintf(out, "\n# unknown assembly section %X-%X (%06X-%06X) [%X]",
-               last_end, ram_address, ram_to_rom(config, last_end), ram_to_rom(config, ram_address), ram_address - last_end);
-         unsigned int a = ram_to_rom(config, last_end);
-         int count = 0;
-         while (a < ram_to_rom(config, ram_address)) {
-            if ((count % 4) == 0) {
-               fprintf(out, "\n .word 0x%08x", read_u32_be(&data[a]));
-            } else {
-               fprintf(out, ", 0x%08x", read_u32_be(&data[a]));
+         int is_dummy = disassemble_dummy(out, config, data, last_end, ram_address);
+         if (!is_dummy) {
+            // TODO: put larger sections in .bins
+            fprintf(out, "\n# unknown assembly section %X-%X (%06X-%06X) [%X]",
+                  last_end, ram_address, ram_to_rom(config, last_end), ram_to_rom(config, ram_address), ram_address - last_end);
+            unsigned int a = ram_to_rom(config, last_end);
+            int count = 0;
+            while (a < ram_to_rom(config, ram_address)) {
+               if ((count % 4) == 0) {
+                  fprintf(out, "\n .word 0x%08x", read_u32_be(&data[a]));
+               } else {
+                  fprintf(out, ", 0x%08x", read_u32_be(&data[a]));
+               }
+               a += 4;
+               count++;
             }
-            a += 4;
-            count++;
+            fprintf(out, "\n# end unknown section\n");
          }
-         fprintf(out, "\n# end unknown section\n");
       }
       // TODO: this is a workaround for the inner procedures __osPopThread, __osEnqueueThread, proc_80327D68
       if (procs->procedures[proc_idx].start != 0x80327D58 &&
