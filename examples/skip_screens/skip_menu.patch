@@ -1,0 +1,11 @@
+--- gen/levels/game_over_level.s	2015-06-30 23:57:51.003573666 -0500
++++ gen/levels/game_over_level.orig.s	2015-06-30 15:19:02.339548628 -0500
+@@ -77,7 +77,7 @@
+ .word 0x1C040000
+ .word 0x03040002
+ .word 0x13040010
+-.word 0x01100015, main_level_scripts, main_level_scripts_end, 0x15000000
++.word 0x01100014, main_menu_level, main_menu_level_end, 0x14000000
+ .word 0x33080110, 0xFFFFFF00
+ .word 0x03040010
+ .word 0x1C040000
