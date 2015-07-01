@@ -5,7 +5,7 @@
 
 // defines
 
-#define MAX_PROCEDURES 4096
+#define MAX_PROCEDURES (32 * 1024)
 
 // typedefs
 
