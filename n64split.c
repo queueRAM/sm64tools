@@ -198,6 +198,14 @@ static void write_geolayout(FILE *out, unsigned char *data, unsigned int start, 
       fprintf(out, ".word ");
       print_spaces(out, indent);
       switch (data[a]) {
+         case 0x0A:
+            fprintf(out, "0x%08X", read_u32_be(&data[a]));
+            fprintf(out, ", 0x%08X", read_u32_be(&data[a+4]));
+            if (len > 8) {
+               fill_addr_label(config, read_u32_be(&data[a+8]), label, -1);
+               fprintf(out, ", %s", label);
+            }
+            break;
          case 0x0E:
          case 0x18:
          case 0x19:
@@ -523,6 +531,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
 #define BIN_DIR      GEN_DIR "/bin"
 #define MIO0_DIR     GEN_DIR "/bin"
 #define TEXTURE_DIR  GEN_DIR "/textures"
+#define GEO_DIR      GEN_DIR "/geo"
 #define LEVEL_DIR    GEN_DIR "/levels"
 #define BEHAVIOR_DIR GEN_DIR
 
@@ -551,6 +560,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    make_dir(BIN_DIR);
    make_dir(MIO0_DIR);
    make_dir(TEXTURE_DIR);
+   make_dir(GEO_DIR);
    make_dir(LEVEL_DIR);
 
    // open main assembly file and write header
@@ -708,6 +718,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    for (s = 0; s < config->section_count; s++) {
       split_section *sec = &sections[s];
       switch (sec->type) {
+         case TYPE_GEO:
+            count += i + strlen(sec->label) + 4;
+            break;
          case TYPE_MIO0:
             count += i + strlen(sec->label) + 4;
             break;
@@ -729,6 +742,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    fprintf(fmake, "LD_SCRIPT = %s/%s.ld\n\n", GEN_DIR, config->basename);
    fprintf(fmake, "MIO0_DIR = %s\n\n", MIO0_DIR);
    fprintf(fmake, "TEXTURE_DIR = %s\n\n", TEXTURE_DIR);
+   fprintf(fmake, "GEO_DIR = %s\n\n", GEO_DIR);
    fprintf(fmake, "LEVEL_DIR = %s\n\n", LEVEL_DIR);
 
    fprintf(fasm, "\n.section .mio0\n");
@@ -736,20 +750,37 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
       split_section *sec = &sections[s];
       switch (sec->type) {
          case TYPE_GEO:
+         {
+            char geofilename[512];
+            FILE *fgeo;
             if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(outfilename, "%s/%s.%06X.geo", BIN_DIR, config->basename, sec->start);
+               sprintf(geofilename, "%s.%06X.geo.s", config->basename, sec->start);
                sprintf(start_label, "L%06X", sec->start);
             } else {
-               sprintf(outfilename, "%s/%s.geo", BIN_DIR, sec->label);
+               sprintf(geofilename, "%s.geo.s", sec->label);
                strcpy(start_label, sec->label);
             }
-            write_file(outfilename, &data[sec->start], sec->end - sec->start);
+            sprintf(outfilename, "%s/%s", GEO_DIR, geofilename);
+
+            // decode and write level data out
+            fgeo = fopen(outfilename, "w");
+            if (fgeo == NULL) {
+               perror(outfilename);
+               exit(1);
+            }
+            write_geolayout(fgeo, data, sec->start, sec->end, config);
+            fclose(fgeo);
+
             fprintf(fasm, "\n.align 4, 0x01\n");
             fprintf(fasm, ".global %s\n", start_label);
             fprintf(fasm, "%s:\n", start_label);
-            fprintf(fasm, ".incbin \"%s\"\n", outfilename);
+            fprintf(fasm, ".include \"%s\"\n", outfilename);
             fprintf(fasm, "%s_end:\n", start_label);
+            // append to Makefile
+            sprintf(maketmp, " \\\n$(GEO_DIR)/%s", geofilename);
+            strcat(makeheader_level, maketmp);
             break;
+         }
          case TYPE_MIO0:
          {
             char binfilename[512];
