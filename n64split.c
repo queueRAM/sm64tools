@@ -125,6 +125,89 @@ static void write_behavior(FILE *out, unsigned char *data, rom_config *config, i
    }
 }
 
+static void write_geolayout(FILE *out, unsigned char *data, unsigned int start, unsigned int end, rom_config *config)
+{
+   unsigned int a = start;
+   int indent;
+   int len;
+   int i;
+   indent = 0;
+   // TODO: process function pointers and other geo layout references
+   (void)config;
+   while (a < end) {
+      switch (data[a]) {
+         case 0x00: // end
+         case 0x01:
+         case 0x03:
+         case 0x04:
+         case 0x05:
+         case 0x09:
+         case 0x0B:
+         case 0x0C:
+         case 0x17:
+         case 0x20:
+            len = 4;
+            break;
+         case 0x02:
+         case 0x0D:
+         case 0x0E:
+         case 0x12:
+         case 0x14:
+         case 0x15:
+         case 0x16:
+         case 0x18:
+         case 0x19:
+            len = 8;
+            break;
+         case 0x08:
+         case 0x13:
+         case 0x1C:
+            len = 12;
+            break;
+         case 0x10:
+         case 0x1F:
+            len = 16;
+            break;
+         case 0x0F:
+            len = 20;
+            break;
+         case 0x0A:
+            len = 8;
+            if (data[a+1]) {
+               len += 4;
+            }
+            break;
+         case 0x11:
+         case 0x1D:
+            len = 8;
+            if (data[a+1] & 0x80) {
+               len += 4;
+            }
+            break;
+         default:
+            len = 4;
+            ERROR("WHY? %06X %2X\n", a, data[a]);
+      }
+      if (data[a] == 0x05 && indent > 1) {
+         indent -= 2;
+      }
+      if (data[a] == 0x01) {
+         indent = 0;
+      }
+      fprintf(out, ".word ");
+      print_spaces(out, indent);
+      fprintf(out, "0x%08X", read_u32_be(&data[a]));
+      for (i = 4; i < len; i+=4) {
+         fprintf(out, ", 0x%08X", read_u32_be(&data[a+i]));
+      }
+      fprintf(out, "\n");
+      if (data[a] == 0x04) {
+         indent += 2;
+      }
+      a += len;
+   }
+}
+
 static void write_level(FILE *out, unsigned char *data, rom_config *config, int s)
 {
    char start_label[128];
@@ -135,8 +218,6 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
    unsigned int ptr_end;
    unsigned int dst;
    unsigned int a;
-   int indent;
-   int len;
    int i;
    int beh_i;
 
@@ -244,81 +325,9 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
       fprintf(out, "\n");
       a = ALIGN(a, 16);
    }
-   fprintf(out, "# begin %s geo 0x%X\n", sec->label, a);
    // remaining is geo layout script
-   indent = 0;
-   while (a < sec->end) {
-      switch (data[a]) {
-         case 0x00: // end
-         case 0x01:
-         case 0x03:
-         case 0x04:
-         case 0x05:
-         case 0x09:
-         case 0x0B:
-         case 0x0C:
-         case 0x17:
-         case 0x20:
-            len = 4;
-            break;
-         case 0x02:
-         case 0x0D:
-         case 0x0E:
-         case 0x12:
-         case 0x14:
-         case 0x15:
-         case 0x16:
-         case 0x18:
-         case 0x19:
-            len = 8;
-            break;
-         case 0x08:
-         case 0x13:
-         case 0x1C:
-            len = 12;
-            break;
-         case 0x10:
-         case 0x1F:
-            len = 16;
-            break;
-         case 0x0F: // Kaze has 8
-            len = 20;
-            break;
-         case 0x0A:
-            len = 8;
-            if (data[a+1]) {
-               len += 4;
-            }
-            break;
-         case 0x11:
-         case 0x1D:
-            len = 8;
-            if (data[a+1] & 0x80) {
-               len += 4;
-            }
-            break;
-         default:
-            len = 4;
-            ERROR("WHY? %06X %2X\n", a, data[a]);
-      }
-      if (data[a] == 0x05 && indent > 1) {
-         indent -= 2;
-      }
-      if (data[a] == 0x01) {
-         indent = 0;
-      }
-      fprintf(out, ".word ");
-      print_spaces(out, indent);
-      fprintf(out, "0x%08X", read_u32_be(&data[a]));
-      for (i = 4; i < len; i+=4) {
-         fprintf(out, ", 0x%08X", read_u32_be(&data[a+i]));
-      }
-      fprintf(out, "\n");
-      if (data[a] == 0x04) {
-         indent += 2;
-      }
-      a += len;
-   }
+   fprintf(out, "# begin %s geo 0x%X\n", sec->label, a);
+   write_geolayout(out, data, a, sec->end, config);
 }
 
 static int disassemble_dummy(FILE *out, rom_config *config, unsigned char *data, unsigned int start, unsigned int end)
