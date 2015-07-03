@@ -127,6 +127,7 @@ static void write_behavior(FILE *out, unsigned char *data, rom_config *config, i
 
 static void write_geolayout(FILE *out, unsigned char *data, unsigned int start, unsigned int end, rom_config *config)
 {
+   char label[128];
    unsigned int a = start;
    int indent;
    int len;
@@ -196,9 +197,20 @@ static void write_geolayout(FILE *out, unsigned char *data, unsigned int start, 
       }
       fprintf(out, ".word ");
       print_spaces(out, indent);
-      fprintf(out, "0x%08X", read_u32_be(&data[a]));
-      for (i = 4; i < len; i+=4) {
-         fprintf(out, ", 0x%08X", read_u32_be(&data[a+i]));
+      switch (data[a]) {
+         case 0x0E:
+         case 0x18:
+         case 0x19:
+            fprintf(out, "0x%08X", read_u32_be(&data[a]));
+            fill_addr_label(config, read_u32_be(&data[a+4]), label, -1);
+            fprintf(out, ", %s", label);
+            break;
+         default:
+            fprintf(out, "0x%08X", read_u32_be(&data[a]));
+            for (i = 4; i < len; i+=4) {
+               fprintf(out, ", 0x%08X", read_u32_be(&data[a+i]));
+            }
+            break;
       }
       fprintf(out, "\n");
       if (data[a] == 0x04) {
