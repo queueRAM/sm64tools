@@ -337,6 +337,27 @@ static int disassemble_dummy(FILE *out, rom_config *config, unsigned char *data,
    unsigned int len = end - start;
    unsigned int rom_start = ram_to_rom(config, start);
    unsigned int rom_end = ram_to_rom(config, end);
+   int allnops = 1;
+   // first check all nops
+   for (i = rom_start; i < rom_end; i += 4) {
+      instr = read_u32_be(&data[i]);
+      if (instr != 0x0) {
+         allnops = 0;
+         break;
+      }
+   }
+   if (allnops) {
+      fprintf(out, "\n# alignment");
+      for (i = 0; i < len; i += 4) {
+         if (i % 0x10 == 0) {
+            fprintf(out, "\n.word 0x00000000");
+         } else {
+            fprintf(out, ", 0x00000000");
+         }
+      }
+      fprintf(out, "\n");
+      return 1;
+   }
    // ensure multiple of 8 (also takes care of < 8)
    if (len & 0x7) return 0;
    for (i = rom_start; i < rom_end; i += 8) {
@@ -350,7 +371,6 @@ static int disassemble_dummy(FILE *out, rom_config *config, unsigned char *data,
       fprintf(out, "  jr    $ra\n"
                    "  nop\n");
    }
-   fprintf(out, "# end dummy%08X\n", start);
    return 1;
 }
 
@@ -381,14 +401,27 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
                   last_end, ram_address, ram_to_rom(config, last_end), ram_to_rom(config, ram_address), ram_address - last_end);
             unsigned int a = ram_to_rom(config, last_end);
             int count = 0;
-            while (a < ram_to_rom(config, ram_address)) {
+            unsigned int rom_address = ram_to_rom(config, ram_address);
+            int newline = 0;
+            while (a < rom_address) {
+               unsigned int val = read_u32_be(&data[a]);
+               if (val == 0x03e00008) {
+                  newline = 2;
+               }
                if ((count % 4) == 0) {
-                  fprintf(out, "\n .word 0x%08x", read_u32_be(&data[a]));
+                  fprintf(out, "\n.word 0x%08x", val);
                } else {
-                  fprintf(out, ", 0x%08x", read_u32_be(&data[a]));
+                  fprintf(out, ", 0x%08x", val);
                }
                a += 4;
                count++;
+               if (newline) {
+                  newline--;
+                  if (!newline) {
+                     count = 0;
+                     fprintf(out, "\n# %X (%06X)", rom_to_ram(config, a), a);
+                  }
+               }
             }
             fprintf(out, "\n# end unknown section\n");
          }
