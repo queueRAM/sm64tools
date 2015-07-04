@@ -413,10 +413,19 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
    end_address = rom_to_ram(config, sec->end);
    for (proc_idx = start_proc; proc_idx < procs->count; proc_idx++) {
       ram_address = procs->procedures[proc_idx].start;
+      // TODO: this is a workaround for inner procedures
+      switch (ram_address) {
+         case 0x80327B98: // proc_80327B98
+         case 0x80327C80: // __osEnqueueAndYield
+         case 0x80327D10: // __osEnqueueThread
+         case 0x80327D58: // __osPopThread
+         case 0x80327D68: // __osDispatchThread
+            continue;
+         default: break;
+      }
       if (ram_address > last_end) {
          int is_dummy = disassemble_dummy(out, config, data, last_end, ram_address);
          if (!is_dummy) {
-            // TODO: put larger sections in .bins
             fprintf(out, "\n# unknown assembly section %X-%X (%06X-%06X) [%X]",
                   last_end, ram_address, ram_to_rom(config, last_end), ram_to_rom(config, ram_address), ram_address - last_end);
             unsigned int a = ram_to_rom(config, last_end);
@@ -446,15 +455,10 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
             fprintf(out, "\n# end unknown section\n");
          }
       }
-      // TODO: this is a workaround for the inner procedures __osPopThread, __osEnqueueThread, proc_80327D68
-      if (procs->procedures[proc_idx].start != 0x80327D58 &&
-          procs->procedures[proc_idx].start != 0x80327D68 &&
-          procs->procedures[proc_idx].start != 0x80327D10) {
-         if (ram_address < last_end) {
-            ERROR("Warning: %08X < %08X\n", ram_address, last_end);
-         }
-         disassemble_proc(out, data, len, &procs->procedures[proc_idx], config);
+      if (ram_address < last_end) {
+         ERROR("Warning: %08X < %08X\n", ram_address, last_end);
       }
+      disassemble_proc(out, data, len, &procs->procedures[proc_idx], config);
       last_end = procs->procedures[proc_idx].end;
       if (last_end >= end_address) {
          break;

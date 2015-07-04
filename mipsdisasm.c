@@ -64,12 +64,13 @@ static int find_proc(proc_table *procs, unsigned int addr)
    return -1;
 }
 
-static void add_proc(proc_table *procs, unsigned int addr)
+static void add_proc(proc_table *procs, unsigned int start, unsigned int end)
 {
-   if (find_proc(procs, addr) >= 0) {
+   if (find_proc(procs, start) >= 0) {
       return;
    }
-   procs->procedures[procs->count].start = addr;
+   procs->procedures[procs->count].start = start;
+   procs->procedures[procs->count].end = end;
    procs->count++;
 }
 
@@ -108,6 +109,7 @@ static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptb
    // find referenced JAL, local labels, and find end marked by last JR or ERET
    locals.offsets = local_offsets;
    locals.count = 0;
+
    disassembling = 1;
    processed = 0;
    remaining = 0;
@@ -138,7 +140,7 @@ static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptb
                unsigned int addr;
                cs_mips *mips = &insn[i].detail->mips;
                addr = (unsigned int)mips->operands[0].imm;
-               add_proc(ptbl, addr);
+               add_proc(ptbl, addr, 0);
             }
 
             // if we encounter B, JR, or ERET past last local label, end disassembly
@@ -151,10 +153,18 @@ static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptb
                }
             }
 
-            if (remaining > 0) {
-               remaining--;
-               if (remaining == 0) {
+            // manually set end
+            if (proc->end) {
+               if (proc->end == ram_address + processed + 4) {
                   disassembling = 0;
+               }
+            } else {
+               // automatically find terminating instruction
+               if (remaining > 0) {
+                  remaining--;
+                  if (remaining == 0) {
+                     disassembling = 0;
+                  }
                }
             }
             processed += 4;
@@ -445,9 +455,14 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
             // handle redirect jump instruction immediates
             int inslen;
             int ll;
-            // TODO: workaround for __osEnqueueThread, __osPopThread
+            // TODO: workaround for __osEnqueueThread, __osPopThread, __osDispatchThread
             switch (ram_address + processed) {
-               case 0x80327D10: fprintf(out, "\n# begin 80327D10 (0E2D10)\n__osEnqueueThread:\n"); break;
+               case 0x80327B98: fprintf(out, "# end __osExceptionHandler 80327B98 (0E2B98)\n\n"
+                                             "\n# begin 80327B98 (0E2B98)\nproc_80327B98:\n"); break;
+               case 0x80327C4C: fprintf(out, "# end proc_80327B98 80327C4C (0E2C4C)\n\n"); break;
+               case 0x80327C80: fprintf(out, "\n# begin 80327C80 (0E2C80)\n__osEnqueueAndYield:\n"); break;
+               case 0x80327D10: fprintf(out, "# end __osEnqueueAndYield 80327D10 (0E2D10)\n\n"
+                                             "# begin 80327D10 (0E2D10)\n__osEnqueueThread:\n"); break;
                case 0x80327D58: fprintf(out, "# end __osEnqueueThread 80327D58 (0E2D58)\n\n"
                                              "# begin 80327D58 (0E2D58)\n__osPopThread:\n"); break;
                case 0x80327D68: fprintf(out, "# end __osPopThread 80327D68 (0E2D68)\n\n"
@@ -568,12 +583,14 @@ void mipsdisasm_add_procs(proc_table *procs, rom_config *config, long file_len)
 {
    unsigned int ram_address;
    unsigned int rom_offset;
+   unsigned int end_address;
    int i;
    for (i = 0; i < config->label_count; i++) {
       ram_address = config->labels[i].ram_addr;
+      end_address = config->labels[i].end_addr;
       rom_offset = ram_to_rom(config, ram_address);
       if (rom_offset < file_len) {
-         add_proc(procs, ram_address);
+         add_proc(procs, ram_address, end_address);
       }
    }
 }
@@ -776,7 +793,7 @@ int main(int argc, char *argv[])
                return EXIT_FAILURE;
             }
          }
-         add_proc(&procs, ram_address);
+         add_proc(&procs, ram_address, 0);
       }
    } else {
       // populate procedure list from list of known addresses

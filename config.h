@@ -17,6 +17,7 @@ typedef enum
 typedef struct _label
 {
    unsigned int ram_addr;
+   unsigned int end_addr;
    char name[128];
 } label;
 

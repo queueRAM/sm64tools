@@ -254,11 +254,16 @@ int parse_config_file(const char *filename, rom_config *config)
          unsigned int addr;
          const char *label;
          lab_count = config_setting_length(lab);
-         if (lab_count == 2) {
+         if (lab_count == 2 || lab_count == 3) {
             addr  = config_setting_get_int64_elem(lab, 0);
             labels[i].ram_addr = addr;
+            labels[i].end_addr = 0x0;
             label = config_setting_get_string_elem(lab, 1);
             strcpy(labels[i].name, label);
+            if (lab_count > 2) {
+               addr  = config_setting_get_int64_elem(lab, 2);
+               labels[i].end_addr = addr;
+            }
          } else {
             ERROR("Error: %s:%d - expected 2 fields for label\n", filename, setting->line);
             return -1;
