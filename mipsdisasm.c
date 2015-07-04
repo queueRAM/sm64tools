@@ -390,7 +390,7 @@ int fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint
       default:
          break;
    }
-   sprintf(label, "0x%08x", addr);
+   sprintf(label, "0x%08X", addr);
    return 0;
 }
 
@@ -456,7 +456,7 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
             }
             ll = find_local(&proc->locals, processed);
             if (ll >= 0) {
-               fprintf(out, "L%s_%X: # %X\n", sec_name, processed, ram_address + processed);
+               fprintf(out, ".L%s_%X: # %X\n", sec_name, processed, ram_address + processed);
             }
             consumed = pseudoins_detected(out, handle, &insn[i], count-1, config);
             if (consumed > 0) {
@@ -482,7 +482,7 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
                         case MIPS_OP_IMM:
                         {
                            unsigned int sec_offset = (unsigned int)mips->operands[o].imm - ram_address;
-                           fprintf(out, "L%s_%X", sec_name, sec_offset);
+                           fprintf(out, ".L%s_%X", sec_name, sec_offset);
                            break;
                         }
                         default:
