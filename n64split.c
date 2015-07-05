@@ -207,10 +207,16 @@ static void write_geolayout(FILE *out, unsigned char *data, unsigned int start, 
             }
             break;
          case 0x0E:
+         case 0x0F:
          case 0x18:
          case 0x19:
+         case 0x1C:
+            // these all have a function pointer in the last word
             fprintf(out, "0x%08X", read_u32_be(&data[a]));
-            fill_addr_label(config, read_u32_be(&data[a+4]), label, -1);
+            for (i = 4; i < len-4; i+=4) {
+               fprintf(out, ", 0x%08X", read_u32_be(&data[a+i]));
+            }
+            fill_addr_label(config, read_u32_be(&data[a+len-4]), label, -1);
             fprintf(out, ", %s", label);
             break;
          default:
