@@ -441,7 +441,7 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
    // perform disassembly
    disassembling = 1;
    processed = 0;
-   fprintf(out, "\n# begin %08X (%06X)\n%s:\n", ram_address, rom_offset, sec_name);
+   fprintf(out, "\n%s: # begin %08X (%06X)\n", sec_name, ram_address, rom_offset);
    while (disassembling) {
       int consumed;
       cur_amount = MIN(MAX_BYTES_PER_CALL, length - processed);
@@ -457,16 +457,16 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
             int ll;
             // TODO: workaround for __osEnqueueThread, __osPopThread, __osDispatchThread
             switch (ram_address + processed) {
-               case 0x80327B98: fprintf(out, "# end __osExceptionHandler 80327B98 (0E2B98)\n\n"
-                                             "\n# begin 80327B98 (0E2B98)\nproc_80327B98:\n"); break;
-               case 0x80327C4C: fprintf(out, "# end proc_80327B98 80327C4C (0E2C4C)\n\n"); break;
-               case 0x80327C80: fprintf(out, "\n# begin 80327C80 (0E2C80)\n__osEnqueueAndYield:\n"); break;
-               case 0x80327D10: fprintf(out, "# end __osEnqueueAndYield 80327D10 (0E2D10)\n\n"
-                                             "# begin 80327D10 (0E2D10)\n__osEnqueueThread:\n"); break;
-               case 0x80327D58: fprintf(out, "# end __osEnqueueThread 80327D58 (0E2D58)\n\n"
-                                             "# begin 80327D58 (0E2D58)\n__osPopThread:\n"); break;
-               case 0x80327D68: fprintf(out, "# end __osPopThread 80327D68 (0E2D68)\n\n"
-                                             "# begin 80327D68 (0E2D68)\n__osDispatchThread:\n"); break;
+               case 0x80327B98: fprintf(out, "# end __osExceptionHandler\n\n"
+                                             "proc_80327B98: # begin 80327B98 (0E2B98)\n"); break;
+               case 0x80327C4C: fprintf(out, "# end proc_80327B98\n\n"); break;
+               case 0x80327C80: fprintf(out, "\n__osEnqueueAndYield: # begin 80327C80 (0E2C80)\n"); break;
+               case 0x80327D10: fprintf(out, "# end __osEnqueueAndYield\n\n"
+                                             "__osEnqueueThread: # begin 80327D10 (0E2D10)\n"); break;
+               case 0x80327D58: fprintf(out, "# end __osEnqueueThread\n\n"
+                                             "__osPopThread: # begin 80327D58 (0E2D58)\n"); break;
+               case 0x80327D68: fprintf(out, "# end __osPopThread\n\n"
+                                             "__osDispatchThread: # begin 80327D68 (0E2D68)\n"); break;
                default: break;
             }
             ll = find_local(&proc->locals, processed);
@@ -547,7 +547,7 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
       }
    }
 
-   fprintf(out, "# end %s %08X (%06X)\n", sec_name, ram_address + processed, rom_offset + processed);
+   fprintf(out, "# end %s\n", sec_name);
 
    cs_close(&handle);
 
