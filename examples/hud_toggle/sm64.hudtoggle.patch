@@ -1,63 +1,63 @@
 --- gen/sm64.orig.s	2015-05-30 22:10:42.024713967 +0200
 +++ gen/sm64.s	2015-05-30 22:11:06.161380917 +0200
-@@ -125954,10 +125954,10 @@
+@@ -168833,10 +168833,10 @@
    sw    $t6, 0x30($sp)
    addiu $t7, $zero, 0xcd
    sw    $t7, 0x2c($sp)
 -  lh    $t8, 0x80332608 # lui $t8, 0x8033/lh $t8, 0x2608($t8)
--  bnez  $t8, LShowCameraStatus_44
+-  bnez  $t8, .LShowCameraStatus_44
 -  nop   
--  b     LShowCameraStatus_1DC
+-  b     .LShowCameraStatus_1DC
 +  lb    $t8, 0x8033AFA1
 +  addiu $s2, $zero, 0x0010
-+  bne   $s2, $t8, LShowCameraStatus_1DC
++  bne   $s2, $t8, .LShowCameraStatus_1DC
 +  nop
    nop   
- LShowCameraStatus_44: # 802E3B80
+ .LShowCameraStatus_44: # 802E3B80
    lw    $t9, 0x8033b06c # lui $t9, 0x8034/lw $t9, -0x4f94($t9)
-@@ -126102,29 +126102,25 @@
+@@ -168980,29 +168980,25 @@
    jal   RenderHud_CannonReticle
    nop   
- LRenderHud_74: # 802E3DA0
+ .LRenderHud_74: # 802E3DA0
 -  lh    $t2, 0x1e($sp)
 -  andi  $t3, $t2, 1
--  beqz  $t3, LRenderHud_8C
+-  beqz  $t3, .LRenderHud_8C
 -  nop   
 +  lb    $s1, 0x8033afa1
 +  andi  $s2, $s1, 0x10
-+  beq   $zero, $s2, LRenderHud_C0
++  beq   $zero, $s2, .LRenderHud_C0
 +  lh    $s0, 0x1e($sp)
    jal   RenderHud_MarioLives
 -  nop   
--LRenderHud_8C: # 802E3DB8
+-.LRenderHud_8C: # 802E3DB8
 -  lh    $t4, 0x1e($sp)
 -  andi  $t5, $t4, 2
--  beqz  $t5, LRenderHud_A4
+-  beqz  $t5, .LRenderHud_A4
 -  nop   
 +  lui   $s3, 0x8033
    jal   RenderHud_Coins
 -  nop   
--LRenderHud_A4: # 802E3DD0
+-.LRenderHud_A4: # 802E3DD0
 -  lh    $t6, 0x1e($sp)
 -  andi  $t7, $t6, 4
--  beqz  $t7, LRenderHud_BC
+-  beqz  $t7, .LRenderHud_BC
 -  nop   
 +  lb    $s1, 0x8033afdb
    jal   RenderHud_Stars
 -  nop   
--LRenderHud_BC: # 802E3DE8
+-.LRenderHud_BC: # 802E3DE8
 -  lh    $t8, 0x1e($sp)
 -  andi  $t9, $t8, 0x10
 +  andi  $s2, $s1, 0x10
-+  beq   $zero, $s2, LRenderHud_C0
++  beq   $zero, $s2, .LRenderHud_C0
 +  lui   $a0, 0x701a
 +  addiu $a1, $s3, 0x3f10
 +  jal   SetSound
 +  ori   $a0, $a0, 0x8081
 +  nop
 +  nop
-+LRenderHud_C0:
++.LRenderHud_C0:
 +  andi  $t9, $s0, 0x10
-   beqz  $t9, LRenderHud_D4
+   beqz  $t9, .LRenderHud_D4
    nop   
    jal   proc_802E38E4
