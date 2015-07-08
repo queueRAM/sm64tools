@@ -45,7 +45,8 @@ Source patch for modifying the sign posts behavior to rotate about the Y-axis
 1. patch -p0 < sm64.rotating\_sign.patch
 
 ## Skip Screens
-Skip title or Mario screens at startup
+Skip title, Mario, or menu screens at startup
 
 1. patch -p0 < skip\_mario.patch
 2. patch -p0 < skip\_title.patch
+3. patch -p0 < skip\_menu.patch
