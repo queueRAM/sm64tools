@@ -28,6 +28,8 @@ N64CKSUM = $(TOOLS_DIR)/n64cksum
 N64GRAPHICS = $(TOOLS_DIR)/n64graphics
 EMULATOR = mupen64plus
 EMU_FLAGS = --noosd
+LOADER = loader64
+LOADER_FLAGS = -vwf
 
 ######################## Targets #############################
 
@@ -72,5 +74,8 @@ diff: $(BUILD_DIR)/$(TARGET).gen.hex
 
 test: $(TARGET).gen.z64
 	$(EMULATOR) $(EMU_FLAGS) $<
+
+load: $(TARGET).gen.z64
+	$(LOADER) $(LOADER_FLAGS) $<
 
 .PHONY: all clean default diff test
