@@ -384,18 +384,19 @@ static int disassemble_dummy(FILE *out, rom_config *config, unsigned char *data,
       fprintf(out, "\n");
       return 1;
    }
-   // ensure multiple of 8 (also takes care of < 8)
-   if (len & 0x7) return 0;
-   for (i = rom_start; i < rom_end; i += 8) {
+   // ensure multiple of 4 (also takes care of < 4)
+   if (len & 0x3) return 0;
+   for (i = rom_start; i < rom_end; i += 4) {
       instr = read_u32_be(&data[i]);
-      if (instr != 0x03e00008) return 0;
-      instr = read_u32_be(&data[i+4]);
-      if (instr != 0x0) return 0;
+      if (instr != 0x03e00008 && instr != 0x00000000) return 0;
    }
    fprintf(out, "\ndummy%08X:\n", start);
-   for (i = start; i < end; i += 8) {
-      fprintf(out, "  jr    $ra\n"
-                   "  nop\n");
+   for (i = rom_start; i < rom_end; i += 4) {
+      instr = read_u32_be(&data[i]);
+      switch (instr) {
+         case 0x03e00008: fprintf(out, "  jr    $ra\n"); break;
+         case 0x00000000: fprintf(out, "  nop\n"); break;
+      }
    }
    return 1;
 }
