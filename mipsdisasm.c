@@ -207,11 +207,9 @@ static int proc_cmp(const void *a, const void *b)
 // TODO: pseudo-instruction detection: li, la (more cases), bgt, blt
 static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, rom_config *config)
 {
-   const char *spaces[] = {"      ", "     ", "    ", "   ", "  ", " "};
    int retVal = 0;
    int i;
    int luis;
-   int sidx;
    if (count >= 2) {
       /* lui   $a1, 0x11
        * lui   $a2, 0x11
@@ -316,8 +314,7 @@ static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, r
                      cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
                      label, insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
             } else {
-               sidx = MIN(strlen(insn[rev].mnemonic), DIM(spaces) - 1);
-               fprintf(out, "  %s%s$%s, 0x%x # %s %s/%s %s", insn[rev].mnemonic, spaces[sidx],
+               fprintf(out, "  %-5s $%s, 0x%x # %s %s/%s %s", insn[rev].mnemonic,
                      cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
                      addr[i], insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
             }
@@ -445,12 +442,10 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
       cur_amount = MIN(cur_amount, datalen - rom_offset - processed);
       count = cs_disasm(handle, &data[rom_offset + processed], cur_amount, ram_address + processed, 0, &insn);
       if (count > 0) {
-         const char *spaces[] = {"      ", "     ", "    ", "   ", "  ", " "};
          int i, o;
 
          for (i = 0; i < count && disassembling; i++) {
             // handle redirect jump instruction immediates
-            int inslen;
             int ll;
             // TODO: workaround for __osEnqueueThread, __osPopThread, __osDispatchThread
             switch (ram_address + processed) {
@@ -479,8 +474,7 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
                fprintf(out, ".byte 0x%02X, 0x%02X, 0x%02X, 0x%02X # Invalid: %X",
                      in[0], in[1], in[2], in[3], ram_address + processed);
             } else {
-               inslen = MIN(strlen(insn[i].mnemonic), DIM(spaces) - 1);
-               fprintf(out, "  %s%s", insn[i].mnemonic, spaces[inslen]);
+               fprintf(out, "  %-5s ", insn[i].mnemonic);
                if (cs_insn_group(handle, &insn[i], MIPS_GRP_JUMP)) {
                   cs_mips *mips = &insn[i].detail->mips;
                   for (o = 0; o < mips->op_count; o++) {
