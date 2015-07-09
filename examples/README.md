@@ -22,8 +22,9 @@ Source patch for R-button toggle show HUD ASM
 
 1. patch -p0 < sm64.hudtoggle.patch
 
-Thanks to Skelux's implementation from
+Thanks to Skelux and Kaze for each of their HUD toggling implementations:
 https://sites.google.com/site/supermario64starroad/home/sm64-documents/skelux
+http://smwc.me/1208284
 
 ## Coin colors
 coin colors and texture replacement

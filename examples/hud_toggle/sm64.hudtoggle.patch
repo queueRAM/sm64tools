@@ -1,63 +1,159 @@
---- gen/sm64.orig.s	2015-05-30 22:10:42.024713967 +0200
-+++ gen/sm64.s	2015-05-30 22:11:06.161380917 +0200
-@@ -168833,10 +168833,10 @@
-   sw    $t6, 0x30($sp)
-   addiu $t7, $zero, 0xcd
-   sw    $t7, 0x2c($sp)
--  lh    $t8, 0x80332608 # lui $t8, 0x8033/lh $t8, 0x2608($t8)
--  bnez  $t8, .LShowCameraStatus_44
--  nop   
--  b     .LShowCameraStatus_1DC
-+  lb    $t8, 0x8033AFA1
-+  addiu $s2, $zero, 0x0010
-+  bne   $s2, $t8, .LShowCameraStatus_1DC
-+  nop
+--- gen/sm64.orig.s	2015-07-07 22:24:24.070151641 +0200
++++ gen/sm64.s	2015-07-08 23:56:38.204091547 +0200
+@@ -69949,11 +69949,11 @@
+   lw    $t6, 0x40($sp)
+   lui   $at, 0x8034
+   sw    $t6, -0x3430($at)
+-  jal   ChangeCameraStatus
++  jal   HandleToggleHud
+   lw    $a0, 0x40($sp)
+   lw    $t7, 0x40($sp)
+   lbu   $t8, 0x30($t7)
+-  bnez  $t8, .Lproc_802868F8_98
++  b     .Lproc_802868F8_98 # disable lakitu camera
    nop   
- .LShowCameraStatus_44: # 802E3B80
-   lw    $t9, 0x8033b06c # lui $t9, 0x8034/lw $t9, -0x4f94($t9)
-@@ -168980,29 +168980,25 @@
+   jal   proc_80288624
+   move  $a0, $zero
+@@ -72378,73 +72378,37 @@
+   jr    $ra
+   nop
+ 
+-ChangeCameraStatus: # begin 80288E68 (043E68)
+-  addiu $sp, $sp, -0x20
++HandleToggleHud:
++  addiu $sp, $sp, -0x18
+   sw    $ra, 0x14($sp)
+-  sw    $a0, 0x20($sp)
+-  sh    $zero, 0x1e($sp)
+-  lw    $t6, 0x20($sp)
+-  lbu   $t7, 0x30($t6)
+-  bnez  $t7, .LChangeCameraStatus_4C
+-  nop   
+-  lw    $t8, 0x8032d5e4 # lui $t8, 0x8033/lw $t8, -0x2a1c($t8)
+-  lhu   $t9, 0x10($t8)
+-  andi  $t0, $t9, 0x10
+-  beqz  $t0, .LChangeCameraStatus_5C
+-  nop   
+-  jal   proc_80288624
+-  move  $a0, $zero
+-  addiu $at, $zero, 2
+-  bne   $v0, $at, .LChangeCameraStatus_5C
+-  nop   
+-.LChangeCameraStatus_4C: # 80288EB4
+-  lh    $t1, 0x1e($sp)
+-  ori   $t2, $t1, 4
+-  b     .LChangeCameraStatus_8C
+-  sh    $t2, 0x1e($sp)
+-.LChangeCameraStatus_5C: # 80288EC4
+-  jal   proc_80288718
+-  move  $a0, $zero
+-  addiu $at, $zero, 1
+-  bne   $v0, $at, .LChangeCameraStatus_80
+-  nop   
+-  lh    $t3, 0x1e($sp)
+-  ori   $t4, $t3, 1
+-  b     .LChangeCameraStatus_8C
+-  sh    $t4, 0x1e($sp)
+-.LChangeCameraStatus_80: # 80288EE8
+-  lh    $t5, 0x1e($sp)
+-  ori   $t6, $t5, 2
+-  sh    $t6, 0x1e($sp)
+-.LChangeCameraStatus_8C: # 80288EF4
+-  lh    $t7, 0x8033c848 # lui $t7, 0x8034/lh $t7, -0x37b8($t7)
+-  andi  $t8, $t7, 2
+-  beqz  $t8, .LChangeCameraStatus_AC
+-  nop   
+-  lh    $t9, 0x1e($sp)
+-  ori   $t0, $t9, 8
+-  sh    $t0, 0x1e($sp)
+-.LChangeCameraStatus_AC: # 80288F14
+-  lh    $t1, 0x8033c848 # lui $t1, 0x8034/lh $t1, -0x37b8($t1)
+-  andi  $t2, $t1, 0x2000
+-  beqz  $t2, .LChangeCameraStatus_CC
+-  nop   
+-  lh    $t3, 0x1e($sp)
+-  ori   $t4, $t3, 0x10
+-  sh    $t4, 0x1e($sp)
+-.LChangeCameraStatus_CC: # 80288F34
+-  jal   SetCameraStatus
+-  lh    $a0, 0x1e($sp)
+-  b     .LChangeCameraStatus_E4
+-  lh    $v0, 0x1e($sp)
+-  b     .LChangeCameraStatus_E4
+-  nop   
+-.LChangeCameraStatus_E4: # 80288F4C
++  lh    $s1, 0x8033AFA0 # lui $s1, 0x8034 / lh $s1, -0x5060($s1)
++  lh    $t0, 0x8032B1A0 # lui $t0, 0x8034 / lh $t0, -0x4E60($t0)
++  andi  $s1, $s1, 0x10
++  beq   $zero, $s1, .L_End # if R no being pressed, skip
++  nop
++  beq   $t0, $s1, .L_PrintTimer # if being toggled on, play sound
++  nop
++  lui   $a0, 0x701A
++  la    $a1, 0x803331F0 # lui $a1, 0x8033 / addiu $a1, $a1, 0x31F0
++  jal   SetSound # 8031EB00
++  ori   $a0, $a0, 0x81
++.L_PrintTimer:
++  addiu $a0, $zero, 0x102
++  lh    $a3, 0x8033B226 # lui $a3, 0x8034 / lh $a3, -0x4DDA($a3)
++  beq   $zero, $a3, .L_End
++  nop
++  la    $a2, 0x803383A0 # lui $a2, 0x8034 / addiu $a2, $a2, 0x7C60
++  jal   PrintInt # 802D62D8
++  li    $a1, 0x20
++.L_End:
++  lui   $at, 0x8033
++  sh    $s1, %lo(0x8032B1A0)($at)
+   lw    $ra, 0x14($sp)
+-  addiu $sp, $sp, 0x20
++  addiu $sp, $sp, 0x18
+   jr    $ra
+   nop   
+-# end ChangeCameraStatus
++# keep same size
++.space 0x78, 0x00
+ 
+ proc_80288F5C: # begin 80288F5C (043F5C)
+   addiu $sp, $sp, -0x98
+@@ -168954,10 +168918,9 @@
+   addiu $sp, $sp, -0x20
+   sw    $ra, 0x14($sp)
+   lh    $t6, 0x8033b26a # lui $t6, 0x8034/lh $t6, -0x4d96($t6)
++  bnez  $t6, .LRenderHud_40
+   sh    $t6, 0x1e($sp)
+-  lh    $t7, 0x1e($sp)
+-  bnez  $t7, .LRenderHud_40
+-  nop   
++
+   lui   $at, 0x8033
+   sb    $zero, 0x25f0($at)
+   addiu $t8, $zero, 8
+@@ -168980,6 +168943,9 @@
    jal   RenderHud_CannonReticle
    nop   
  .LRenderHud_74: # 802E3DA0
--  lh    $t2, 0x1e($sp)
--  andi  $t3, $t2, 1
--  beqz  $t3, .LRenderHud_8C
--  nop   
-+  lb    $s1, 0x8033afa1
-+  andi  $s2, $s1, 0x10
-+  beq   $zero, $s2, .LRenderHud_C0
-+  lh    $s0, 0x1e($sp)
-   jal   RenderHud_MarioLives
--  nop   
--.LRenderHud_8C: # 802E3DB8
--  lh    $t4, 0x1e($sp)
--  andi  $t5, $t4, 2
--  beqz  $t5, .LRenderHud_A4
--  nop   
-+  lui   $s3, 0x8033
-   jal   RenderHud_Coins
--  nop   
--.LRenderHud_A4: # 802E3DD0
--  lh    $t6, 0x1e($sp)
--  andi  $t7, $t6, 4
--  beqz  $t7, .LRenderHud_BC
--  nop   
-+  lb    $s1, 0x8033afdb
-   jal   RenderHud_Stars
--  nop   
--.LRenderHud_BC: # 802E3DE8
--  lh    $t8, 0x1e($sp)
--  andi  $t9, $t8, 0x10
-+  andi  $s2, $s1, 0x10
-+  beq   $zero, $s2, .LRenderHud_C0
-+  lui   $a0, 0x701a
-+  addiu $a1, $s3, 0x3f10
-+  jal   SetSound
-+  ori   $a0, $a0, 0x8081
-+  nop
-+  nop
-+.LRenderHud_C0:
-+  andi  $t9, $s0, 0x10
-   beqz  $t9, .LRenderHud_D4
++  lh    $t1, 0x8033AFA0 # lui $t1, 0x8034 / lh $t1, -0x5060($t1)
++  andi  $t1, $t1, 0x10
++  beq   $t1, $zero, .LRenderHud_BC
+   lh    $t2, 0x1e($sp)
+   andi  $t3, $t2, 1
+   beqz  $t3, .LRenderHud_8C
+@@ -169014,7 +168980,7 @@
    nop   
-   jal   proc_802E38E4
+   jal   RenderHud_Hp
+   nop   
+-  jal   ShowCameraStatus
++  nop
+   nop   
+ .LRenderHud_F4: # 802E3E20
+   lh    $t2, 0x1e($sp)
+@@ -169024,9 +168990,6 @@
+   jal   RenderHud_Timer
+   nop   
+ .LRenderHud_10C: # 802E3E38
+-  b     .LRenderHud_114
+-  nop   
+-.LRenderHud_114: # 802E3E40
+   lw    $ra, 0x14($sp)
+   addiu $sp, $sp, 0x20
+   jr    $ra
