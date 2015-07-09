@@ -51,23 +51,20 @@ static int cmp_local(const void *a, const void *b)
    return (*uia - *uib);
 }
 
-static int find_proc(proc_table *procs, unsigned int addr)
-{
-   int i;
-   for (i = 0; i < procs->count; i++) {
-      if (procs->procedures[i].start == addr) {
-         return i;
-      } else if (addr > procs->procedures[i].start && addr < procs->procedures[i].end) {
-         ERROR("%X in middle of proc %X - %X\n", addr, procs->procedures[i].start, procs->procedures[i].end);
-      }
-   }
-   return -1;
-}
-
 static void add_proc(proc_table *procs, unsigned int start, unsigned int end)
 {
-   if (find_proc(procs, start) >= 0) {
-      return;
+   int i;
+   int warning = -1;
+   for (i = 0; i < procs->count; i++) {
+      if (procs->procedures[i].start == start) {
+         return;
+      } else if (start > procs->procedures[i].start && start < procs->procedures[i].end) {
+         warning = i;
+      }
+   }
+   // TODO: workaround for __osExceptionHandler (80327650) and inner asm routines
+   if (warning >= 0 && procs->procedures[warning].start != 0x80327650) {
+      ERROR("Warning: %X in middle of proc %X - %X\n", start, procs->procedures[warning].start, procs->procedures[warning].end);
    }
    procs->procedures[procs->count].start = start;
    procs->procedures[procs->count].end = end;
