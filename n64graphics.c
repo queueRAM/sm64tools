@@ -665,14 +665,19 @@ static void get_image_info(char *filename, int *offset, img_format *format, int 
       switch (mode) {
          case 0:
             if (stroffset[c] == '.') {
+               mode = 1;
+            }
+            break;
+         case 1:
+            if (stroffset[c] == '.') {
                stroffset[c] = '\0';
                *offset = strtoul(stroffset, NULL, 0);
-               mode = 1;
+               mode = 2;
                strformat = &stroffset[c+1];
                stroffset[c] = '.';
             }
             break;
-         case 1:
+         case 2:
             if (stroffset[c] == '.') {
                stroffset[c] = '\0';
                if (!strcmp("ia8", strformat)) {
@@ -685,7 +690,7 @@ static void get_image_info(char *filename, int *offset, img_format *format, int 
                   *format = IMG_FORMAT_SKYBOX;
                   *depth = 16;
                }
-               mode = 2;
+               mode = 3;
             }
             break;
       }

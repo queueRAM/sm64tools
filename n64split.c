@@ -830,8 +830,6 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                texture *texts = sec->extra;
                int t;
                unsigned int offset = 0;
-               sprintf(outfilepath, "%s/%s", TEXTURE_DIR, sec->label);
-               make_dir(outfilepath);
                if (sec->label == NULL || sec->label[0] == '\0') {
                   fprintf(fmake, "$(MIO0_DIR)/%06X.bin:", sec->start);
                } else {
@@ -847,7 +845,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      {
                         ia *img = file2ia(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
-                           sprintf(outfilepath, "%s/%s/0x%05X.ia%d.png", TEXTURE_DIR, sec->label, offset, texts[t].depth);
+                           sprintf(outfilepath, "%s/%s.0x%05X.ia%d.png", TEXTURE_DIR, sec->label, offset, texts[t].depth);
                            ia2png(img, w, h, outfilepath);
                            free(img);
                            fprintf(fmake, " %s", outfilepath);
@@ -858,7 +856,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      {
                         rgba *img = file2rgba(binfilename, offset, w, h);
                         if (img) {
-                           sprintf(outfilepath, "%s/%s/0x%05X.png", TEXTURE_DIR, sec->label, offset);
+                           sprintf(outfilepath, "%s/%s.0x%05X.png", TEXTURE_DIR, sec->label, offset);
                            rgba2png(img, w, h, outfilepath);
                            free(img);
                            fprintf(fmake, " %s", outfilepath);
@@ -892,7 +890,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                               sky_offset += 32*32*2;
                            }
                         }
-                        sprintf(outfilepath, "%s/%s/0x%05X.skybox.png", TEXTURE_DIR, sec->label, offset);
+                        sprintf(outfilepath, "%s/%s.0x%05X.skybox.png", TEXTURE_DIR, sec->label, offset);
                         rgba2png(img, w, h, outfilepath);
                         free(img);
                         fprintf(fmake, " %s", outfilepath);
@@ -906,13 +904,11 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                fprintf(fmake, "\n\t$(N64GRAPHICS) $@ $^\n\n");
             }
 #if GENERATE_ALL_PNG
-            sprintf(outfilepath, "%s/%s", TEXTURE_DIR, sec->label);
-            make_dir(outfilepath);
             w = 32;
             h = filesize(binfilename) / (w * 2);
             rgba *img = file2rgba(binfilename, 0, w, h);
             if (img) {
-               sprintf(outfilepath, "%s/%s/ALL.png", TEXTURE_DIR, sec->label);
+               sprintf(outfilepath, "%s/%s.ALL.png", TEXTURE_DIR, sec->label);
                rgba2png(img, w, h, outfilepath);
                free(img);
                img = NULL;
