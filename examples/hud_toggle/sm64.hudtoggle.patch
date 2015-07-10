@@ -115,7 +115,7 @@
  
  proc_80288F5C: # begin 80288F5C (043F5C)
    addiu $sp, $sp, -0x98
-@@ -168954,10 +168918,9 @@
+@@ -168909,10 +168873,9 @@
    addiu $sp, $sp, -0x20
    sw    $ra, 0x14($sp)
    lh    $t6, 0x8033b26a # lui $t6, 0x8034/lh $t6, -0x4d96($t6)
@@ -128,7 +128,7 @@
    lui   $at, 0x8033
    sb    $zero, 0x25f0($at)
    addiu $t8, $zero, 8
-@@ -168980,6 +168943,9 @@
+@@ -168935,6 +168898,9 @@
    jal   RenderHud_CannonReticle
    nop   
  .LRenderHud_74: # 802E3DA0
@@ -138,7 +138,7 @@
    lh    $t2, 0x1e($sp)
    andi  $t3, $t2, 1
    beqz  $t3, .LRenderHud_8C
-@@ -169014,7 +168980,7 @@
+@@ -168969,7 +168935,7 @@
    nop   
    jal   RenderHud_Hp
    nop   
@@ -147,7 +147,7 @@
    nop   
  .LRenderHud_F4: # 802E3E20
    lh    $t2, 0x1e($sp)
-@@ -169024,9 +168990,6 @@
+@@ -168979,9 +168945,6 @@
    jal   RenderHud_Timer
    nop   
  .LRenderHud_10C: # 802E3E38
