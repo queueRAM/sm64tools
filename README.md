@@ -1,6 +1,23 @@
 # sm64tools
 Collection of tools for manipulating the Super Mario 64 ROM
 
+## n64split
+N64 ROM Splitter and Build System
+ - splits ROM into assets: asm, textures, level, geo, behavior data
+ - generates build files to rebuild the ROM
+ - built-in recursive disassembler
+ - generic config file system to support other games
+
+### Usage
+```console
+n64split [-c CONFIG] [-v] ROM
+```
+Options:
+ - <code>-c CONFIG</code> ROM configuration file (default: sm64.config).
+ - <code>-v</code> Verbose output.
+
+Output files are stored in the 'gen' directory.
+              
 ## sm64extend
 Super Mario 64 ROM Extender
  - accepts Z64 (BE) or V64 (byte-swapped) ROMs as input
@@ -9,15 +26,15 @@ Super Mario 64 ROM Extender
  - configurable extended ROM size (default 64 MB)
  - configurable padding between MIO0 blocks (default 32 KB)
  - configurable MIO0 block alignment (default 1 byte)
- - changes all 0x18 commands to 0x17
- - creates MIO0 headers for all 0x1A commands
+ - changes all 0x18 level commands to 0x17
+ - creates MIO0 headers for all 0x1A level commands
  - optionally fills old MIO0 blocks with 0x01
  - optionally dump compressed and uncompressed MIO0 data to files
  - updates assembly reference to MIO0 blocks
  - recalculates ROM header checksums
 
 ### Usage
-```
+```console
 sm64extend [-s SIZE] [-p PADDING] [-a ALIGNMENT] [-d] [-f] [-v] FILE [OUT_FILE]
 ```
 Options:
@@ -32,22 +49,22 @@ Output file: If unspecified, it is constructed by replacing input file extension
               
 ### Examples
 64 MB extended ROM that is bit compatible with with generated from the M64ROMExtender1.3b, after extending to 64 MB
-```
+```console
 sm64extend sm64.z64
 ```
                
 24 MB extended ROM that is bit compatible with the ROM generated from the M64ROMExtender1.3b
-```
+```console
 sm64extend -s 24 sm64.z64
 ```
                 
 Enable verbose messages and specify output filename:
-```
+```console
 sm64extend -v sm64.z64 sm64_output.ext.z64
 ```
                  
 Pad 64 KB between blocks, align blocks to 16-byte boundaries, fill old MIO0 blocks with 0x01:
-```
+```console
 sm64extend -p 64 -a 16 -f sm64.z64
 ```
 
@@ -61,7 +78,7 @@ Experimental Super Mario 64 ROM alignment and compression tool
  - recalculates ROM header checksums
 
 ### Usage
-```
+```console
 sm64compress [-a ALIGNMENT] [-c] [-d] [-v] FILE [OUT_FILE]
 ```
 Options:
@@ -71,3 +88,16 @@ Options:
  - <code>-v</code> Verbose output.
 
 Output file: If unspecified, it is constructed by replacing input file extension with .out.z64
+
+## Other Tools
+There are many other smaller tools included to help with SM64 hacking.  They are:
+ - f3d: tool to decode Fast3D display lists
+ - mio0: standalone MIO0 compressor/decompressor
+ - n64cksum: standalone N64 checksum generator.  can either do in place or output to a new file
+ - n64graphics: converts graphics data from PNG files into RGBA or IA N64 graphics data
+ - mipsdisasm: standalone recursive MIPS disassembler
+ - sm64geo: standalone SM64 geometry layout decoder
+
+## License
+
+MIT License. Copyright 2015 queueRAM.
