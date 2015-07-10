@@ -5,17 +5,17 @@ This directory contains examples for replacing textures, patching assembly sourc
 ## Texture swap
 castle grounds texture swap (RGBA)
 
-1. copy 0x01000.png to gen/textures/castle\_grounds\_textures/
+1. copy texture\_swap/castle\_grounds\_textures.0x01000.png to gen/textures/
 
 ## Peach's signature
 replace peach's signature (IA8) with my hero's autograph
 
-1. copy signature/0x0EAE8.ia8.png to gen/textures/castle\_grounds\_geo/
+1. copy signature/castle\_grounds\_segment7.0x0EAE8.ia8.png to gen/textures/
 
 ## Transition
 swap star transition with mushroom
 
-1. copy transition/0x122B8.ia8.png to gen/textures/font\_graphics/
+1. copy transition/font\_graphics.0x122B8.ia8.png to gen/textures/
 
 ## HUD toggle
 Source patch for R-button toggle show HUD ASM
@@ -29,7 +29,7 @@ http://smwc.me/1208284
 ## Coin colors
 coin colors and texture replacement
 
-1. copy 0x05780.ia16.png 0x05F80.ia16.png 0x06780.ia16.png 0x06F80.ia16.png to gen/textures/doors\_trees\_coins/
+1. copy the png files from coin\_colors/ to gen/textures/
 2. Apply coin\_colors.ips IPS patch to gen/bin/doors\_trees\_coins.bin
 
 Thanks to cpuHacka101 for details on this
@@ -38,7 +38,7 @@ http://www.smwcentral.net/?p=viewthread&t=58544
 ## Skybox
 replace water skybox with night sky from Lylat System.
 
-1. copy skybox/0x00000.skybox.png to gen/textures/water\_skybox/
+1. copy skybox/water\_skybox.0x00000.skybox.png to gen/textures/
 
 ## Behavior
 Source patch for modifying the sign posts behavior to rotate about the Y-axis
