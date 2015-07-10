@@ -20,21 +20,20 @@ This will split the ROM based on the contents of the configuration file
 
 Output:
 gen/
- +- behavior_data.s - behavior command bank*
- +- sm64.s - top level assembly*
- +- Makefile.gen - generated Makefile with texture and level dependencies
+ +- behavior_data.s - behavior command bank
+ +- sm64.s - top level assembly
  +- bin/ - raw binary data from undecoded sections and MIO0 blocks
+ +- geo/ - decoded geo layout data
  +- levels/ - decoded level data
- +- textures/ - all ripped textures*
+ +- textures/ - all ripped textures
+ +- Makefile.gen - generated Makefile with texture and level dependencies
  
-* These are the two areas of most interest.
-
-ROM Build System: build system to reconstruct ROM after making changes
+Build System: build system to reconstruct ROM after making changes
 --------
 The build system relies on GNU make to detect changes in resources and 
 mips64-elf assembler and linker to rebuild the ROM.  You could of course 
-circumvent make and just build everything every time with a batch script, 
-but this is incredibly slow due to all the texture encoding and my terribly 
+circumvent 'make' and just build everything every time with a batch script, 
+but this is incredibly slow due to all the texture encoding and a terribly 
 inefficient MIO0 compressor.  A win32 build of make is included, but you'll 
 need to either build or obtain** mips64-elf binutils on your own if you want 
 to rebuild the image.
@@ -61,12 +60,27 @@ Complete ROM is sm64.gen.z64
 Source is MIT licensed and available at:
 https://github.com/queueRAM/sm64tools/
 
-n64split makes use of the following libraries:
+n64split makes use of the following libraries. See the licenses directory for
+more information:
  - libpng: PNG decoding and encoding
  - capstone: raw MIPS disassembler
  - libconfig: config file reading
 
 Changelog:
+v0.3a: Complete disassembly and decoding of scripts
+ - 100% of behavior scripts decoded and most behavior references detected
+ - ~99% of asm sections disassembled
+ - update geo layout commands 0x0A, 0x0E, 0x0F, 0x12, 0x18, 0x19, 0x1C
+ - generate assembly files for standalone geo layout sections
+ - detect more LA that are split across JALs
+ - add option to configure number of columns in data ptr tables
+ - decode interaction table and functions
+ - decode cut scene tables and functions
+ - decode camera change table and functions
+ - decode camera preset tables and functions
+ - automatic detection and disassembly of dummy stub functions
+ - add examples to skip startup screens and start right in level
+ - switch HUD toggle example based off of Kaze's method from Green Stars
 v0.2a: Most scripts decoded
  - supports decoding level scripts, geometry layout, behavior scripts and assembly routines
  - adds many more procedure labels
