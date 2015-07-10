@@ -9,7 +9,7 @@
 #include "mipsdisasm.h"
 #include "utils.h"
 
-#define MIPSDISASM_VERSION "0.1"
+#define MIPSDISASM_VERSION "0.2"
 
 #define DEFAULT_CONFIG "sm64.config"
 
