@@ -81,6 +81,7 @@ v0.3a: Complete disassembly and decoding of scripts
  - automatic detection and disassembly of dummy stub functions
  - add examples to skip startup screens and start right in level
  - switch HUD toggle example based off of Kaze's method from Green Stars
+ - removed individual texture subdirectories
 v0.2a: Most scripts decoded
  - supports decoding level scripts, geometry layout, behavior scripts and assembly routines
  - adds many more procedure labels
