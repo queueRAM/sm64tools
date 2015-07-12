@@ -646,6 +646,7 @@ static void print_usage(void)
 static void get_image_info(char *filename, int *offset, img_format *format, int *depth)
 {
    char tmpname[512];
+   char *base;
    char *stroffset;
    char *strformat;
    unsigned int c;
@@ -659,27 +660,28 @@ static void get_image_info(char *filename, int *offset, img_format *format, int 
    strcpy(tmpname, filename);
 
    // remove file extension and leading path
-   stroffset = basename(tmpname);
-   strformat = stroffset;
-   for (c = 0; c < strlen(stroffset); c++) {
+   base = basename(tmpname);
+   strformat = base;
+   for (c = 0; c < strlen(base); c++) {
       switch (mode) {
          case 0:
-            if (stroffset[c] == '.') {
+            if (base[c] == '.') {
                mode = 1;
+               stroffset = &base[c+1];
             }
             break;
          case 1:
-            if (stroffset[c] == '.') {
-               stroffset[c] = '\0';
+            if (base[c] == '.') {
+               base[c] = '\0';
                *offset = strtoul(stroffset, NULL, 0);
                mode = 2;
-               strformat = &stroffset[c+1];
-               stroffset[c] = '.';
+               strformat = &base[c+1];
+               base[c] = '.';
             }
             break;
          case 2:
-            if (stroffset[c] == '.') {
-               stroffset[c] = '\0';
+            if (base[c] == '.') {
+               base[c] = '\0';
                if (!strcmp("ia8", strformat)) {
                   *format = IMG_FORMAT_IA;
                   *depth = 8;
