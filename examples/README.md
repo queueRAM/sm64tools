@@ -2,6 +2,14 @@
 
 This directory contains examples for replacing textures, patching assembly source, and updating binaries.
 
+## Hello World
+Print Hello World to the screen by hooking into a behavior and overriding an used function
+
+1. patch -p0 < sm64.hello\_world.patch
+
+Thanks to Jedi for implementing this example and Kaze for his ASM Tutorial:
+http://www.smwcentral.net/?p=viewthread&t=68900
+
 ## Texture swap
 castle grounds texture swap (RGBA)
 
