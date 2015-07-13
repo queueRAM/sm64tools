@@ -9,7 +9,7 @@
 #include "n64graphics.h"
 #include "utils.h"
 
-#define N64SPLIT_VERSION "0.3a"
+#define N64SPLIT_VERSION "0.3.1a"
 
 #define GEN_DIR     "gen"
 
