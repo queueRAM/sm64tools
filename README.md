@@ -13,7 +13,7 @@ N64 ROM Splitter and Build System
 n64split [-c CONFIG] [-v] ROM
 ```
 Options:
- - <code>-c CONFIG</code> ROM configuration file (default: sm64.config).
+ - <code>-c CONFIG</code> ROM configuration file (default: config/sm64.u.config).
  - <code>-v</code> Verbose output.
 
 Output files are stored in the 'gen' directory.

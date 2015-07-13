@@ -11,7 +11,7 @@
 
 #define MIPSDISASM_VERSION "0.2"
 
-#define DEFAULT_CONFIG "sm64.config"
+#define DEFAULT_CONFIG "configs/sm64.u.config"
 
 static int known_index(rom_config *config, unsigned int ram_addr)
 {

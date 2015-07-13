@@ -13,10 +13,10 @@ pairs to macro instructions (like LUI/ADDIU to LA and LUI/LW pairs to LW) and
 adds proper labels JALs and local branches.
 
 Usage:
-n64split -c sm64.config "Super Mario 64 (U).z64"
+n64split -c configs/sm64.u.config "Super Mario 64 (U).z64"
 
 This will split the ROM based on the contents of the configuration file 
-"sm64.config".  See the comments in that file if you want to adapt it.
+"sm64.u.config".  See the comments in that file if you want to adapt it.
 
 Output:
 gen/

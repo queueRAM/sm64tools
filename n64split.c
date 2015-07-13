@@ -29,7 +29,7 @@ typedef enum {
 static const arg_config default_args = 
 {
    "", // input filename
-   "sm64.config", // config filename
+   "configs/sm64.u.config", // config filename
 };
 
 const char asm_header[] = 
