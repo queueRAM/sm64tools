@@ -1145,6 +1145,7 @@ int main(int argc, char *argv[])
    split_file(data, len, &procs, &config);
 
    // print some stats
+   INFO("\nROM split statistics:\n");
    size = 0;
    asm_size = 0;
    for (i = 0; i < config.section_count; i++) {
@@ -1156,13 +1157,13 @@ int main(int argc, char *argv[])
       }
    }
    percent = (float)(100 * size) / (float)(len);
-   printf("Total decoded section size: %X/%lX (%.2f%%)\n", size, len, percent);
+   printf("Total decoded section size:  %X/%lX (%.2f%%)\n", size, len, percent);
    size = 0;
    for (i = 0; i < procs.count; i++) {
       size += procs.procedures[i].end - procs.procedures[i].start;
    }
    percent = (float)(100 * size) / (float)(asm_size);
-   printf("Total disassembled ASM size:  %X/%X (%.2f%%)\n", size, asm_size, percent);
+   printf("Total disassembled ASM size: %X/%X (%.2f%%)\n", size, asm_size, percent);
 
    return 0;
 }
