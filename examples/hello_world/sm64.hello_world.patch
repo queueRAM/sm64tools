@@ -1,0 +1,97 @@
+diff -aur gen/behavior_data.s gen.hello/behavior_data.s
+--- gen/behavior_data.s	2015-07-12 22:13:40.403201383 -0500
++++ gen.hello/behavior_data.s	2015-07-12 21:29:16.962374817 -0500
+@@ -4692,3 +4692,8 @@
+ .word 0x0C000000, BehIntroSceneLoop
+ .word 0x09000000
+ .word 0x00000000
++beh_hello_world:
++.word 0x08000000
++.word 0x0C000000, BehHelloWorld
++.word 0x09000000
++.word 0x00000000
+diff -aur gen/levels/castle_grounds_level.s gen.hello/levels/castle_grounds_level.s
+--- gen/levels/castle_grounds_level.s	2015-07-12 22:13:40.929860245 -0500
++++ gen.hello/levels/castle_grounds_level.s	2015-07-12 21:27:17.144092979 -0500
+@@ -49,7 +49,7 @@
+ .word 0x24181F37, 0xF1050D14, 0xE6090000, 0x00000000, 0x00000000, beh_castle_flag_waving
+ .word 0x24181F37, 0x0EFB0D14, 0xE6090000, 0x00000000, 0x00000000, beh_castle_flag_waving
+ .word 0x07040000
+-.word 0x24181FBB, 0xEE640196, 0x11300000, 0x00000000, 0x00000000, beh_butterfly
++.word 0x24181FBB, 0xEE640196, 0x11300000, 0x00000000, 0x00000000, beh_hello_world
+ .word 0x24181FBB, 0xEEC80196, 0x11940000, 0x00000000, 0x00000000, beh_butterfly
+ .word 0x24181FBB, 0xED9C0196, 0x10040000, 0x00000000, 0x00000000, beh_butterfly
+ .word 0x24181FBB, 0xE88D01D9, 0xF5C30000, 0x00000000, 0x00000000, beh_butterfly
+diff -aur gen/sm64.s gen.hello/sm64.s
+--- gen/sm64.s	2015-07-12 22:13:41.009859059 -0500
++++ gen.hello/sm64.s	2015-07-12 22:22:39.551889324 -0500
+@@ -141122,49 +141122,30 @@
+   addiu $sp, $sp, 8
+ # end proc_802C9A3C
+ 
+-UnknownRecursive802C9AD8: # begin 802C9AD8 (084AD8)
+-  addiu $sp, $sp, -0x28
++# hello world behavior function
++BehHelloWorld: # begin 802C9AD8 (084AD8)
++  # increase stack and store return address
++  addiu $sp, $sp, -0x18
+   sw    $ra, 0x14($sp)
+-  sw    $a0, 0x28($sp)
+-  lw    $t6, 0x28($sp)
+-  sw    $t6, 0x1c($sp)
+-  lw    $t7, 0x28($sp)
+-  lw    $t8, 0x10($t7)
+-  beqz  $t8, .LUnknownRecursive802C9AD8_34
+-  sw    $t8, 0x24($sp)
+-  jal   UnknownRecursive802C9AD8
+-  lw    $a0, 0x24($sp)
+-  b     .LUnknownRecursive802C9AD8_3C
+-  nop   
+-.LUnknownRecursive802C9AD8_34: # 802C9B0C
+-  jal   proc_802CA028
+-  lw    $a0, 0x28($sp)
+-.LUnknownRecursive802C9AD8_3C: # 802C9B14
+-  lw    $t9, 0x28($sp)
+-  lw    $t1, 0x1c($sp)
+-  lw    $t0, 8($t9)
+-  bne   $t0, $t1, .LUnknownRecursive802C9AD8_78
+-  sw    $t0, 0x20($sp)
+-.LUnknownRecursive802C9AD8_50: # 802C9B28
+-  jal   UnknownRecursive802C9AD8
+-  lw    $a0, 0x20($sp)
+-  lw    $t2, 0x20($sp)
+-  lw    $t3, 8($t2)
+-  sw    $t3, 0x28($sp)
+-  lw    $t4, 0x28($sp)
+-  lw    $t6, 0x1c($sp)
+-  lw    $t5, 8($t4)
+-  beq   $t5, $t6, .LUnknownRecursive802C9AD8_50
+-  sw    $t5, 0x20($sp)
+-.LUnknownRecursive802C9AD8_78: # 802C9B50
+-  b     .LUnknownRecursive802C9AD8_80
+-  nop   
+-.LUnknownRecursive802C9AD8_80: # 802C9B58
++         
++  la    $a2, hello_string # message location, lui/addiu
++  li    $a0, 0xA0         # X position
++  li    $a1, 0xA8         # Y position
++  jal   PrintXY
++  nop
++
++  # restore return address and jump back
+   lw    $ra, 0x14($sp)
+-  addiu $sp, $sp, 0x28
++  addiu $sp, $sp, 0x18
+   jr    $ra
+   nop   
+-# end UnknownRecursive802C9AD8
++# end BehHelloWorld
++
++# placing the string here makes sure it's copied to RAM
++hello_string:
++.string "- Hello World -"
++
++.space 0x50, 0x0 # keep alignment the same
+ 
+ proc_802C9B68: # begin 802C9B68 (084B68)
+   addiu $sp, $sp, -0x18
