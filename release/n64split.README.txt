@@ -67,6 +67,11 @@ more information:
  - libconfig: config file reading
 
 Changelog:
+v0.3.1a: Bugfixes and cleanup
+ - fix major bug introduced in n64graphics due to texture renaming
+ - update INFO and stats messages from n64split
+ - add ROM validation and support for .v64 (BADC ordered) ROMs
+ - add hello world example
 v0.3a: Complete disassembly and decoding of scripts
  - 100% of behavior scripts decoded and most behavior references detected
  - ~99% of asm sections disassembled
