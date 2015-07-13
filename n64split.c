@@ -19,6 +19,12 @@ typedef struct _arg_config
    char config_file[FILENAME_MAX];
 } arg_config;
 
+typedef enum {
+   N64_ROM_INVALID,
+   N64_ROM_Z64,
+   N64_ROM_V64,
+} n64_rom_format;
+
 // default configuration
 static const arg_config default_args = 
 {
@@ -41,6 +47,21 @@ static void print_spaces(FILE *fp, int count)
    for (i = 0; i < count; i++) {
       fputc(' ', fp);
    }
+}
+
+static n64_rom_format n64_rom_type(unsigned char *buf, unsigned int length)
+{
+   const unsigned char bs[] = {0x37, 0x80, 0x40, 0x12}; // byte-swapped
+   const unsigned char be[] = {0x80, 0x37, 0x12, 0x40}; // big-endian
+   if (length >= (8 * MB)) {
+      if (!memcmp(buf, bs, sizeof(bs))) {
+         return N64_ROM_V64;
+      }
+      if (!memcmp(buf, be, sizeof(be))) {
+         return N64_ROM_Z64;
+      }
+   }
+   return N64_ROM_INVALID;
 }
 
 static void write_behavior(FILE *out, unsigned char *data, rom_config *config, int s)
@@ -1074,6 +1095,7 @@ int main(int argc, char *argv[])
    unsigned int asm_size;
    float percent;
    int i;
+   n64_rom_format rom_type;
 
    memset(&procs, 0, sizeof(procs));
    procs.count = 0;
@@ -1085,6 +1107,22 @@ int main(int argc, char *argv[])
 
    if (len <= 0) {
       return 2;
+   }
+
+   // confirm valid N64 ROM
+   rom_type = n64_rom_type(data, len);
+   switch (rom_type) {
+      case N64_ROM_Z64:
+         break; // Z64 is expected format
+      case N64_ROM_V64:
+         // byte-swapped BADC format, swap to big-endian ABCD format for processing
+         INFO("Byte-swapping ROM\n");
+         swap_bytes(data, len);
+         break;
+      case N64_ROM_INVALID:
+         ERROR("This does not appear to be a valid N64 ROM\n");
+         exit(1);
+         break;
    }
 
    ret_val = parse_config_file(args.config_file, &config);
