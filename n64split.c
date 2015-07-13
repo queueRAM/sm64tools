@@ -795,7 +795,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
          case TYPE_MIO0:
          {
             char binfilename[512];
-            INFO("Section MIO0: %X-%X\n", sec->start, sec->end);
+            INFO("Section MIO0: %s %X-%X\n", sec->label, sec->start, sec->end);
             if (sec->label == NULL || sec->label[0] == '\0') {
                sprintf(outfilename, "%06X.mio0", sec->start);
             } else {
@@ -923,7 +923,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
          {
             FILE *flevel;
             char levelfilename[512];
-            INFO("Section relocated level: %X-%X\n", sec->start, sec->end);
+            INFO("Section relocated level: %s %X-%X\n", sec->label, sec->start, sec->end);
             if (sec->label == NULL || sec->label[0] == '\0') {
                sprintf(levelfilename, "%06X.s", sec->start);
             } else {
@@ -961,7 +961,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
          {
             FILE *f_beh;
             char beh_filename[512];
-            INFO("Section relocated behavior: %X-%X\n", sec->start, sec->end);
+            INFO("Section relocated behavior: %s %X-%X\n", sec->label, sec->start, sec->end);
             if (sec->label == NULL || sec->label[0] == '\0') {
                sprintf(beh_filename, "%06X.s", sec->start);
             } else {
@@ -1099,9 +1099,11 @@ int main(int argc, char *argv[])
    mipsdisasm_add_procs(&procs, &config, len);
 
    // first pass disassembler
+   INFO("Running first pass disassembler...\n");
    mipsdisasm_pass1(data, len, &procs, &config);
 
    // split the ROM
+   INFO("Splitting ROM...\n");
    split_file(data, len, &procs, &config);
 
    // print some stats
