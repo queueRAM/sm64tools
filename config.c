@@ -136,6 +136,8 @@ int parse_config_file(const char *filename, rom_config *config)
             sec[i].end   = config_setting_get_int64_elem(r, 1);
             type = config_setting_get_string_elem(r, 2);
             sec[i].type  = str2section(type);
+            sec[i].extra = NULL;
+            sec[i].extra_len = 0;
             // validate section parameter counts
             switch (sec[i].type) {
                case TYPE_ASM:
