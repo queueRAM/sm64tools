@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
                   default:
                      continue;
                }
-               fprintf(out, "        -label '%05X\\n%s\\n%dx%d' textures/%s \\\n", offset, format, w, h, name);
+               fprintf(out, "        -label '%05X\\n%s\\n%dx%d' ../gen/textures/%s \\\n", offset, format, w, h, name);
             }
             int x = MIN(10, sec->extra_len);
             int y = MAX(1, (sec->extra_len + 9) / 10);
@@ -172,7 +172,8 @@ int main(int argc, char *argv[])
    fprintf(out, "cat << EOF > index.html\n");
    fprintf(out, "<html>\n"
                 "<head>\n"
-                "<title>SM64 (U) Textures</title></head>\n"
+                "<title>%s Textures</title></head>\n", config.name);
+   fprintf(out,
 "<style type=\"text/css\">\n"
 "table {border-spacing: 0; }\n"
 "table a:link {\n"
