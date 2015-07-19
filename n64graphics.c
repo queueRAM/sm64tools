@@ -11,6 +11,8 @@
 #define SCALE_8_5(VAL_) (((VAL_) * 0x1F) / 0xFF)
 #define SCALE_4_8(VAL_) ((VAL_) * 0x11)
 #define SCALE_8_4(VAL_) ((VAL_) / 0x11)
+#define SCALE_3_8(VAL_) ((VAL_) * 0x24)
+#define SCALE_8_3(VAL_) ((VAL_) / 0x24)
 
 typedef enum
 {
@@ -121,6 +123,19 @@ ia *file2ia(char *filename, int offset, int width, int height, int depth)
             img[i].alpha     = SCALE_4_8(raw[i] & 0x0F);
          }
          break;
+      case 4:
+         for (i = 0; i < width * height; i++) {
+            unsigned char bits;
+            bits = raw[i/2];
+            if (i % 2) {
+               bits &= 0xF;
+            } else {
+               bits >>= 4;
+            }
+            img[i].intensity = SCALE_3_8((bits >> 1) & 0x07);
+            img[i].alpha     = (bits & 0x01) ? 0xFF : 0x00;
+         }
+         break;
       default:
          ERROR("Error invalid depth %d\n", depth);
          break;
@@ -219,6 +234,24 @@ int ia2file(ia *img, int offset, int width, int height, int depth, char *filenam
             unsigned char val = SCALE_8_4(img[i].intensity);
             unsigned char alpha = SCALE_8_4(img[i].alpha);
             raw[i] = (val << 4) | alpha;
+         }
+         break;
+      case 4:
+         size = width * height / 2; // 4-bit
+         raw = malloc(size);
+         if (!raw) {
+            ERROR("Error allocating %u bytes\n", size);
+            goto ia2file_close;
+         }
+         for (i = 0; i < width * height; i++) {
+            unsigned char val = SCALE_8_3(img[i].intensity);
+            unsigned char alpha = img[i].alpha ? 0x01 : 0x00;
+            unsigned char old = raw[i/2];
+            if (i % 2) {
+               raw[i/2] = (old & 0xF0) | (val << 1) | alpha;
+            } else {
+               raw[i/2] = (old & 0x0F) | (((val << 1) | alpha) << 4);
+            }
          }
          break;
       default:
@@ -682,7 +715,10 @@ static void get_image_info(char *filename, int *offset, img_format *format, int 
          case 2:
             if (base[c] == '.') {
                base[c] = '\0';
-               if (!strcmp("ia8", strformat)) {
+               if (!strcmp("ia4", strformat)) {
+                  *format = IMG_FORMAT_IA;
+                  *depth = 4;
+               } else if (!strcmp("ia8", strformat)) {
                   *format = IMG_FORMAT_IA;
                   *depth = 8;
                } else if (!strcmp("ia16", strformat)) {
