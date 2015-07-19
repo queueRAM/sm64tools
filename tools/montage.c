@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
             }
             int x = MIN(10, sec->extra_len);
             int y = MAX(1, (sec->extra_len + 9) / 10);
-            fprintf(out, "        -tile %dx%d -shadow -background none -geometry '64x64+2+2>' montages/%s.png\n\n",
+            fprintf(out, "        -tile %dx%d -background none -geometry '64x64+2+2>' montages/%s.png\n\n",
                     x, y, sec->label);
             fprintf(out, "pngcrush -ow montages/%s.png\n\n", sec->label);
          }
@@ -176,25 +176,11 @@ int main(int argc, char *argv[])
    fprintf(out,
 "<style type=\"text/css\">\n"
 "table {border-spacing: 0; }\n"
-"table a:link {\n"
-"  color: #666;\n"
-"  font-weight: bold;\n"
-"  text-decoration:none;\n"
-"}\n"
-"table a:visited {\n"
-"  color: #999999;\n"
-"  font-weight:bold;\n"
-"  text-decoration:none;\n"
-"}\n"
-"table a:active, table a:hover {\n"
-"  color: #bd5a35;\n"
-"  text-decoration:underline;\n"
-"}\n"
 "table {\n"
 "  font-family:Arial, Helvetica, sans-serif;\n"
-"  color:#666;\n"
+"  color:#333;\n"
 "  font-size:12px;\n"
-"  text-shadow: 1px 1px 0px #fff;\n"
+"  text-shadow: 1px 1px 0px #ccc;\n"
 "  background:#eaebec;\n"
 "  margin:20px;\n"
 "  border:#ccc 1px solid;\n"
@@ -210,15 +196,8 @@ int main(int argc, char *argv[])
 "table th {\n"
 "  padding:21px 25px 22px 25px;\n"
 "  border-top:1px solid #fafafa;\n"
-"  border-bottom:1px solid #e0e0e0;\n"
-"\n"
+"  border-bottom:1px solid #aaa;\n"
 "  background: #ededed;\n"
-"  background: -webkit-gradient(linear, left top, left bottom, from(#ededed), to(#ebebeb));\n"
-"  background: -moz-linear-gradient(top, #ededed, #ebebeb);\n"
-"}\n"
-"table th:first-child{\n"
-"  text-align: left;\n"
-"  padding-left:20px;\n"
 "}\n"
 "table tr:first-child th:first-child {\n"
 "  -moz-border-radius-topleft:3px;\n"
@@ -232,30 +211,16 @@ int main(int argc, char *argv[])
 "}\n"
 "table tr {\n"
 "  text-align: center;\n"
-"  padding-left:20px;\n"
-"}\n"
-"table tr td:first-child {\n"
-"  text-align: left;\n"
-"  padding-left:20px;\n"
-"  border-left: 0;\n"
 "}\n"
 "table tr td {\n"
-"  padding:18px;\n"
-"  border-top: 1px solid #ffffff;\n"
-"  border-bottom:1px solid #e0e0e0;\n"
-"  border-left: 1px solid #e0e0e0;\n"
-"\n"
-"  background: #fafafa;\n"
-"  background: -webkit-gradient(linear, left top, left bottom, from(#fbfbfb), to(#fafafa));\n"
-"  background: -moz-linear-gradient(top, #fbfbfb, #fafafa);\n"
+"  vertical-align: top;\n"
+"  padding: 18px;\n"
+"  border-bottom: 1px solid #aaa;\n"
+"  border-left: 1px solid #aaa;\n"
+"  background: #ccc;\n"
 "}\n"
-"table tr.even td {\n"
-"  background: #f6f6f6;\n"
-"  background: -webkit-gradient(linear, left top, left bottom, from(#f8f8f8), to(#f6f6f6));\n"
-"  background: -moz-linear-gradient(top, #f8f8f8, #f6f6f6);\n"
-"}\n"
-"table tr:last-child td {\n"
-"  border-bottom:0;\n"
+"table tr:hover td {\n"
+"  background: #fff;\n"
 "}\n"
 "table tr:last-child td:first-child {\n"
 "   -moz-border-radius-bottomleft:3px;\n"
@@ -267,13 +232,9 @@ int main(int argc, char *argv[])
 "  -webkit-border-bottom-right-radius:3px;\n"
 "  border-bottom-right-radius:3px;\n"
 "}\n"
-"table tr:hover td {\n"
-"  background: #f2f2f2;\n"
-"  background: -webkit-gradient(linear, left top, left bottom, from(#f2f2f2), to(#f0f0f0));\n"
-"  background: -moz-linear-gradient(top, #f2f2f2, #f0f0f0);\n"
-"}\n"
 "</style>\n");
    fprintf(out, "<body>\n");
+   fprintf(out, "<center>\n");
    fprintf(out, "<table>\n");
    fprintf(out, "<tr><th>ROM MIO0</th><th>Extended ROM</th><th>Textures and offset in block</th></tr>\n");
    for (i = 0; i < config.section_count; i++) {
@@ -286,6 +247,7 @@ int main(int argc, char *argv[])
       }
    }
    fprintf(out, "</table>\n");
+   fprintf(out, "</center>\n");
    fprintf(out, "</body>\n");
    fprintf(out, "</html>\n");
    fprintf(out, "EOF\n");
