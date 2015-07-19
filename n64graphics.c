@@ -36,7 +36,7 @@ rgba *file2rgba(char *filename, int offset, int width, int height)
    }
 
    if (fseek(fp, offset, SEEK_SET)) {
-      ERROR("Error reading input file\n");
+      ERROR("Error seeking to 0x%X in file '%s'\n", offset, filename);
       goto file2rgba_close;
    }
 
@@ -47,7 +47,7 @@ rgba *file2rgba(char *filename, int offset, int width, int height)
       goto file2rgba_close;
    }
    if (fread(raw, 1, size, fp) != size) {
-      ERROR("Error reading input file\n");
+      ERROR("Error reading 0x%X bytes at 0x%X from '%s'\n", size, offset, filename);
       goto file2rgba_free;
    }
 
@@ -88,7 +88,7 @@ ia *file2ia(char *filename, int offset, int width, int height, int depth)
    }
 
    if (fseek(fp, offset, SEEK_SET)) {
-      ERROR("Error reading input file\n");
+      ERROR("Error seeking to 0x%X in file '%s'\n", offset, filename);
       goto file2rgba_close;
    }
 
@@ -99,7 +99,7 @@ ia *file2ia(char *filename, int offset, int width, int height, int depth)
       goto file2rgba_close;
    }
    if (fread(raw, 1, size, fp) != size) {
-      ERROR("Error reading input file\n");
+      ERROR("Error reading 0x%X bytes at 0x%X from '%s'\n", size, offset, filename);
       goto file2rgba_free;
    }
 
@@ -162,7 +162,7 @@ int rgba2file(rgba *img, int offset, int width, int height, char *filename)
    }
 
    if (fseek(fp, offset, SEEK_SET)) {
-      ERROR("Error reading input file\n");
+      ERROR("Error seeking to 0x%X in file '%s'\n", offset, filename);
       goto rgba2file_close;
    }
 
@@ -183,7 +183,7 @@ int rgba2file(rgba *img, int offset, int width, int height, char *filename)
       raw[i*2+1] = ((g & 0x3) << 6) | (b << 1) | a;
    }
    if (fwrite(raw, 1, size, fp) != size) {
-      ERROR("Error reading input file\n");
+      ERROR("Error writing %u bytes to output file '%s'\n", size, filename);
    }
 
    free(raw);
@@ -206,7 +206,7 @@ int ia2file(ia *img, int offset, int width, int height, int depth, char *filenam
    }
 
    if (fseek(fp, offset, SEEK_SET)) {
-      ERROR("Error reading input file\n");
+      ERROR("Error seeking to 0x%X in file '%s'\n", offset, filename);
       goto ia2file_close;
    }
 
@@ -261,7 +261,7 @@ int ia2file(ia *img, int offset, int width, int height, int depth, char *filenam
 
    if (size > 0) {
       if (fwrite(raw, 1, size, fp) != size) {
-         ERROR("Error reading input file\n");
+         ERROR("Error writing %u bytes to ouput file '%s'\n", size, filename);
       }
       free(raw);
    }
@@ -287,7 +287,7 @@ int sky2file(rgba *img, int offset, int width, int height, char *filename)
    }
 
    if (fseek(fp, offset, SEEK_SET)) {
-      ERROR("Error reading input file\n");
+      ERROR("Error seeking to 0x%X in file '%s'\n", offset, filename);
       goto sky2file_close;
    }
 
@@ -317,7 +317,7 @@ int sky2file(rgba *img, int offset, int width, int height, char *filename)
             }
          }
          if (fwrite(raw, 1, size, fp) != size) {
-            ERROR("Error reading input file\n");
+            ERROR("Error writing %u bytes to output file '%s'\n", size, filename);
          }
       }
    }
@@ -416,13 +416,13 @@ rgba *pngfile2rgba(char *pngname, int *width, int *height)
    // open file and validate PNG
    fp = fopen(pngname, "rb");
    if (!fp) {
-      ERROR("Error opening PNG file\n");
+      ERROR("Error opening PNG file '%s'\n", pngname);
       return NULL;
    }
 
    fread(header, 1, 8, fp);
    if (png_sig_cmp(header, 0, 8)) {
-      ERROR("File is not recognized as a PNG file\n");
+      ERROR("File '%s' is not recognized as a PNG file\n", pngname);
       goto pngfile2rgba_close;
    }
 
@@ -590,7 +590,7 @@ ia *pngfile2ia(char *pngname, int *width, int *height)
 
    fread(header, 1, 8, fp);
    if (png_sig_cmp(header, 0, 8)) {
-      ERROR("File is not recognized as a PNG file\n");
+      ERROR("File '%s' is not recognized as a PNG file\n", pngname);
       goto pngfile2ia_close;
    }
 
