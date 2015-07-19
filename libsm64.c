@@ -16,6 +16,7 @@
 typedef struct
 {
    unsigned int old;      // MIO0 address in original ROM
+   unsigned int old_end;  // ending MIO0 address in original ROM
    unsigned int new;      // starting MIO0 address in extended ROM
    unsigned int new_end;  // ending MIO0 address in extended ROM
    unsigned int addr;     // ASM address for referenced pointer
@@ -83,6 +84,7 @@ static void find_pointers(unsigned char *buf, unsigned int length, ptr_t table[]
          idx = find_ptr(ptr, table, count);
          if (idx >= 0) {
             table[idx].command = buf[addr];
+            table[idx].old_end = read_u32_be(&buf[addr+8]);
          }
       }
    }
@@ -385,8 +387,13 @@ void sm64_decompress_mio0(const sm64_config_t *config,
                // 0x18 commands become 0x17
                ptr_table[i].command = 0x17;
             }
-            INFO("MIO0 file from %08X is decompressed at %08X to %08X as raw data%s\n",
-                  in_addr, out_addr, out_addr + length, is_mio0 ? " with a MIO0 header" : "");
+            // use output from decoder to find end of ASM referenced MIO0 blocks
+            if (ptr_table[i].old_end == 0x00) {
+               ptr_table[i].old_end = in_addr + end;
+            }
+            INFO("MIO0 file %08X-%08X decompressed to %08X-%08X as raw data%s\n",
+                  in_addr, ptr_table[i].old_end, out_addr, out_addr + length,
+                  is_mio0 ? " with a MIO0 header" : "");
             if (config->fill) {
                INFO("Filling old MIO0 with 0x01 from %X length %X\n", in_addr, end);
                memset(&out_buf[in_addr], 0x01, end);
