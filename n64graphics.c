@@ -136,6 +136,17 @@ ia *file2ia(char *filename, int offset, int width, int height, int depth)
             img[i].alpha     = (bits & 0x01) ? 0xFF : 0x00;
          }
          break;
+      case 1:
+         for (i = 0; i < width * height; i++) {
+            unsigned char bits;
+            unsigned char mask;
+            bits = raw[i/8];
+            mask = 1 << (7 - (i % 8)); // MSb->LSb
+            bits = (bits & mask) ? 0xFF : 0x00;
+            img[i].intensity = bits;
+            img[i].alpha     = bits;
+         }
+         break;
       default:
          ERROR("Error invalid depth %d\n", depth);
          break;
@@ -252,6 +263,20 @@ int ia2file(ia *img, int offset, int width, int height, int depth, char *filenam
             } else {
                raw[i/2] = (old & 0x0F) | (((val << 1) | alpha) << 4);
             }
+         }
+         break;
+      case 1:
+         size = width * height / 8; // 1-bit
+         raw = malloc(size);
+         if (!raw) {
+            ERROR("Error allocating %u bytes\n", size);
+            goto ia2file_close;
+         }
+         for (i = 0; i < width * height; i++) {
+            unsigned char val = img[i].intensity;
+            unsigned char old = raw[i/8];
+            unsigned char bit = val ? (1 << (7 - (i % 8))) : 0x00;
+            raw[i/8] = (old & (~bit)) | bit;
          }
          break;
       default:
@@ -715,7 +740,10 @@ static void get_image_info(char *filename, int *offset, img_format *format, int 
          case 2:
             if (base[c] == '.') {
                base[c] = '\0';
-               if (!strcmp("ia4", strformat)) {
+               if (!strcmp("ia1", strformat)) {
+                  *format = IMG_FORMAT_IA;
+                  *depth = 1;
+               } else if (!strcmp("ia4", strformat)) {
                   *format = IMG_FORMAT_IA;
                   *depth = 4;
                } else if (!strcmp("ia8", strformat)) {
