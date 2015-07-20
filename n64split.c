@@ -947,12 +947,13 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
          {
             FILE *flevel;
             char levelfilename[512];
-            INFO("Section relocated level: %s %X-%X\n", sec->label, sec->start, sec->end);
             if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(levelfilename, "%06X.s", sec->start);
+               sprintf(start_label, "L%06X", sec->start);
             } else {
-               sprintf(levelfilename, "%s.s", sec->label);
+               strcpy(start_label, sec->label);
             }
+            INFO("Section relocated level: %s %X-%X\n", start_label, sec->start, sec->end);
+            sprintf(levelfilename, "%s.s", start_label);
             sprintf(outfilename, "%s/%s", LEVEL_DIR, levelfilename);
 
             // decode and write level data out
@@ -961,9 +962,13 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                perror(outfilename);
                exit(1);
             }
-
+            fprintf(flevel, "# level script %s from %X-%X\n\n", start_label, sec->start, sec->end);
+            fprintf(flevel, ".section .mio0\n\n");
+            fprintf(flevel, ".global %s\n", start_label);
+            fprintf(flevel, ".align 4, 0x01\n");
+            fprintf(flevel, "%s:\n", start_label);
             write_level(flevel, data, config, s);
-
+            fprintf(flevel, "%s_end:\n", start_label);
             fclose(flevel);
 
             if (sec->label == NULL || sec->label[0] == '\0') {
@@ -971,11 +976,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             } else {
                strcpy(start_label, sec->label);
             }
-            fprintf(fasm, "\n.align 4, 0x01\n");
-            fprintf(fasm, ".global %s\n", start_label);
-            fprintf(fasm, "%s:\n", start_label);
-            fprintf(fasm, ".include \"%s\"\n", outfilename);
-            fprintf(fasm, "%s_end:\n", start_label);
+            fprintf(fasm, "\n.include \"%s\"\n", outfilename);
             // append to Makefile
             sprintf(maketmp, " \\\n$(LEVEL_DIR)/%s", levelfilename);
             strcat(makeheader_level, maketmp);
