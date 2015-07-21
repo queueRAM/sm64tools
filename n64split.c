@@ -17,6 +17,7 @@ typedef struct _arg_config
 {
    char input_file[FILENAME_MAX];
    char config_file[FILENAME_MAX];
+   int  large_texture;
 } arg_config;
 
 typedef enum {
@@ -30,6 +31,7 @@ static const arg_config default_args =
 {
    "", // input filename
    "configs/sm64.u.config", // config filename
+   0,  // all textures
 };
 
 const char asm_header[] = 
@@ -560,7 +562,7 @@ static void generate_ld_script(rom_config *config)
    fclose(fld);
 }
 
-static void split_file(unsigned char *data, unsigned int length, proc_table *procs, rom_config *config)
+static void split_file(unsigned char *data, unsigned int length, proc_table *procs, arg_config *args, rom_config *config)
 {
 #define MAKEFILENAME GEN_DIR "/Makefile.gen"
 #define BIN_DIR      GEN_DIR "/bin"
@@ -927,17 +929,18 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                }
                fprintf(fmake, "\n\t$(N64GRAPHICS) $@ $^\n\n");
             }
-#if GENERATE_ALL_PNG
-            w = 32;
-            h = filesize(binfilename) / (w * 2);
-            rgba *img = file2rgba(binfilename, 0, w, h);
-            if (img) {
-               sprintf(outfilepath, "%s/%s.ALL.png", TEXTURE_DIR, sec->label);
-               rgba2png(img, w, h, outfilepath);
-               free(img);
-               img = NULL;
+            if (args->large_texture) {
+               INFO("Generating large texture for %s\n", sec->label);
+               w = 32;
+               h = filesize(binfilename) / (w * 2);
+               rgba *img = file2rgba(binfilename, 0, w, h);
+               if (img) {
+                  sprintf(outfilepath, "%s/%s.ALL.png", TEXTURE_DIR, sec->label);
+                  rgba2png(img, w, h, outfilepath);
+                  free(img);
+                  img = NULL;
+               }
             }
-#endif // GENERATE_ALL_PNG
             // touch bin, then mio0 files so 'make' doesn't rebuild them right away
             touch_file(binfilename);
             touch_file(mio0filename);
@@ -1033,12 +1036,13 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
 
 static void print_usage(void)
 {
-   ERROR("Usage: n64split [-c CONFIG] [-v] ROM\n"
+   ERROR("Usage: n64split [-c CONFIG] [-t] [-v] ROM\n"
          "\n"
          "n64split v" N64SPLIT_VERSION ": N64 ROM splitter, texture ripper, recursive disassembler\n"
          "\n"
          "Optional arguments:\n"
          " -c CONFIG    ROM configuration file (default: %s)\n"
+         " -t           generate large texture for MIO0 blocks\n"
          " -v           verbose progress output\n"
          "\n"
          "File arguments:\n"
@@ -1064,6 +1068,9 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                   print_usage();
                }
                strcpy(config->config_file, argv[i]);
+               break;
+            case 't':
+               config->large_texture = 1;
                break;
             case 'v':
                g_verbosity = 1;
@@ -1146,7 +1153,7 @@ int main(int argc, char *argv[])
 
    // split the ROM
    INFO("Splitting ROM...\n");
-   split_file(data, len, &procs, &config);
+   split_file(data, len, &procs, &args, &config);
 
    // print some stats
    INFO("\nROM split statistics:\n");
