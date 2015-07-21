@@ -523,28 +523,29 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
                } else if (insn[i].id == MIPS_INS_SW || insn[i].id == MIPS_INS_SH ||
                           insn[i].id == MIPS_INS_SB || insn[i].id == MIPS_INS_SWC1) {
                   unsigned int reg = insn[i].detail->mips.operands[1].mem.base;
+                  unsigned int sw_imm = (unsigned int)insn[i].detail->mips.operands[1].mem.disp;
                   int lui;
                   consumed = 0;
-                  for (lui = i - 1; lui >= 0; lui--) {
-                     if (insn[lui].id == MIPS_INS_LUI) {
-                        unsigned int lui_reg = insn[lui].detail->mips.operands[0].reg;
-                        if (reg == lui_reg) {
-                           char label[256];
-                           unsigned int lui_imm = (unsigned int)insn[lui].detail->mips.operands[1].imm;
-                           unsigned int sw_imm = (unsigned int)insn[i].detail->mips.operands[1].mem.disp;
-                           unsigned int addr = ((lui_imm << 16) + sw_imm);
-                           fill_addr_label(config, addr, label, -1);
-                           fprintf(out, "$%s, %%lo(%s)($%s) # 0x%X",
-                           cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
-                           label, cs_reg_name(handle, reg), sw_imm & 0xFFFF);
-                           consumed = 1;
-                           break;
+                  // don't attempt to compute addresses for zero offset
+                  if (sw_imm != 0x0) {
+                     for (lui = i - 1; lui >= 0; lui--) {
+                        if (insn[lui].id == MIPS_INS_LUI) {
+                           unsigned int lui_reg = insn[lui].detail->mips.operands[0].reg;
+                           if (reg == lui_reg) {
+                              char label[256];
+                              unsigned int lui_imm = (unsigned int)insn[lui].detail->mips.operands[1].imm;
+                              unsigned int addr = ((lui_imm << 16) + sw_imm);
+                              fill_addr_label(config, addr, label, -1);
+                              fprintf(out, "$%s, %%lo(%s)($%s) # ",
+                                    cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
+                                    label, cs_reg_name(handle, reg));
+                              consumed = 1;
+                              break;
+                           }
                         }
                      }
                   }
-                  if (!consumed) {
-                     fprintf(out, "%s", insn[i].op_str);
-                  }
+                  fprintf(out, "%s", insn[i].op_str);
                } else {
                   fprintf(out, "%s", insn[i].op_str);
                }
