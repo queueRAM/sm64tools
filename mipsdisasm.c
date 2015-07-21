@@ -520,6 +520,31 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
                   fprintf(out, "$%s, $%d # ", cs_reg_name(handle, mips->operands[0].reg), rd);
                   fprintf(out, "%02X%02X%02X%02X", in[0], in[1], in[2], in[3]);
                   fprintf(out, " %s", insn[i].op_str);
+               } else if (insn[i].id == MIPS_INS_SW || insn[i].id == MIPS_INS_SH ||
+                          insn[i].id == MIPS_INS_SB || insn[i].id == MIPS_INS_SWC1) {
+                  unsigned int reg = insn[i].detail->mips.operands[1].mem.base;
+                  int lui;
+                  consumed = 0;
+                  for (lui = i - 1; lui >= 0; lui--) {
+                     if (insn[lui].id == MIPS_INS_LUI) {
+                        unsigned int lui_reg = insn[lui].detail->mips.operands[0].reg;
+                        if (reg == lui_reg) {
+                           char label[256];
+                           unsigned int lui_imm = (unsigned int)insn[lui].detail->mips.operands[1].imm;
+                           unsigned int sw_imm = (unsigned int)insn[i].detail->mips.operands[1].mem.disp;
+                           unsigned int addr = ((lui_imm << 16) + sw_imm);
+                           fill_addr_label(config, addr, label, -1);
+                           fprintf(out, "$%s, %%lo(%s)($%s) # 0x%X",
+                           cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
+                           label, cs_reg_name(handle, reg), sw_imm & 0xFFFF);
+                           consumed = 1;
+                           break;
+                        }
+                     }
+                  }
+                  if (!consumed) {
+                     fprintf(out, "%s", insn[i].op_str);
+                  }
                } else {
                   fprintf(out, "%s", insn[i].op_str);
                }
