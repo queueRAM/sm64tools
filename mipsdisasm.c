@@ -542,6 +542,11 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
                               consumed = 1;
                               break;
                            }
+                        } else if (insn[lui].id == MIPS_INS_LW) {
+                           unsigned int lw_reg = insn[lui].detail->mips.operands[0].reg;
+                           if (reg == lw_reg) {
+                              break;
+                           }
                         }
                      }
                   }
