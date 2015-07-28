@@ -133,7 +133,7 @@ static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptb
                      }
                   }
                }
-            } else if (insn[i].id == MIPS_INS_JAL) {
+            } else if (insn[i].id == MIPS_INS_JAL || insn[i].id == MIPS_INS_BAL) {
                unsigned int addr;
                cs_mips *mips = &insn[i].detail->mips;
                addr = (unsigned int)mips->operands[0].imm;
@@ -495,7 +495,7 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
                            break;
                      }
                   }
-               } else if (insn[i].id == MIPS_INS_JAL) {
+               } else if (insn[i].id == MIPS_INS_JAL || insn[i].id == MIPS_INS_BAL) {
                   unsigned int addr;
                   cs_mips *mips = &insn[i].detail->mips;
                   addr = (unsigned int)mips->operands[0].imm;
