@@ -41,7 +41,7 @@ unsigned int ram_to_rom(rom_config *config, unsigned int ram_addr);
 // returns RAM address that maps to the ROM address
 unsigned int rom_to_ram(rom_config *config, unsigned int rom_addr);
 
-// generate stirng label for address based on config sections and labels
+// generate string label for address based on config sections and labels
 // config: ROM configuration
 // addr: ROM or RAM address to use
 // label: output string
@@ -74,7 +74,7 @@ void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *
 // out: stream to output data to
 // data: buffer containing raw MIPS assembly
 // datalen: length of 'data'
-// proc: the procedure to disassebmle
+// proc: the procedure to disassemble
 // config: ROM configuration
 // returns the RAM address of the end of disassembly
 unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config);
