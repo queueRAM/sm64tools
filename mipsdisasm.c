@@ -74,7 +74,7 @@ static void add_proc(proc_table *procs, unsigned int start, unsigned int end)
 // collect JALs and local labels for a given procedure
 static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptbl, int p, rom_config *config)
 {
-#define MAX_LOCALS 128
+#define MAX_LOCALS 256
 #define MAX_BYTES_PER_CALL 1024
    unsigned int local_offsets[MAX_LOCALS];
    local_table locals;
@@ -107,7 +107,13 @@ static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptb
    locals.offsets = local_offsets;
    locals.count = 0;
 
-   disassembling = 1;
+   // don't try to disassemble if not in ROM bounds
+   if (rom_offset < datalen) {
+      disassembling = 1;
+   } else {
+      ERROR("Error: unknown ROM mapping for proc %08X (tried %X)\n", ram_address, rom_offset);
+      disassembling = 0;
+   }
    processed = 0;
    remaining = 0;
    last_label = 0;
