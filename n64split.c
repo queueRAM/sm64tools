@@ -428,14 +428,14 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
 {
    // disassemble all the procedures
    unsigned int ram_address;
-   unsigned int last_end;
+   unsigned int prev_end;
    unsigned int end_address;
    int start_proc;
    int proc_idx;
    // find first procedure in section
-   last_end = rom_to_ram(config, sec->start);
+   prev_end = rom_to_ram(config, sec->start);
    for (start_proc = 0; start_proc < procs->count; start_proc++) {
-      if (procs->procedures[start_proc].start >= last_end) {
+      if (procs->procedures[start_proc].start >= prev_end) {
          break;
       }
    }
@@ -453,12 +453,12 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
             continue;
          default: break;
       }
-      if (ram_address > last_end) {
-         int is_dummy = disassemble_dummy(out, config, data, last_end, ram_address);
+      if (ram_address > prev_end) {
+         int is_dummy = disassemble_dummy(out, config, data, prev_end, ram_address);
          if (!is_dummy) {
             fprintf(out, "\n# unknown assembly section %X-%X (%06X-%06X) [%X]",
-                  last_end, ram_address, ram_to_rom(config, last_end), ram_to_rom(config, ram_address), ram_address - last_end);
-            unsigned int a = ram_to_rom(config, last_end);
+                  prev_end, ram_address, ram_to_rom(config, prev_end), ram_to_rom(config, ram_address), ram_address - prev_end);
+            unsigned int a = ram_to_rom(config, prev_end);
             int count = 0;
             unsigned int rom_address = ram_to_rom(config, ram_address);
             int newline = 0;
@@ -485,12 +485,12 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
             fprintf(out, "\n# end unknown section\n");
          }
       }
-      if (ram_address < last_end) {
-         ERROR("Warning: %08X < %08X\n", ram_address, last_end);
+      if (ram_address < prev_end) {
+         ERROR("Warning: %08X < %08X\n", ram_address, prev_end);
       }
       disassemble_proc(out, data, len, &procs->procedures[proc_idx], config);
-      last_end = procs->procedures[proc_idx].end;
-      if (last_end >= end_address) {
+      prev_end = procs->procedures[proc_idx].end;
+      if (prev_end >= end_address) {
          break;
       }
    }
@@ -586,7 +586,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    int i, j;
    unsigned int a;
    unsigned int w, h;
-   unsigned int last_end = 0;
+   unsigned int prev_end = 0;
    unsigned int ptr;
    int count;
    int level_alloc;
@@ -620,13 +620,13 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
       }
 
       // fill gaps between regions
-      if (sec->start != last_end) {
-         int gap_len = sec->start - last_end;
+      if (sec->start != prev_end) {
+         int gap_len = sec->start - prev_end;
          INFO("Filling gap before region %d (%d bytes)\n", s, gap_len);
-         fprintf(fasm, "# Unknown region %06X-%06X [%X]\n", last_end, sec->start, gap_len);
+         fprintf(fasm, "# Unknown region %06X-%06X [%X]\n", prev_end, sec->start, gap_len);
          // for small gaps, just output bytes
          if (gap_len <= 0x80) {
-            unsigned int group_offset = last_end;
+            unsigned int group_offset = prev_end;
             while (gap_len > 0) {
                int group_len = MIN(gap_len, 0x10);
                fprintf(fasm, ".byte ");
@@ -636,8 +636,8 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                group_offset += group_len;
             }
          } else {
-            sprintf(outfilename, "%s/%s.%06X.bin", BIN_DIR, config->basename, last_end);
-            write_file(outfilename, &data[last_end], gap_len);
+            sprintf(outfilename, "%s/%s.%06X.bin", BIN_DIR, config->basename, prev_end);
+            write_file(outfilename, &data[prev_end], gap_len);
             fprintf(fasm, ".incbin \"%s\"\n", outfilename);
          }
          fprintf(fasm, "\n");
@@ -743,7 +743,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             exit(1);
             break;
       }
-      last_end = sec->end;
+      prev_end = sec->end;
    }
 
    // put MIO0 in separate data section and generate Makefile
