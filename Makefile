@@ -55,8 +55,10 @@ AR        = $(CROSS)ar
 INCLUDES  = 
 DEFS      = 
 CFLAGS    = -Wall -Wextra -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(DEFS) -MMD
+#DBG_CFLAGS    = -Wall -Wextra -O0 -g $(INCLUDES) $(DEFS) -MMD
 
 LDFLAGS   = -s -Wl,--gc-sections
+#DBG_LDFLAGS   =
 LIBS      = 
 SPLIT_LIBS = -lcapstone -lpng -lconfig
 
@@ -112,6 +114,9 @@ $(DISASM_TARGET): $(DISASM_SRC_FILES)
 
 $(SPLIT_TARGET): $(SPLIT_OBJ_FILES)
 	$(LD) $(LDFLAGS) -o $@ $^ $(SPLIT_LIBS)
+
+rawmips: rawmips.c utils.c
+	$(CC) $(CFLAGS) -o $@ $^ -lcapstone
 
 clean:
 	rm -f $(OBJ_FILES) $(DEP_FILES) $(SM64_LIB) $(MIO0_TARGET)
