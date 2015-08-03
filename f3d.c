@@ -80,7 +80,7 @@ static void print_f3d(FILE *fout, unsigned char *data)
          break;
       case F3D_VTX:
          bank  = data[1];
-         val = read_u24_be(&data[2]) / 0x10;
+         val = read_u16_be(&data[2]) / 0x10;
          bank2 = data[4];
          address = read_u24_be(&data[5]);
          fprintf(fout, "%14s %02X %06X %02X %06X", "F3D_VTX", bank, val, bank2, address);
