@@ -18,6 +18,7 @@ typedef struct _arg_config
    char input_file[FILENAME_MAX];
    char config_file[FILENAME_MAX];
    int  large_texture;
+   int  gen_proc_table;
 } arg_config;
 
 typedef enum {
@@ -32,6 +33,7 @@ static const arg_config default_args =
    "", // input filename
    "configs/sm64.u.config", // config filename
    0,  // all textures
+   0,  // procedure table
 };
 
 const char asm_header[] = 
@@ -1031,6 +1033,29 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    fprintf(fmake, "\n\n%s", makeheader_mio0);
    fprintf(fmake, "\n\n%s", makeheader_level);
 
+   // dump the proc table
+   if (args->gen_proc_table)
+   {
+      unsigned int ram_address;
+      unsigned int rom_offset;
+      int i, j;
+      printf("static const procedure proc_table[] = {\n");
+      for (i = 0; i < config->label_count; i++) {
+         ram_address = config->labels[i].ram_addr;
+         rom_offset = ram_to_rom(config, ram_address);
+         for (j = 0; j < procs->count; j++) {
+            procedure *p = &procs->procedures[j];
+            if (p->start == ram_address) {
+            printf("   {0x%08X, 0x%08X, 0x%06X, 0x%06X, \"%s\"},\n",
+                   p->start, p->end, rom_offset, ram_to_rom(config, p->end),
+                   config->labels[i].name);
+               break;
+            }
+         }
+      }
+      printf("};\n");
+   }
+
    // cleanup
    free(makeheader_mio0);
    free(makeheader_level);
@@ -1048,6 +1073,7 @@ static void print_usage(void)
          "\n"
          "Optional arguments:\n"
          " -c CONFIG    ROM configuration file (default: %s)\n"
+         " -p           generate procedure table for analysis\n"
          " -t           generate large texture for MIO0 blocks\n"
          " -v           verbose progress output\n"
          "\n"
@@ -1074,6 +1100,9 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                   print_usage();
                }
                strcpy(config->config_file, argv[i]);
+               break;
+            case 'p':
+               config->gen_proc_table = 1;
                break;
             case 't':
                config->large_texture = 1;
@@ -1162,7 +1191,7 @@ int main(int argc, char *argv[])
    split_file(data, len, &procs, &args, &config);
 
    // print some stats
-   INFO("\nROM split statistics:\n");
+   printf("\nROM split statistics:\n");
    size = 0;
    asm_size = 0;
    for (i = 0; i < config.section_count; i++) {
