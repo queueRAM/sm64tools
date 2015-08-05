@@ -13,6 +13,8 @@
 
 #define GEN_DIR     "gen"
 
+#define GLOBALS_FILE "globals.inc"
+
 typedef struct _arg_config
 {
    char input_file[FILENAME_MAX];
@@ -43,6 +45,8 @@ const char asm_header[] =
    "# assembler directives\n"
    ".set noat      # allow manual use of $at\n"
    ".set noreorder # don't insert nops after branches\n"
+   "\n"
+   ".include \"" GEN_DIR "/" GLOBALS_FILE "\"\n"
    "\n";
 
 static void print_spaces(FILE *fp, int count)
@@ -504,6 +508,27 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
    }
 }
 
+static void generate_globals(rom_config *config)
+{
+   char globalfilename[FILENAME_MAX];
+   FILE *fglobal;
+   int i;
+   sprintf(globalfilename, "%s/%s", GEN_DIR, GLOBALS_FILE);
+   fglobal = fopen(globalfilename, "w");
+   if (fglobal == NULL) {
+      ERROR("Error opening %s\n", globalfilename);
+      exit(3);
+   }
+   fprintf(fglobal, "# globally accessible functions and data\n"
+                    "# these will be accessible by C code and show up in the .map file\n\n");
+   for (i = 0; i < config->label_count; i++) {
+      fprintf(fglobal, ".global %s\n", config->labels[i].name);
+   }
+   fprintf(fglobal, "\n");
+
+   fclose(fglobal);
+}
+
 static void generate_ld_script(rom_config *config)
 {
    char ldfilename[512];
@@ -616,6 +641,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
       exit(3);
    }
    fprintf(fasm, asm_header, config->name, N64SPLIT_VERSION);
+
+   // generate globals include file
+   generate_globals(config);
 
    for (s = 0; s < config->section_count; s++) {
       split_section *sec = &sections[s];
