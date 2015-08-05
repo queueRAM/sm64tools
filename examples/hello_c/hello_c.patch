@@ -1,0 +1,195 @@
+diff -Naur gen.orig/behavior_data.s gen/behavior_data.s
+--- gen.orig/behavior_data.s	2015-08-05 13:07:51.819231111 -0500
++++ gen/behavior_data.s	2015-08-05 13:13:20.057826973 -0500
+@@ -4692,3 +4692,9 @@
+ .word 0x0C000000, BehIntroSceneLoop
+ .word 0x09000000
+ .word 0x00000000
++
++beh_hello_world:
++.word 0x08000000
++.word 0x0C000000, BehHelloWorld
++.word 0x09000000
++.word 0x00000000
+diff -Naur gen.orig/extended.c gen/extended.c
+--- gen.orig/extended.c	1969-12-31 18:00:00.000000000 -0600
++++ gen/extended.c	2015-08-06 16:31:17.162926557 -0500
+@@ -0,0 +1,18 @@
++#include "sm64.h"
++
++const char HelloString[] = "- Hello World -";
++unsigned int x = 1;
++unsigned int y = 1;
++char xdir = 0, ydir = 0;
++
++#define MAX_X 0x100
++#define MAX_Y 0xB0
++
++void BehHelloWorld(void)
++{
++   PrintXY(x, y, HelloString);
++   x += xdir ? -1 : 1;
++   y += ydir ? -1 : 1;
++   if (x == 0 || x == MAX_X) xdir = !xdir;
++   if (y == 0 || y == MAX_Y) ydir = !ydir;
++}
+diff -Naur gen.orig/levels/castle_grounds_level.s gen/levels/castle_grounds_level.s
+--- gen.orig/levels/castle_grounds_level.s	2015-08-05 13:07:52.329223754 -0500
++++ gen/levels/castle_grounds_level.s	2015-08-05 13:22:20.880011503 -0500
+@@ -67,7 +67,7 @@
+ .word 0x24181FBB, 0x16F10307, 0xEA0A0000, 0x00000000, 0x00000000, beh_butterfly
+ .word 0x24181FBB, 0x15610307, 0xEB360000, 0x00000000, 0x00000000, beh_butterfly
+ .word 0x24181FBB, 0xFA200146, 0x0C7C0000, 0x00000000, 0x00000000, beh_butterfly
+-.word 0x24181FBB, 0xFB4C0146, 0x0CE00000, 0x00000000, 0x00000000, beh_butterfly
++.word 0x24181FBB, 0xFB4C0146, 0x0CE00000, 0x00000000, 0x00000000, beh_hello_world
+ .word 0x24181F55, 0x00000C66, 0xEA070000, 0x00000000, 0x00000000, beh_yoshi
+ .word 0x07040000
+ .word 0x1B040000
+diff -Naur gen.orig/sm64.h gen/sm64.h
+--- gen.orig/sm64.h	1969-12-31 18:00:00.000000000 -0600
++++ gen/sm64.h	2015-08-06 16:31:11.946334171 -0500
+@@ -0,0 +1,22 @@
++#ifndef SM64_H
++#define SM64_H
++
++#include <stddef.h>
++
++// handful of useful routines to call from C
++
++// standard libary
++void bcopy(const void *src, void *dest, size_t n);
++void bzero(void *s, size_t n);
++
++// math
++float sinf(float);
++float cosf(float);
++float sqrtf(float);
++
++// SM64
++void PrintInt(unsigned int x, unsigned int y, const char *format, unsigned int value);
++void PrintStr(unsigned int x, unsigned int y, const char *str);
++void PrintXY(unsigned int x, unsigned int y, const char *str);
++
++#endif // SM64_H
+diff -Naur gen.orig/sm64.ld gen/sm64.ld
+--- gen.orig/sm64.ld	2015-08-05 13:07:52.405889314 -0500
++++ gen/sm64.ld	2015-08-05 13:25:47.643687263 -0500
+@@ -3,6 +3,7 @@
+ 
+ OUTPUT_FORMAT ("elf32-bigmips", "elf32-bigmips", "elf32-littlemips")
+ OUTPUT_ARCH (mips)
++ENTRY(EntryPoint)
+ 
+ SECTIONS
+ {
+@@ -16,8 +17,8 @@
+    .rodata 0x800000 : {
+       FILL (0x01) /* fill unused with 0x01 */
+       * (.mio0);
+-      * (.rodata);
+-      * (.data);
++      build/sm64.o (.rodata);
++      build/sm64.o (.data);
+       * (.MIPS.abiflags);
+       . = ALIGN(0x10);
+    }
+@@ -26,13 +27,32 @@
+    .behavior 0x13000000 : AT( LOADADDR(.rodata) + SIZEOF(.rodata) ) {
+       FILL (0x01) /* fill unused with 0x01 */
+       * (.behavior);
++      . = ALIGN(0x10);
+       behavior_length = . - 0x13000000;
+-      /* default 4MB data (12MB ROM) */
+-      . = 0x400000 - SIZEOF(.rodata);
+    }
+    __load_behavior_data = LOADADDR(.behavior);
+    __load_behavior_data_end = LOADADDR(.behavior) + behavior_length;
+ 
++   /* Create new text section at 0x80400000 loaded immediately after behaviors */
++   .text80400000 0x80400000 : AT(__load_behavior_data_end) {
++      __run_text80400000 = .;
++      * (.text80400000); /* use this for assembly sections */
++      build/extended.o (.text);
++      build/extended.o (.rodata);
++      build/extended.o (.rodata.*);
++      build/extended.o (.data);
++      build/extended.o (.sdata);
++      build/extended.o (.bss);
++      build/extended.o (.sbss);
++      . = ALIGN(0x10);
++      __load_text80400000_len = . - 0x80400000;
++      /* default 4MB data (12MB ROM) */
++      . = 0x400000 - SIZEOF(.rodata) - SIZEOF(.behavior);
++   }
++   /* Create two symbols for the start and end addresses. */
++   __load_text80400000 = LOADADDR(.text80400000);
++   __load_text80400000_end = LOADADDR(.text80400000) + __load_text80400000_len;
++
+    /* (0x8016F000, 0x801B99DF, 0x7FF4FB40), // 21F4C0-269EA0 [4A9E0] */
+    .text8016F000 0x8016F000 : AT(0x21F4C0) {
+       * (.text8016F000);
+diff -Naur gen.orig/sm64.s gen/sm64.s
+--- gen.orig/sm64.s	2015-08-05 13:07:52.405889314 -0500
++++ gen/sm64.s	2015-08-05 13:12:31.271864732 -0500
+@@ -38,30 +38,39 @@
+ .LEntryPoint_10: # 80246010
+   addi  $t1, $t1, -8
+   sw    $zero, ($t0)
+-  sw    $zero, %lo(0x80340004)($t0) # $zero, 4($t0)
++  sw    $zero, 4($t0)
+   bnez  $t1, .LEntryPoint_10
+   addi  $t0, $t0, 8
+-  lui   $t2, 0x8024
+-  lui   $sp, 0x8020
+-  addiu $t2, $t2, 0x6df8
+-  jr    $t2
+-  addiu $sp, $sp, 0x600
+-# end EntryPoint
+-
+-# alignment
+-.word 0x00000000, 0x00000000, 0x00000000, 0x00000000
+-.word 0x00000000, 0x00000000
+-
+-Unknown80246050: # begin 80246050 (001050)
+-  addiu $sp, $sp, -8
+-  lw    $t6, 0x8032d5ec # lui $t6, 0x8033/lw $t6, -0x2a14($t6)
+-  lhu   $t7, 0x12($t6)
+-  beqz  $t7, .LUnknown80246050_110
+-  nop   
+-  lh    $t8, 0x8032d5bc # lui $t8, 0x8033/lh $t8, -0x2a44($t8)
+-  lw    $t1, 0x8032d5ec # lui $t1, 0x8033/lw $t1, -0x2a14($t1)
+-  lui   $t0, 0x8033
+-  sll   $t9, $t8, 1
++
++# intialize stack so we can call some routines
++  la    $sp, 0x80200600
++
++  jal   osWriteBackDCacheAll
++  nop
++
++  li    $a0, 0x0
++  la    $a1, __load_text80400000
++  la    $a2, __run_text80400000
++  li    $a3, __load_text80400000_len
++  jal   osPiRawStartDma
++  nop
++
++.LUntilDmaDone:
++  lw    $t0, 0xA4600010
++  andi  $t0, $t0, 0x1
++  bne   $t0, $zero, .LUntilDmaDone
++  nop
++
++# TODO: do these need different args?
++  jal   osInvalCache
++  nop
++  jal   osInvalDCache
++  nop
++# this replaces the lui $t2, 0x8024/addiu $t2, $t2, 0x6df8/jr $t2
++  j     Main
++  nop
++
++# leftover from Unknown80246050:
+   addu  $t0, $t0, $t9
+   lhu   $t0, -0x2a64($t0)
+   lhu   $t2, 0x12($t1)
