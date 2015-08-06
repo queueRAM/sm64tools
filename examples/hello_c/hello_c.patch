@@ -193,3 +193,25 @@ diff -Naur gen.orig/sm64.s gen/sm64.s
    addu  $t0, $t0, $t9
    lhu   $t0, -0x2a64($t0)
    lhu   $t2, 0x12($t1)
+--- Makefile.orig	2015-08-05 12:49:18.333734339 -0500
++++ Makefile	2015-08-05 12:48:52.617442852 -0500
+@@ -44,7 +44,7 @@
+ all: $(TARGET).gen.z64
+ 
+ clean:
+-	rm -f $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).o $(BUILD_DIR)/$(TARGET).bin $(TARGET).v64
++	rm -f $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/extended.o $(BUILD_DIR)/$(TARGET).o $(BUILD_DIR)/$(TARGET).bin $(TARGET).v64
+ 
+ $(MIO0_DIR)/%.mio0: $(MIO0_DIR)/%.bin
+ 	$(MIO0TOOL) $< $@
+@@ -58,8 +58,8 @@
+ $(BUILD_DIR)/%.o: gen/%.c Makefile.as | $(BUILD_DIR)
+ 	$(CC) $(CFLAGS) -o $@ $<
+ 
+-$(BUILD_DIR)/$(TARGET).elf: $(BUILD_DIR)/$(TARGET).o $(LD_SCRIPT)
+-	$(LD) $(LDFLAGS) -o $@ $< $(LIBS)
++$(BUILD_DIR)/$(TARGET).elf: $(BUILD_DIR)/$(TARGET).o $(BUILD_DIR)/extended.o $(LD_SCRIPT)
++	$(LD) $(LDFLAGS) -o $@ $< $(BUILD_DIR)/extended.o $(LIBS)
+ 
+ $(BUILD_DIR)/$(TARGET).bin: $(BUILD_DIR)/$(TARGET).elf
+ 	$(OBJCOPY) $< $@ -O binary
