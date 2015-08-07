@@ -47,6 +47,15 @@
   #define mkdir(DIR_, PERM_) _mkdir(DIR_)
 #endif
 
+// typedefs
+
+#define MAX_DIR_FILES 128
+typedef struct
+{
+   char *files[MAX_DIR_FILES];
+   int count;
+} dir_list;
+
 // global verbosity setting
 extern int g_verbosity;
 
@@ -105,6 +114,16 @@ void make_dir(const char *dir_name);
 // src_name: source file name
 // dst_name: destination file name
 long copy_file(const char *src_name, const char *dst_name);
+
+// list a directory, optionally filtering files by extension
+// dir: directory to list files in
+// extension: extension to filter files by (NULL if no filtering)
+// list: output list and count
+void dir_list_ext(const char *dir, const char *extension, dir_list *list);
+
+// free associated date from a directory list
+// list: directory list filled in by dir_list_ext() call
+void dir_list_free(dir_list *list);
 
 // determine if a string ends with another string
 // str: string to check if ends with 'suffix'

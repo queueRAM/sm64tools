@@ -1,4 +1,3 @@
-#include <dirent.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -1161,31 +1160,24 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
 static int detect_config_file(unsigned int c1, unsigned int c2, rom_config *config)
 {
 #define CONFIGS_DIR "configs"
-   struct dirent *entry;
-   DIR *dfd;
+   dir_list list;
    int config_ret;
    int ret_val = 0;
+   int i;
 
-   dfd = opendir(CONFIGS_DIR);
-   if (dfd == NULL) {
-      ERROR("Can't open '%s'\n", CONFIGS_DIR);
-      exit(1);
-   }
+   dir_list_ext(CONFIGS_DIR, ".config", &list);
 
-   while ((entry = readdir(dfd)) != NULL) {
-      char config_path[FILENAME_MAX];
-      if (str_ends_with(entry->d_name, ".config")) {
-         sprintf(config_path, "%s/%s", CONFIGS_DIR, entry->d_name);
-         config_ret = parse_config_file(config_path, config);
-         if (config_ret == 0 && c1 == config->checksum1 && c2 == config->checksum2) {
-            ERROR("Using config file: %s\n", config_path);
-            ret_val = 1;
-            break;
-         }
+   for (i = 0; i < list.count; i++) {
+      config_ret = parse_config_file(list.files[i], config);
+      INFO("Checking config file '%s' (%X, %X)\n", list.files[i], config->checksum1, config->checksum2);
+      if (config_ret == 0 && c1 == config->checksum1 && c2 == config->checksum2) {
+         ERROR("Using config file: %s\n", list.files[i]);
+         ret_val = 1;
+         break;
       }
    }
 
-   closedir(dfd);
+   dir_list_free(&list);
 
    return ret_val;
 }

@@ -1,3 +1,4 @@
+#include <dirent.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -185,6 +186,46 @@ long copy_file(const char *src_name, const char *dst_name)
    }
 
    return bytes_read;
+}
+
+void dir_list_ext(const char *dir, const char *extension, dir_list *list)
+{
+   char *pool;
+   char *pool_ptr;
+   struct dirent *entry;
+   DIR *dfd;
+   int idx;
+
+   dfd = opendir(dir);
+   if (dfd == NULL) {
+      ERROR("Can't open '%s'\n", dir);
+      exit(1);
+   }
+
+   pool = malloc(FILENAME_MAX * MAX_DIR_FILES);
+   pool_ptr = pool;
+
+   idx = 0;
+   while ((entry = readdir(dfd)) != NULL && idx < MAX_DIR_FILES) {
+      if (!extension || str_ends_with(entry->d_name, extension)) {
+         sprintf(pool_ptr, "%s/%s", dir, entry->d_name);
+         list->files[idx] = pool_ptr;
+         pool_ptr += strlen(pool_ptr) + 1;
+         idx++;
+      }
+   }
+   list->count = idx;
+
+   closedir(dfd);
+}
+
+void dir_list_free(dir_list *list)
+{
+   // assume first entry in array is allocated
+   if (list->files[0]) {
+      free(list->files[0]);
+      list->files[0] = NULL;
+   }
 }
 
 int str_ends_with(const char *str, const char *suffix)
