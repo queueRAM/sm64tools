@@ -59,6 +59,9 @@ typedef struct _rom_config
    char name[128];
    char basename[128];
 
+   unsigned int checksum1;
+   unsigned int checksum2;
+
    unsigned int *ram_table;
    int ram_count;
 

@@ -106,4 +106,10 @@ void make_dir(const char *dir_name);
 // dst_name: destination file name
 long copy_file(const char *src_name, const char *dst_name);
 
+// determine if a string ends with another string
+// str: string to check if ends with 'suffix'
+// suffix: string to see if 'str' ends with
+// returns 1 if 'str' ends with 'suffix'
+int str_ends_with(const char *str, const char *suffix);
+
 #endif // UTILS_H_

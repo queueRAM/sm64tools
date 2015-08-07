@@ -186,3 +186,16 @@ long copy_file(const char *src_name, const char *dst_name)
 
    return bytes_read;
 }
+
+int str_ends_with(const char *str, const char *suffix)
+{
+   if (!str || !suffix) {
+      return 0;
+   }
+   size_t len_str = strlen(str);
+   size_t len_suffix = strlen(suffix);
+   if (len_suffix > len_str) {
+      return 0;
+   }
+   return (0 == strncmp(str + len_str - len_suffix, suffix, len_suffix));
+}

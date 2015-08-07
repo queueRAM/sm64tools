@@ -1,3 +1,4 @@
+#include <dirent.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -33,7 +34,7 @@ typedef enum {
 static const arg_config default_args = 
 {
    "", // input filename
-   "configs/sm64.u.config", // config filename
+   "", // config filename
    0,  // all textures
    0,  // procedure table
 };
@@ -1157,6 +1158,38 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
    }
 }
 
+static int detect_config_file(unsigned int c1, unsigned int c2, rom_config *config)
+{
+#define CONFIGS_DIR "configs"
+   struct dirent *entry;
+   DIR *dfd;
+   int config_ret;
+   int ret_val = 0;
+
+   dfd = opendir(CONFIGS_DIR);
+   if (dfd == NULL) {
+      ERROR("Can't open '%s'\n", CONFIGS_DIR);
+      exit(1);
+   }
+
+   while ((entry = readdir(dfd)) != NULL) {
+      char config_path[FILENAME_MAX];
+      if (str_ends_with(entry->d_name, ".config")) {
+         sprintf(config_path, "%s/%s", CONFIGS_DIR, entry->d_name);
+         config_ret = parse_config_file(config_path, config);
+         if (config_ret == 0 && c1 == config->checksum1 && c2 == config->checksum2) {
+            ERROR("Using config file: %s\n", config_path);
+            ret_val = 1;
+            break;
+         }
+      }
+   }
+
+   closedir(dfd);
+
+   return ret_val;
+}
+
 int main(int argc, char *argv[])
 {
    arg_config args;
@@ -1199,10 +1232,20 @@ int main(int argc, char *argv[])
          break;
    }
 
-   ret_val = parse_config_file(args.config_file, &config);
-   if (ret_val != 0) {
-      return 2;
+   // if no config file supplied, find the right one
+   if (0 == strcmp(args.config_file, "")) {
+      ret_val = detect_config_file(read_u32_be(data+0x10), read_u32_be(data+0x14), &config);
+      if (!ret_val) {
+         ERROR("Error: could not find valid config file for '%s'\n", args.input_file);
+         return 1;
+      }
+   } else {
+      ret_val = parse_config_file(args.config_file, &config);
+      if (ret_val != 0) {
+         return 1;
+      }
    }
+
    if (validate_config(&config, len)) {
       return 3;
    }

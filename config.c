@@ -53,6 +53,7 @@ int parse_config_file(const char *filename, rom_config *config)
    config_t cfg;
    config_setting_t *setting;
    const char *str;
+   long long checksum;
    int count;
    int i, j;
 
@@ -79,6 +80,20 @@ int parse_config_file(const char *filename, rom_config *config)
    } else {
       strcpy(config->basename, "default");
       ERROR("No 'basename' field in config file, using default.\n");
+   }
+
+   // get checksums
+   if (config_lookup_int64(&cfg, "checksum1", &checksum)) {
+      config->checksum1 = (unsigned int)checksum;
+   } else {
+      config->checksum1 = 0;
+      ERROR("No 'checksum1' field in config file.\n");
+   }
+   if (config_lookup_int64(&cfg, "checksum2", &checksum)) {
+      config->checksum2 = (unsigned int)checksum;
+   } else {
+      config->checksum2 = 0;
+      ERROR("No 'checksum2' field in config file.\n");
    }
 
    // output memory mapping
