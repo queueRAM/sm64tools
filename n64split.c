@@ -17,6 +17,7 @@ typedef struct _arg_config
 {
    char input_file[FILENAME_MAX];
    char config_file[FILENAME_MAX];
+   char output_dir[FILENAME_MAX];
    int  large_texture;
    int  gen_proc_table;
 } arg_config;
@@ -32,6 +33,7 @@ static const arg_config default_args =
 {
    "", // input filename
    "", // config filename
+   "", // output directory
    0,  // all textures
    0,  // procedure table
 };
@@ -509,12 +511,12 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
    }
 }
 
-static void generate_globals(rom_config *config)
+static void generate_globals(arg_config *args, rom_config *config)
 {
    char globalfilename[FILENAME_MAX];
    FILE *fglobal;
    int i;
-   sprintf(globalfilename, "%s.split/%s", config->basename, GLOBALS_FILE);
+   sprintf(globalfilename, "%s/%s", args->output_dir, GLOBALS_FILE);
    fglobal = fopen(globalfilename, "w");
    if (fglobal == NULL) {
       ERROR("Error opening %s\n", globalfilename);
@@ -530,12 +532,12 @@ static void generate_globals(rom_config *config)
    fclose(fglobal);
 }
 
-static void generate_ld_script(rom_config *config)
+static void generate_ld_script(arg_config *args, rom_config *config)
 {
-   char ldfilename[512];
+   char ldfilename[FILENAME_MAX];
    FILE *fld;
    int i;
-   sprintf(ldfilename, "%s.split/%s.ld", config->basename, config->basename);
+   sprintf(ldfilename, "%s/%s.ld", args->output_dir, config->basename);
    fld = fopen(ldfilename, "w");
    if (fld == NULL) {
       ERROR("Error opening %s\n", ldfilename);
@@ -604,20 +606,19 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
 #define GEO_SUBDIR      "geo"
 #define LEVEL_SUBDIR    "levels"
 #define BEHAVIOR_SUBDIR "."
-   char split_dir[128];
-   char makefile_name[128];
-   char bin_dir[128];
-   char mio0_dir[128];
-   char texture_dir[128];
-   char geo_dir[128];
-   char level_dir[128];
-   char behavior_dir[128];
-   char asmfilename[512];
-   char outfilename[512];
-   char outfilepath[512];
-   char mio0filename[512];
+   char makefile_name[FILENAME_MAX];
+   char bin_dir[FILENAME_MAX];
+   char mio0_dir[FILENAME_MAX];
+   char texture_dir[FILENAME_MAX];
+   char geo_dir[FILENAME_MAX];
+   char level_dir[FILENAME_MAX];
+   char behavior_dir[FILENAME_MAX];
+   char asmfilename[FILENAME_MAX];
+   char outfilename[FILENAME_MAX];
+   char outfilepath[FILENAME_MAX];
+   char mio0filename[FILENAME_MAX];
+   char maketmp[FILENAME_MAX];
    char start_label[256];
-   char maketmp[256];
    char *makeheader_mio0;
    char *makeheader_level;
    FILE *fasm;
@@ -633,15 +634,14 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    split_section *sections = config->sections;
 
    // create directories
-   sprintf(split_dir, "%s.split", config->basename);
-   sprintf(makefile_name, "%s/Makefile.split", split_dir);
-   sprintf(bin_dir, "%s/%s", split_dir, BIN_SUBDIR);
-   sprintf(mio0_dir, "%s/%s", split_dir, MIO0_SUBDIR);
-   sprintf(texture_dir, "%s/%s", split_dir, TEXTURE_SUBDIR);
-   sprintf(geo_dir, "%s/%s", split_dir, GEO_SUBDIR);
-   sprintf(level_dir, "%s/%s", split_dir, LEVEL_SUBDIR);
-   sprintf(behavior_dir, "%s/%s", split_dir, BEHAVIOR_SUBDIR);
-   make_dir(split_dir);
+   sprintf(makefile_name, "%s/Makefile.split", args->output_dir);
+   sprintf(bin_dir, "%s/%s", args->output_dir, BIN_SUBDIR);
+   sprintf(mio0_dir, "%s/%s", args->output_dir, MIO0_SUBDIR);
+   sprintf(texture_dir, "%s/%s", args->output_dir, TEXTURE_SUBDIR);
+   sprintf(geo_dir, "%s/%s", args->output_dir, GEO_SUBDIR);
+   sprintf(level_dir, "%s/%s", args->output_dir, LEVEL_SUBDIR);
+   sprintf(behavior_dir, "%s/%s", args->output_dir, BEHAVIOR_SUBDIR);
+   make_dir(args->output_dir);
    make_dir(bin_dir);
    make_dir(mio0_dir);
    make_dir(texture_dir);
@@ -650,7 +650,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    make_dir(behavior_dir);
 
    // open main assembly file and write header
-   sprintf(asmfilename, "%s/%s.s", split_dir, config->basename);
+   sprintf(asmfilename, "%s/%s.s", args->output_dir, config->basename);
    fasm = fopen(asmfilename, "w");
    if (fasm == NULL) {
       ERROR("Error opening %s\n", asmfilename);
@@ -659,7 +659,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    fprintf(fasm, asm_header, config->name, N64SPLIT_VERSION);
 
    // generate globals include file
-   generate_globals(config);
+   generate_globals(args, config);
 
    for (s = 0; s < config->section_count; s++) {
       split_section *sec = &sections[s];
@@ -689,7 +689,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             }
          } else {
             sprintf(outfilename, "%s/%s.%06X.bin", BIN_SUBDIR, config->basename, prev_end);
-            sprintf(outfilepath, "%s/%s", split_dir, outfilename);
+            sprintf(outfilepath, "%s/%s", args->output_dir, outfilename);
             write_file(outfilepath, &data[prev_end], gap_len);
             fprintf(fasm, ".incbin \"%s\"\n", outfilename);
          }
@@ -739,7 +739,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             } else {
                sprintf(outfilename, "%s/%s.%06X.%s.bin", BIN_SUBDIR, config->basename, sec->start, sec->label);
             }
-            sprintf(outfilepath, "%s/%s", split_dir, outfilename);
+            sprintf(outfilepath, "%s/%s", args->output_dir, outfilename);
             write_file(outfilepath, &data[sec->start], sec->end - sec->start);
             if (sec->label == NULL || sec->label[0] == '\0') {
                sprintf(start_label, "L%06X", sec->start);
@@ -843,7 +843,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
       switch (sec->type) {
          case TYPE_GEO:
          {
-            char geofilename[512];
+            char geofilename[FILENAME_MAX];
             FILE *fgeo;
             if (sec->label == NULL || sec->label[0] == '\0') {
                sprintf(geofilename, "%s.%06X.geo.s", config->basename, sec->start);
@@ -853,7 +853,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                strcpy(start_label, sec->label);
             }
             sprintf(outfilename, "%s/%s", GEO_SUBDIR, geofilename);
-            sprintf(outfilepath, "%s/%s", split_dir, outfilename);
+            sprintf(outfilepath, "%s/%s", args->output_dir, outfilename);
 
             // decode and write level data out
             fgeo = fopen(outfilepath, "w");
@@ -876,7 +876,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
          }
          case TYPE_MIO0:
          {
-            char binfilename[512];
+            char binfilename[FILENAME_MAX];
             INFO("Section MIO0: %s %X-%X\n", sec->label, sec->start, sec->end);
             if (sec->label == NULL || sec->label[0] == '\0') {
                sprintf(outfilename, "%06X.mio0", sec->start);
@@ -1010,7 +1010,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
          case TYPE_LEVEL:
          {
             FILE *flevel;
-            char levelfilename[512];
+            char levelfilename[FILENAME_MAX];
             if (sec->label == NULL || sec->label[0] == '\0') {
                sprintf(start_label, "L%06X", sec->start);
             } else {
@@ -1019,7 +1019,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             INFO("Section relocated level: %s %X-%X\n", start_label, sec->start, sec->end);
             sprintf(levelfilename, "%s.s", start_label);
             sprintf(outfilename, "%s/%s", LEVEL_SUBDIR, levelfilename);
-            sprintf(outfilepath, "%s/%s", split_dir, outfilename);
+            sprintf(outfilepath, "%s/%s", args->output_dir, outfilename);
 
             // decode and write level data out
             flevel = fopen(outfilepath, "w");
@@ -1050,7 +1050,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
          case TYPE_BEHAVIOR:
          {
             FILE *f_beh;
-            char beh_filename[512];
+            char beh_filename[FILENAME_MAX];
             INFO("Section relocated behavior: %s %X-%X\n", sec->label, sec->start, sec->end);
             if (sec->label == NULL || sec->label[0] == '\0') {
                sprintf(beh_filename, "%06X.s", sec->start);
@@ -1058,7 +1058,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                sprintf(beh_filename, "%s.s", sec->label);
             }
             sprintf(outfilename, "%s/%s", BEHAVIOR_SUBDIR, beh_filename);
-            sprintf(outfilepath, "%s/%s", split_dir, outfilename);
+            sprintf(outfilepath, "%s/%s", args->output_dir, outfilename);
             // decode and write level data out
             f_beh = fopen(outfilepath, "w");
             if (f_beh == NULL) {
@@ -1118,29 +1118,29 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    fclose(fasm);
 
    // output top-level makefile
-   sprintf(makefile_name, "%s/Makefile", split_dir);
+   sprintf(makefile_name, "%s/Makefile", args->output_dir);
    fmake = fopen(makefile_name, "w");
    fprintf(fmake, makefile_data);
    fclose(fmake);
 
-   generate_ld_script(config);
+   generate_ld_script(args, config);
 }
 
 static void print_usage(void)
 {
-   ERROR("Usage: n64split [-c CONFIG] [-t] [-v] ROM\n"
+   ERROR("Usage: n64split [-c CONFIG] [-o OUTPUT_DIR] [-t] [-v] ROM\n"
          "\n"
          "n64split v" N64SPLIT_VERSION ": N64 ROM splitter, texture ripper, recursive disassembler\n"
          "\n"
          "Optional arguments:\n"
-         " -c CONFIG    ROM configuration file (default: %s)\n"
-         " -p           generate procedure table for analysis\n"
-         " -t           generate large texture for MIO0 blocks\n"
-         " -v           verbose progress output\n"
+         " -c CONFIG     ROM configuration file (default: determine from checksum)\n"
+         " -o OUTPUT_DIR output directory (default: {CONFIG.basename}.split)\n"
+         " -p            generate procedure table for analysis\n"
+         " -t            generate large texture for MIO0 blocks\n"
+         " -v            verbose progress output\n"
          "\n"
          "File arguments:\n"
-         " ROM        input ROM file\n",
-         default_args.config_file);
+         " ROM        input ROM file\n");
    exit(1);
 }
 
@@ -1161,6 +1161,12 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                   print_usage();
                }
                strcpy(config->config_file, argv[i]);
+               break;
+            case 'o':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               strcpy(config->output_dir, argv[i]);
                break;
             case 'p':
                config->gen_proc_table = 1;
@@ -1273,6 +1279,12 @@ int main(int argc, char *argv[])
 
    if (validate_config(&config, len)) {
       return 3;
+   }
+
+   // if no output directory specified, construct one from config file
+   if (0 == strcmp(args.output_dir, "")) {
+      sprintf(args.output_dir, "%s.split", config.basename);
+      printf("Splitting into \"%s\" directory\n", args.output_dir);
    }
 
    // fill procs table from config labels
