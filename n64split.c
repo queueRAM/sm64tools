@@ -454,11 +454,17 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
       ram_address = procs->procedures[proc_idx].start;
       // TODO: this is a workaround for inner procedures
       switch (ram_address) {
+         // SM64 (U)
          case 0x80327B98: // proc_80327B98
          case 0x80327C80: // __osEnqueueAndYield
          case 0x80327D10: // __osEnqueueThread
          case 0x80327D58: // __osPopThread
          case 0x80327D68: // __osDispatchThread
+         // SM64 (J)
+         case 0x80326D00: // __osEnqueueAndYield
+         case 0x80326D90: // __osEnqueueThread
+         case 0x80326DD8: // __osPopThread
+         case 0x80326DE8: // __osDispatchThread
             continue;
          default: break;
       }
