@@ -25,10 +25,13 @@ LIBS      = -lconfig
 
 default: all
 
-all: $(TARGET)
+all: $(TARGET) matchsigs
 
 $(TARGET): $(SRC_FILES)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
+
+matchsigs: match_signatures.c ../utils.c
+	$(CC) $(CFLAGS) -o $@ $^ -lcapstone
 
 clean:
 	rm -f $(TARGET)
