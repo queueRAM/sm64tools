@@ -38,7 +38,7 @@ static void print_usage(void)
          " FILE        input ROM file\n"
          " OUT_FILE    output ROM file (default: replaces FILE extension with .ext.z64)\n",
          default_config.ext_size, default_config.padding, default_config.alignment);
-   exit(1);
+   exit(EXIT_FAILURE);
 }
 
 // parse command line arguments
@@ -48,7 +48,6 @@ static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
    int file_count = 0;
    if (argc < 2) {
       print_usage();
-      exit(1);
    }
    for (i = 1; i < argc; i++) {
       if (argv[i][0] == '-') {
@@ -58,10 +57,6 @@ static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
                   print_usage();
                }
                config->alignment = strtoul(argv[i], NULL, 0);
-               if (!is_power2(config->alignment)) {
-                  ERROR("Error: Alignment must be power of 2\n");
-                  exit(2);
-               }
                break;
             case 'd':
                config->dump = 1;
@@ -125,6 +120,18 @@ int main(int argc, char *argv[])
       config.ext_filename = ext_filename;
       generate_filename(config.in_filename, config.ext_filename, "ext.z64");
    }
+
+   // validate arguments
+   if (config.ext_size < 12 || config.ext_size > 64) {
+      ERROR("Error: Extended size must be between 12 and 64 MB\n");
+      exit(EXIT_FAILURE);
+   }
+   if (!is_power2(config.alignment)) {
+      ERROR("Error: Alignment must be power of 2\n");
+      exit(EXIT_FAILURE);
+   }
+
+   // convert sizes to bytes
    config.ext_size *= MB;
    config.padding *= KB;
 
@@ -137,17 +144,17 @@ int main(int argc, char *argv[])
    in_size = read_file(config.in_filename, &in_buf);
    if (in_size <= 0) {
       ERROR("Error reading input file \"%s\"\n", config.in_filename);
-      exit(1);
+      exit(EXIT_FAILURE);
    }
 
    // confirm valid SM64
    rom_type = sm64_rom_type(in_buf, in_size);
    if (rom_type < 1) {
       ERROR("This does not appear to be a valid SM64 ROM\n");
-      exit(1);
+      exit(EXIT_FAILURE);
    } else if (rom_type == 0) {
       ERROR("This ROM is already extended!\n");
-      exit(1);
+      exit(EXIT_FAILURE);
    } else if (rom_type == 1) {
       // byte-swapped BADC format, swap to big-endian ABCD format for processing
       INFO("Byte-swapping ROM\n");
@@ -173,8 +180,8 @@ int main(int argc, char *argv[])
    bytes_written = write_file(config.ext_filename, out_buf, config.ext_size);
    if (bytes_written < (long)config.ext_size) {
       ERROR("Error writing bytes to output file \"%s\"\n", config.ext_filename);
-      exit(1);
+      exit(EXIT_FAILURE);
    }
 
-   return 0;
+   return EXIT_SUCCESS;
 }
