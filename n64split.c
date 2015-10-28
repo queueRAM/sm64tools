@@ -517,8 +517,9 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
    }
 }
 
-static void parse_music_sequences(FILE *out, unsigned char *data, long len, split_section *sec, rom_config *config)
+static void parse_music_sequences(FILE *out, unsigned char *data, long len, split_section *sec, arg_config *args, rom_config *config, char *makeheader)
 {
+#define MUSIC_SUBDIR    "music"
    typedef struct {
       unsigned start;
       unsigned length;
@@ -528,8 +529,18 @@ static void parse_music_sequences(FILE *out, unsigned char *data, long len, spli
       unsigned count;
       sequence *seq;
    } sequence_bank;
-   unsigned i, j;
+
+   char music_dir[FILENAME_MAX];
+   char m64_file[FILENAME_MAX];
+   char m64_file_rel[FILENAME_MAX];
+   char seq_name[128];
+   char maketmp[FILENAME_MAX];
    sequence_bank seq_bank = {0};
+   unsigned i;
+
+   sprintf(music_dir, "%s/%s", args->output_dir, MUSIC_SUBDIR);
+   make_dir(music_dir);
+
    seq_bank.revision = read_u16_be(&data[sec->start]);
    seq_bank.count = read_u16_be(&data[sec->start+2]);
    if (seq_bank.count > 0) {
@@ -545,21 +556,27 @@ static void parse_music_sequences(FILE *out, unsigned char *data, long len, spli
    fprintf(out, ".hword %d, (music_sequence_table_end - music_sequence_table) / 8\n", seq_bank.revision);
    fprintf(out, "music_sequence_table:\n");
    for (i = 0; i < seq_bank.count; i++) {
-      fprintf(out, ".word (seq_%02X - music_sequence_table_header), (seq_%02X_end - seq_%02X) # 0x%05X, 0x%04X\n", i, i, i, seq_bank.seq[i].start, seq_bank.seq[i].length);
+      sprintf(seq_name, "seq_%02X", i);
+      fprintf(out, ".word (%s - music_sequence_table_header), (%s_end - %s) # 0x%05X, 0x%04X\n",
+              seq_name, seq_name, seq_name, seq_bank.seq[i].start, seq_bank.seq[i].length);
    }
    fprintf(out, "music_sequence_table_end:\n");
    fprintf(out, "\n.align 4, 0x01\n");
    for (i = 0; i < seq_bank.count; i++) {
-      fprintf(out, "\nseq_%02X:", i);
-      for (j = 0; j < seq_bank.seq[i].length; j += 4) {
-         unsigned int val = read_u32_be(&data[sec->start + seq_bank.seq[i].start + j]);
-         if ((j % 16) == 0) {
-            fprintf(out, "\n.word 0x%08X", val);
-         } else {
-            fprintf(out, ", 0x%08X", val);
-         }
-      }
-      fprintf(out, "\nseq_%02X_end:\n", i);
+      sprintf(seq_name, "seq_%02X", i);
+      fprintf(out, "\n%s:", seq_name);
+
+      sprintf(m64_file, "%s/%s.m64", music_dir, seq_name);
+      write_file(m64_file, &data[sec->start + seq_bank.seq[i].start], seq_bank.seq[i].length);
+
+      sprintf(m64_file_rel, "%s/%s.m64", MUSIC_SUBDIR, seq_name);
+      fprintf(out, "\n.incbin \"%s\"\n", m64_file_rel);
+
+      // append to Makefile
+      sprintf(maketmp, " \\\n$(MUSIC_DIR)/%s.m64", seq_name);
+      strcat(makeheader, maketmp);
+
+      fprintf(out, "%s_end:\n", seq_name);
    }
 }
 
@@ -673,6 +690,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    char start_label[256];
    char *makeheader_mio0;
    char *makeheader_level;
+   char *makeheader_music;
    FILE *fasm;
    FILE *fmake;
    int s;
@@ -712,6 +730,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
 
    // generate globals include file
    generate_globals(args, config);
+
+   makeheader_music = malloc(100 * strlen(" \\\n$(MUSIC_DIR)/seq_100.m64"));
+   sprintf(makeheader_music, "MUSIC_FILES =");
 
    for (s = 0; s < config->section_count; s++) {
       split_section *sec = &sections[s];
@@ -845,7 +866,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
             break;
          case TYPE_M64:
-            parse_music_sequences(fasm, data, length, sec, config);
+            parse_music_sequences(fasm, data, length, sec, args, config, makeheader_music);
             break;
          default:
             ERROR("Don't know what to do with type %d\n", sec->type);
@@ -891,6 +912,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    fprintf(fmake, "TEXTURE_DIR = %s\n", TEXTURE_SUBDIR);
    fprintf(fmake, "GEO_DIR = %s\n", GEO_SUBDIR);
    fprintf(fmake, "LEVEL_DIR = %s\n\n", LEVEL_SUBDIR);
+   fprintf(fmake, "MUSIC_DIR = %s\n\n", MUSIC_SUBDIR);
 
    fprintf(fasm, "\n.section .mio0\n");
    for (s = 0; s < config->section_count; s++) {
@@ -1142,6 +1164,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    }
    fprintf(fmake, "\n\n%s", makeheader_mio0);
    fprintf(fmake, "\n\n%s", makeheader_level);
+   fprintf(fmake, "\n\n%s", makeheader_music);
 
    // dump the proc table
    if (args->gen_proc_table)
@@ -1169,6 +1192,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    // cleanup
    free(makeheader_mio0);
    free(makeheader_level);
+   free(makeheader_music);
    fclose(fmake);
    fclose(fasm);
 

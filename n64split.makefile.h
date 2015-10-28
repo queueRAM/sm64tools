@@ -49,7 +49,7 @@ static const char makefile_data[] =
 "$(BUILD_DIR):\n"
 "\tmkdir -p $(BUILD_DIR)\n"
 "\n"
-"$(BUILD_DIR)/$(TARGET).o: $(TARGET).s Makefile $(MAKEFILE_SPLIT) $(MIO0_FILES) $(LEVEL_FILES) | $(BUILD_DIR)\n"
+"$(BUILD_DIR)/$(TARGET).o: $(TARGET).s Makefile $(MAKEFILE_SPLIT) $(MIO0_FILES) $(LEVEL_FILES) $(MUSIC_FILES) | $(BUILD_DIR)\n"
 "\t$(AS) $(ASFLAGS) -o $@ $<\n"
 "\n"
 "$(BUILD_DIR)/%%.o: %%.c Makefile.as | $(BUILD_DIR)\n"
