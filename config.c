@@ -23,6 +23,8 @@ static section_type str2section(const char *type_name)
          type = TYPE_HEADER;
       } else if (0 == strcmp("level", type_name)) {
          type = TYPE_LEVEL;
+      } else if (0 == strcmp("m64", type_name)) {
+         type = TYPE_M64;
       } else if (0 == strcmp("mio0", type_name)) {
          type = TYPE_MIO0;
       } else if (0 == strcmp("ptr", type_name)) {
@@ -160,6 +162,7 @@ int parse_config_file(const char *filename, rom_config *config)
                case TYPE_HEADER:
                case TYPE_GEO:
                case TYPE_LEVEL:
+               case TYPE_M64:
                   if (r_count > 4) {
                      ERROR("Error: %s:%d - expected 3-4 fields for section\n", filename, r->line);
                      return -1;

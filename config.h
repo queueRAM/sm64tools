@@ -10,6 +10,7 @@ typedef enum
    TYPE_GEO,
    TYPE_HEADER,
    TYPE_LEVEL,
+   TYPE_M64,
    TYPE_MIO0,
    TYPE_PTR,
 } section_type;

@@ -517,6 +517,52 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
    }
 }
 
+static void parse_music_sequences(FILE *out, unsigned char *data, long len, split_section *sec, rom_config *config)
+{
+   typedef struct {
+      unsigned start;
+      unsigned length;
+   } sequence;
+   typedef struct {
+      unsigned revision;
+      unsigned count;
+      sequence *seq;
+   } sequence_bank;
+   unsigned i, j;
+   sequence_bank seq_bank = {0};
+   seq_bank.revision = read_u16_be(&data[sec->start]);
+   seq_bank.count = read_u16_be(&data[sec->start+2]);
+   if (seq_bank.count > 0) {
+      seq_bank.seq = malloc(seq_bank.count * sizeof(*seq_bank.seq));
+      for (i = 0; i < seq_bank.count; i++) {
+         seq_bank.seq[i].start = read_u32_be(&data[sec->start+i*8+4]);
+         seq_bank.seq[i].length = read_u32_be(&data[sec->start+i*8+8]);
+      }
+   }
+
+   fprintf(out, "\n# music sequence table\n");
+   fprintf(out, "music_sequence_table_header:\n");
+   fprintf(out, ".hword %d, (music_sequence_table_end - music_sequence_table) / 8\n", seq_bank.revision);
+   fprintf(out, "music_sequence_table:\n");
+   for (i = 0; i < seq_bank.count; i++) {
+      fprintf(out, ".word (seq_%02X - music_sequence_table_header), (seq_%02X_end - seq_%02X) # 0x%05X, 0x%04X\n", i, i, i, seq_bank.seq[i].start, seq_bank.seq[i].length);
+   }
+   fprintf(out, "music_sequence_table_end:\n");
+   fprintf(out, "\n.align 4, 0x01\n");
+   for (i = 0; i < seq_bank.count; i++) {
+      fprintf(out, "\nseq_%02X:", i);
+      for (j = 0; j < seq_bank.seq[i].length; j += 4) {
+         unsigned int val = read_u32_be(&data[sec->start + seq_bank.seq[i].start + j]);
+         if ((j % 16) == 0) {
+            fprintf(out, "\n.word 0x%08X", val);
+         } else {
+            fprintf(out, ", 0x%08X", val);
+         }
+      }
+      fprintf(out, "\nseq_%02X_end:\n", i);
+   }
+}
+
 static void generate_globals(arg_config *args, rom_config *config)
 {
    char globalfilename[FILENAME_MAX];
@@ -797,6 +843,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
          case TYPE_BEHAVIOR:
             // behaviors are done below
             fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
+            break;
+         case TYPE_M64:
+            parse_music_sequences(fasm, data, length, sec, config);
             break;
          default:
             ERROR("Don't know what to do with type %d\n", sec->type);
