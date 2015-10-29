@@ -517,7 +517,7 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
    }
 }
 
-static void parse_music_sequences(FILE *out, unsigned char *data, long len, split_section *sec, arg_config *args, rom_config *config, char *makeheader)
+static void parse_music_sequences(FILE *out, unsigned char *data, split_section *sec, arg_config *args, char *makeheader)
 {
 #define MUSIC_SUBDIR    "music"
    typedef struct {
@@ -536,8 +536,7 @@ static void parse_music_sequences(FILE *out, unsigned char *data, long len, spli
    char seq_name[128];
    char maketmp[FILENAME_MAX];
    sequence_bank seq_bank = {0};
-   unsigned *instrument_set;
-   unsigned i, start;
+   unsigned i;
 
    sprintf(music_dir, "%s/%s", args->output_dir, MUSIC_SUBDIR);
    make_dir(music_dir);
@@ -580,22 +579,33 @@ static void parse_music_sequences(FILE *out, unsigned char *data, long len, spli
       fprintf(out, "%s_end:\n", seq_name);
    }
 
-   // data at end is instrument set
+   // free used memory
+   if (seq_bank.count > 0) {
+      free(seq_bank.seq);
+   }
+}
+
+static void parse_instrument_set(FILE *out, unsigned char *data, split_section *sec)
+{
+   unsigned *instrument_set;
+   unsigned count;
+   unsigned i, cur;
+
+   count = sec->extra_len;
    // each sequence has its own instrument set defined by offsets table
-   start = seq_bank.seq[seq_bank.count-1].start + seq_bank.seq[seq_bank.count-1].length;
-   instrument_set = malloc(seq_bank.count * sizeof(*instrument_set));
-   for (i = 0; i < seq_bank.count; i++) {
-      instrument_set[i] = read_u16_be(&data[sec->start + start + 2*i]);
+   instrument_set = malloc(count * sizeof(*instrument_set));
+   for (i = 0; i < count; i++) {
+      instrument_set[i] = read_u16_be(&data[sec->start + 2*i]);
    }
    fprintf(out, "\ninstrument_sets:\n");
-   for (i = 0; i < seq_bank.count; i++) {
+   for (i = 0; i < count; i++) {
       fprintf(out, ".hword instrument_set_%02X - instrument_sets # 0x%04X\n", i, instrument_set[i]);
    }
 
    // output each instrument set
-   unsigned cur = 0;
-   for (i = 2*seq_bank.count; sec->start + start + i < sec->end; i++) {
-      unsigned char val = data[sec->start + start + i];
+   cur = 0;
+   for (i = 2*count; sec->start + i < sec->end; i++) {
+      unsigned char val = data[sec->start + i];
       if (instrument_set[cur] == i) {
          fprintf(out, "\ninstrument_set_%02X:\n.byte 0x%02X", cur, val);
          cur++;
@@ -604,11 +614,6 @@ static void parse_music_sequences(FILE *out, unsigned char *data, long len, spli
       }
    }
    fprintf(out, "\ninstrument_sets_end:\n");
-
-   // free used memory
-   if (seq_bank.count > 0) {
-      free(seq_bank.seq);
-   }
 }
 
 static void generate_globals(arg_config *args, rom_config *config)
@@ -897,7 +902,10 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
             break;
          case TYPE_M64:
-            parse_music_sequences(fasm, data, length, sec, args, config, makeheader_music);
+            parse_music_sequences(fasm, data, sec, args, makeheader_music);
+            break;
+         case TYPE_INSTRUMENT_SET:
+            parse_instrument_set(fasm, data, sec);
             break;
          default:
             ERROR("Don't know what to do with type %d\n", sec->type);

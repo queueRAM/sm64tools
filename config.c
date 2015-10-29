@@ -21,6 +21,8 @@ static section_type str2section(const char *type_name)
          type = TYPE_GEO;
       } else if (0 == strcmp("header", type_name)) {
          type = TYPE_HEADER;
+      } else if (0 == strcmp("instrset", type_name)) {
+         type = TYPE_INSTRUMENT_SET;
       } else if (0 == strcmp("level", type_name)) {
          type = TYPE_LEVEL;
       } else if (0 == strcmp("m64", type_name)) {
@@ -168,6 +170,7 @@ int parse_config_file(const char *filename, rom_config *config)
                      return -1;
                   }
                   break;
+               case TYPE_INSTRUMENT_SET:
                case TYPE_PTR:
                   if (r_count > 5) {
                      ERROR("Error: %s:%d - expected 3-5 fields for section\n", filename, r->line);
@@ -248,6 +251,9 @@ int parse_config_file(const char *filename, rom_config *config)
                   break;
                }
                case TYPE_PTR:
+                  sec[i].extra_len = config_setting_get_int_elem(r, 4);
+                  break;
+               case TYPE_INSTRUMENT_SET:
                   sec[i].extra_len = config_setting_get_int_elem(r, 4);
                   break;
                default:

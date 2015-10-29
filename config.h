@@ -9,6 +9,7 @@ typedef enum
    TYPE_BIN,
    TYPE_GEO,
    TYPE_HEADER,
+   TYPE_INSTRUMENT_SET,
    TYPE_LEVEL,
    TYPE_M64,
    TYPE_MIO0,
