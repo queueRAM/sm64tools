@@ -168,6 +168,14 @@ static void write_geolayout(FILE *out, unsigned char *data, unsigned int start, 
    // TODO: process function pointers and other geo layout references
    (void)config;
    while (a < end) {
+      if (indent == 0) {
+         switch (data[a]) {
+            case 0x16:
+            case 0x20:
+               fprintf(out, "# %04X\n", a);
+            default: break;
+         }
+      }
       switch (data[a]) {
          case 0x00: // end
          case 0x01:
@@ -385,7 +393,7 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
    }
    // remaining is geo layout script
    fprintf(out, "# begin %s geo 0x%X\n", sec->label, a);
-   write_geolayout(out, data, a, sec->end, config);
+   write_geolayout(out, &data[sec->start], a - sec->start, sec->end - sec->start, config);
 }
 
 static int disassemble_dummy(FILE *out, rom_config *config, unsigned char *data, unsigned int start, unsigned int end)
@@ -977,7 +985,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                perror(outfilepath);
                exit(1);
             }
-            write_geolayout(fgeo, data, sec->start, sec->end, config);
+            write_geolayout(fgeo, &data[sec->start], 0, sec->end - sec->start, config);
             fclose(fgeo);
 
             fprintf(fasm, "\n.align 4, 0x01\n");
