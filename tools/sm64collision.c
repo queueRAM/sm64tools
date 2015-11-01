@@ -79,6 +79,24 @@ static void parse_arguments(int argc, char *argv[], arg_config *args)
                }
                args->offset = strtoul(argv[i], NULL, 0);
                break;
+            case 'x':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               args->x = strtol(argv[i], NULL, 0);
+               break;
+            case 'y':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               args->y = strtol(argv[i], NULL, 0);
+               break;
+            case 'z':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               args->z = strtol(argv[i], NULL, 0);
+               break;
             case 'v':
                g_verbosity = 1;
                break;
