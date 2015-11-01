@@ -31,6 +31,8 @@
    (buf)[0] = ((val) >> 8) & 0xFF; \
    (buf)[1] = ((val)) & 0xFF; \
 } while(0)
+#define SWAP16(val) ((((val) & 0xFF) << 8) | (((val) & 0xFF00) >> 8))
+#define read_s16_be(buf) SWAP16(*((short*)(buf)))
 
 // print nibbles and bytes
 #define fprint_nibble(FP, NIB_) fputc((NIB_) < 10 ? ('0' + (NIB_)) : ('A' + (NIB_) - 0xA), FP)
