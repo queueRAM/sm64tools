@@ -9,7 +9,9 @@
 typedef struct
 {
    char *in_filename;
+   char *out_filename;
    unsigned offset;
+   unsigned scale;
    short x;
    short y;
    short z;
@@ -37,7 +39,9 @@ typedef struct
 static const arg_config default_config = 
 {
    NULL,   // input filename
+   NULL,   // output filename
    0xF3A0, // offset for castle grounds
+   4096,   // scale for OBJ export
    0,      // shift X
    0,      // shift Y
    0,      // shift Z
@@ -45,20 +49,23 @@ static const arg_config default_config =
 
 static void print_usage(void)
 {
-   ERROR("Usage: sm64collision [-o OFFSET] [-x X] [-y Y] [-z Z] [-v] FILE\n"
+   ERROR("Usage: sm64collision [-o OFFSET] [-s SCALE] [-x X] [-y Y] [-z Z] [-v] FILE [OUT_FILE]\n"
          "\n"
          "sm64collision v" SM64COLLISION_VERSION ": Super Mario 64 collision decoder\n"
          "\n"
          "Optional arguments:\n"
          " -o OFFSET    offset to pull collision data from in bytes (default: 0x%X)\n"
+         " -s SCALE     scale obj data by this amount (default: %d)\n"
          " -x X         amount to shift X values (default: %d)\n"
          " -y Y         amount to shift Y values (default: %d)\n"
          " -z Z         amount to shift Z values (default: %d)\n"
          " -v           verbose progress output\n"
          "\n"
          "File arguments:\n"
-         " FILE        input ROM file\n",
-         default_config.offset, default_config.x, default_config.y, default_config.z);
+         " FILE        input binary file\n"
+         " OUT_FILE    output OBJ file (default: no obj output)\n",
+         default_config.offset, default_config.scale,
+         default_config.x, default_config.y, default_config.z);
    exit(EXIT_FAILURE);
 }
 
@@ -78,6 +85,12 @@ static void parse_arguments(int argc, char *argv[], arg_config *args)
                   print_usage();
                }
                args->offset = strtoul(argv[i], NULL, 0);
+               break;
+            case 's':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               args->scale = strtol(argv[i], NULL, 0);
                break;
             case 'x':
                if (++i >= argc) {
@@ -109,6 +122,9 @@ static void parse_arguments(int argc, char *argv[], arg_config *args)
             case 0:
                args->in_filename = argv[i];
                break;
+            case 1:
+               args->out_filename = argv[i];
+               break;
             default: // too many
                print_usage();
                break;
@@ -126,6 +142,7 @@ void decode_collision(unsigned char *data, collision *col)
    unsigned i;
    unsigned vcount;
    unsigned tcount;
+   unsigned offset;
    if (data[0] != 0x00 || data[1] != 0x40) {
       ERROR("Unknown data: %08X\n", read_u32_be(data));
       return;
@@ -134,33 +151,52 @@ void decode_collision(unsigned char *data, collision *col)
    INFO("Loading %u vertices\n", vcount);
    col->verts = malloc(vcount * sizeof(*col->verts));
    // load vetices
+   offset = 4;
    for (i = 0; i < vcount; i++) {
-      col->verts[i].x = read_s16_be(&data[4+i*6]);
-      col->verts[i].y = read_s16_be(&data[4+i*6+2]);
-      col->verts[i].z = read_s16_be(&data[4+i*6+4]);
+      col->verts[i].x = read_s16_be(&data[offset + i*6]);
+      col->verts[i].y = read_s16_be(&data[offset + i*6+2]);
+      col->verts[i].z = read_s16_be(&data[offset + i*6+4]);
    }
    tcount = read_u16_be(&data[4+vcount*6+2]);
    INFO("Loading %u triangles\n", tcount);
    col->tris = malloc(tcount * sizeof(*col->tris));
    // load triangles
+   offset = 4 + 4 + vcount*6;
    for (i = 0; i < tcount; i++) {
-      col->tris[i].vidx[0] = read_u16_be(&data[4+vcount*6+i*6]);
-      col->tris[i].vidx[1] = read_u16_be(&data[4+vcount*6+i*6+2]);
-      col->tris[i].vidx[2] = read_u16_be(&data[4+vcount*6+i*6+4]);
-      INFO("[%3d] = {%d, %d, %d} {%d %d %d} {%d %d %d}\n", i, 
-      col->verts[col->tris[i].vidx[0]].x,
-      col->verts[col->tris[i].vidx[0]].y,
-      col->verts[col->tris[i].vidx[0]].z,
-      col->verts[col->tris[i].vidx[1]].x,
-      col->verts[col->tris[i].vidx[1]].y,
-      col->verts[col->tris[i].vidx[1]].z,
-      col->verts[col->tris[i].vidx[2]].x,
-      col->verts[col->tris[i].vidx[2]].y,
-      col->verts[col->tris[i].vidx[2]].z
-      );
+      col->tris[i].vidx[0] = read_u16_be(&data[offset + i*6]);
+      col->tris[i].vidx[1] = read_u16_be(&data[offset + i*6+2]);
+      col->tris[i].vidx[2] = read_u16_be(&data[offset + i*6+4]);
    }
    col->vcount = vcount;
    col->tcount = tcount;
+}
+
+static void generate_obj(char *filename, collision *col, unsigned scale)
+{
+   FILE *out;
+   unsigned i;
+
+   out = fopen(filename, "w");
+   if (out == NULL) {
+      ERROR("Error opening %s\n", filename);
+      exit(EXIT_FAILURE);
+   }
+
+   fprintf(out, "g collision\n");
+
+   for (i = 0; i < col->vcount; i++) {
+      float x, y, z;
+      x = (float)col->verts[i].x / (float)scale;
+      y = (float)col->verts[i].y / (float)scale;
+      z = (float)col->verts[i].z / (float)scale;
+      fprintf(out, "v %f %f %f\n", x, y, z);
+   }
+
+   for (i = 0; i < col->tcount; i++) {
+      fprintf(out, "f %d %d %d\n", col->tris[i].vidx[0]+1, col->tris[i].vidx[1]+1, col->tris[i].vidx[2]+1);
+   }
+
+   fclose(out);
 }
 
 int main(int argc, char *argv[])
@@ -185,17 +221,28 @@ int main(int argc, char *argv[])
    // decode collision vertices and triangles
    decode_collision(&in_buf[config.offset], &col);
 
-   for (i = 0; i < col.vcount; i++) {
-      col.verts[i].x += config.x;
-      col.verts[i].y += config.y;
-      col.verts[i].z += config.z;
+   ERROR("Read: %d vertices, %d triangles\n", col.vcount, col.tcount);
+   // output obj
+   if (config.out_filename != NULL) {
+      INFO("Generating OBJ file \"%s\"\n", config.out_filename);
+      generate_obj(config.out_filename, &col, config.scale);
    }
-   for (i = 0; i < col.vcount; i++) {
-      write_u16_be(&in_buf[config.offset+4+i*6],   col.verts[i].x);
-      write_u16_be(&in_buf[config.offset+4+i*6+2], col.verts[i].y);
-      write_u16_be(&in_buf[config.offset+4+i*6+4], col.verts[i].z);
+
+   // if shifting values
+   if (config.x || config.y || config.z) {
+      INFO("Shifting vertices by: {%d %d %d}\n", config.x, config.y, config.z);
+      for (i = 0; i < col.vcount; i++) {
+         col.verts[i].x += config.x;
+         col.verts[i].y += config.y;
+         col.verts[i].z += config.z;
+      }
+      for (i = 0; i < col.vcount; i++) {
+         write_u16_be(&in_buf[config.offset+4+i*6],   col.verts[i].x);
+         write_u16_be(&in_buf[config.offset+4+i*6+2], col.verts[i].y);
+         write_u16_be(&in_buf[config.offset+4+i*6+4], col.verts[i].z);
+      }
+      write_file(config.in_filename, in_buf, in_size);
    }
-   write_file(config.in_filename, in_buf, in_size);
 
    // cleanup
    free(in_buf);
