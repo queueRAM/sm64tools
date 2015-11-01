@@ -25,13 +25,16 @@ LIBS      = -lconfig
 
 default: all
 
-all: $(TARGET) matchsigs sm64walk
+all: $(TARGET) matchsigs sm64collision sm64walk
 
 $(TARGET): $(SRC_FILES)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 matchsigs: match_signatures.c ../utils.c
 	$(CC) $(CFLAGS) -o $@ $^ -lcapstone
+
+sm64collision: sm64collision.c ../utils.c
+	$(CC) $(CFLAGS) -o $@ $^
 
 sm64walk: sm64walk.c ../utils.c ../libsm64.a
 	$(CC) $(CFLAGS) -o $@ $^
