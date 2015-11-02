@@ -10,6 +10,7 @@ typedef struct
 {
    char *in_filename;
    char *out_filename;
+   char *name;
    unsigned offset;
    unsigned scale;
    short x;
@@ -40,6 +41,7 @@ static const arg_config default_config =
 {
    NULL,   // input filename
    NULL,   // output filename
+   "collision", // model name
    0xF3A0, // offset for castle grounds
    4096,   // scale for OBJ export
    0,      // shift X
@@ -49,12 +51,13 @@ static const arg_config default_config =
 
 static void print_usage(void)
 {
-   ERROR("Usage: sm64collision [-o OFFSET] [-s SCALE] [-x X] [-y Y] [-z Z] [-v] FILE [OUT_FILE]\n"
+   ERROR("Usage: sm64collision [-o OFFSET] [-n NAME] [-s SCALE] [-x X] [-y Y] [-z Z] [-v] FILE [OUT_FILE]\n"
          "\n"
          "sm64collision v" SM64COLLISION_VERSION ": Super Mario 64 collision decoder\n"
          "\n"
          "Optional arguments:\n"
          " -o OFFSET    offset to pull collision data from in bytes (default: 0x%X)\n"
+         " -n NAME      name specified in obj model (default: %s)\n"
          " -s SCALE     scale obj data by this amount (default: %d)\n"
          " -x X         amount to shift X values (default: %d)\n"
          " -y Y         amount to shift Y values (default: %d)\n"
@@ -64,7 +67,7 @@ static void print_usage(void)
          "File arguments:\n"
          " FILE        input binary file\n"
          " OUT_FILE    output OBJ file (default: no obj output)\n",
-         default_config.offset, default_config.scale,
+         default_config.offset, default_config.name, default_config.scale,
          default_config.x, default_config.y, default_config.z);
    exit(EXIT_FAILURE);
 }
@@ -85,6 +88,12 @@ static void parse_arguments(int argc, char *argv[], arg_config *args)
                   print_usage();
                }
                args->offset = strtoul(argv[i], NULL, 0);
+               break;
+            case 'n':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               args->name = argv[i];
                break;
             case 's':
                if (++i >= argc) {
@@ -139,10 +148,14 @@ static void parse_arguments(int argc, char *argv[], arg_config *args)
 
 void decode_collision(unsigned char *data, collision *col)
 {
-   unsigned i;
    unsigned vcount;
    unsigned tcount;
+   unsigned cur_tcount;
    unsigned offset;
+   unsigned terrain;
+   unsigned v_per_t;
+   unsigned processing;
+   unsigned i;
    if (data[0] != 0x00 || data[1] != 0x40) {
       ERROR("Unknown data: %08X\n", read_u32_be(data));
       return;
@@ -157,21 +170,48 @@ void decode_collision(unsigned char *data, collision *col)
       col->verts[i].y = read_s16_be(&data[offset + i*6+2]);
       col->verts[i].z = read_s16_be(&data[offset + i*6+4]);
    }
-   tcount = read_u16_be(&data[4+vcount*6+2]);
-   INFO("Loading %u triangles\n", tcount);
-   col->tris = malloc(tcount * sizeof(*col->tris));
-   // load triangles
-   offset = 4 + 4 + vcount*6;
-   for (i = 0; i < tcount; i++) {
-      col->tris[i].vidx[0] = read_u16_be(&data[offset + i*6]);
-      col->tris[i].vidx[1] = read_u16_be(&data[offset + i*6+2]);
-      col->tris[i].vidx[2] = read_u16_be(&data[offset + i*6+4]);
+   offset += vcount*6;
+   tcount = 0;
+   col->tris = NULL;
+   processing = 1;
+   while (processing) {
+      terrain = read_u16_be(&data[offset]);
+      cur_tcount = read_u16_be(&data[offset+2]);
+      if (terrain == 0x41 || terrain > 0xFF) {
+         ERROR("terrain: %X, tcount: %X\n", terrain, cur_tcount);
+         processing = 0;
+         break;
+      }
+      switch (terrain) {
+         case 0x0E:
+         case 0x2C:
+         case 0x24:
+         case 0x25:
+         case 0x27:
+         case 0x2D:
+            v_per_t = 4;
+            break;
+         default:
+            v_per_t = 3;
+            break;
+      }
+      INFO("Loading %u triangles of terrain %X\n", cur_tcount, terrain);
+      col->tris = realloc(col->tris, (tcount + cur_tcount) * sizeof(*col->tris));
+      // load triangles
+      offset += 4;
+      for (i = 0; i < cur_tcount; i++) {
+         col->tris[tcount+i].vidx[0] = read_u16_be(&data[offset + i*v_per_t*2]);
+         col->tris[tcount+i].vidx[1] = read_u16_be(&data[offset + i*v_per_t*2+2]);
+         col->tris[tcount+i].vidx[2] = read_u16_be(&data[offset + i*v_per_t*2+4]);
+      }
+      tcount += cur_tcount;
+      offset += cur_tcount*v_per_t*2;
    }
    col->vcount = vcount;
    col->tcount = tcount;
 }
 
-static void generate_obj(char *filename, collision *col, unsigned scale)
+static void generate_obj(char *filename, char *name, collision *col, unsigned scale)
 {
    FILE *out;
    unsigned i;
@@ -182,7 +222,7 @@ static void generate_obj(char *filename, collision *col, unsigned scale)
       exit(EXIT_FAILURE);
    }
 
-   fprintf(out, "g collision\n");
+   fprintf(out, "g %s\n", name);
 
    for (i = 0; i < col->vcount; i++) {
       float x, y, z;
@@ -225,7 +265,7 @@ int main(int argc, char *argv[])
    // output obj
    if (config.out_filename != NULL) {
       INFO("Generating OBJ file \"%s\"\n", config.out_filename);
-      generate_obj(config.out_filename, &col, config.scale);
+      generate_obj(config.out_filename, config.name, &col, config.scale);
    }
 
    // if shifting values
