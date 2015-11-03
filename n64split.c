@@ -711,7 +711,7 @@ static void generate_ld_script(arg_config *args, rom_config *config)
    fclose(fld);
 }
 
-void collision2obj(char *binfilename, unsigned int offset, char *objfilename, char *name)
+void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename, char *name)
 {
    unsigned char *data;
    FILE *fobj;
@@ -722,6 +722,7 @@ void collision2obj(char *binfilename, unsigned int offset, char *objfilename, ch
    unsigned terrain;
    unsigned v_per_t;
    unsigned processing;
+   unsigned offset;
    unsigned i;
    unsigned vidx[3];
    short x, y, z;
@@ -739,13 +740,14 @@ void collision2obj(char *binfilename, unsigned int offset, char *objfilename, ch
       exit(EXIT_FAILURE);
    }
 
+   offset = binoffset;
    if (data[offset] != 0x00 || data[offset+1] != 0x40) {
       ERROR("Unknown collision data: %08X\n", read_u32_be(data));
       return;
    }
 
-   fprintf(fobj, "g %s\n", name);
-
+   fprintf(fobj, "# collision model generated from n64split v%s\n"
+                 "# level %s %05X\n\n", N64SPLIT_VERSION, name, binoffset);
    vcount = read_u16_be(&data[offset+2]);
    INFO("Loading %u vertices\n", vcount);
    offset += 4;
@@ -755,7 +757,6 @@ void collision2obj(char *binfilename, unsigned int offset, char *objfilename, ch
       z = read_s16_be(&data[offset + i*6+4]);
       fprintf(fobj, "v %f %f %f\n", (float)x/scale, (float)y/scale, (float)z/scale);
    }
-   fprintf(fobj, "\n");
    offset += vcount*6;
    tcount = 0;
    processing = 1;
@@ -779,6 +780,8 @@ void collision2obj(char *binfilename, unsigned int offset, char *objfilename, ch
             v_per_t = 3;
             break;
       }
+      fprintf(fobj, "\ng %s_%05X_%02X\n", name, binoffset, terrain);
+
       INFO("Loading %u triangles of terrain %X\n", cur_tcount, terrain);
       offset += 4;
       for (i = 0; i < cur_tcount; i++) {
