@@ -711,6 +711,59 @@ static void generate_ld_script(arg_config *args, rom_config *config)
    fclose(fld);
 }
 
+typedef struct
+{
+   unsigned type;
+   char *name;
+} terrain_t;
+
+static terrain_t terrain_table[] =
+{
+   {0x0000, "normal"},
+   {0x0001, "lethal_lava"},
+   {0x0005, "hang"},
+   {0x000A, "deathfloor"},
+   {0x000E, "water_currents"},
+   {0x0012, "void"},
+   {0x0013, "very_slippery"},
+   {0x0014, "slippery"},
+   {0x0015, "climbable"},
+   {0x0028, "wall"},
+   {0x0029, "grass"},
+   {0x002A, "unclimbable"},
+   {0x002C, "windy"},
+   {0x002E, "icy"},
+   {0x0030, "flat"},
+   {0x0036, "snowy"},
+   {0x0037, "snowy"},
+   {0x0076, "fence"},
+   {0x007B, "vanishing_wall"},
+   {0x00FD, "pool_warp"},
+};
+
+char *terrain2str(unsigned type)
+{
+   unsigned i;
+   static char retval[16];
+   if (0x1B <= type && type <= 0x1E) {
+      sprintf(retval, "switch%02X", type);
+      return retval;
+   } else if (0xA6 <= type && type <= 0xCF) {
+      sprintf(retval, "paintingf%02X", type);
+      return retval;
+   } else if (0xD3 <= type && type <= 0xF8) {
+      sprintf(retval, "paintingb%02X", type);
+      return retval;
+   }
+   for (i = 0; i < DIM(terrain_table); i++) {
+      if (terrain_table[i].type == type) {
+         return terrain_table[i].name;
+      }
+   }
+   sprintf(retval, "%02X", type);
+   return retval;
+}
+
 void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename, char *name)
 {
    unsigned char *data;
@@ -780,7 +833,7 @@ void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename,
             v_per_t = 3;
             break;
       }
-      fprintf(fobj, "\ng %s_%05X_%02X\n", name, binoffset, terrain);
+      fprintf(fobj, "\ng %s_%05X_%s\n", name, binoffset, terrain2str(terrain));
 
       INFO("Loading %u triangles of terrain %X\n", cur_tcount, terrain);
       offset += 4;
