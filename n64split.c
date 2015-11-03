@@ -18,6 +18,7 @@ typedef struct _arg_config
    char input_file[FILENAME_MAX];
    char config_file[FILENAME_MAX];
    char output_dir[FILENAME_MAX];
+   float scale;
    int  large_texture;
    int  gen_proc_table;
 } arg_config;
@@ -34,6 +35,7 @@ static const arg_config default_args =
    "", // input filename
    "", // config filename
    "", // output directory
+   1024.0f, // scale
    0,  // all textures
    0,  // procedure table
 };
@@ -764,7 +766,7 @@ char *terrain2str(unsigned type)
    return retval;
 }
 
-void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename, char *name)
+void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename, char *name, float scale)
 {
    unsigned char *data;
    FILE *fobj;
@@ -779,7 +781,6 @@ void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename,
    unsigned i;
    unsigned vidx[3];
    short x, y, z;
-   float scale = 1024.0f; // scale models by this amount TODO: configurable
 
    fobj = fopen(objfilename, "w");
    if (fobj == NULL) {
@@ -835,7 +836,7 @@ void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename,
       }
       fprintf(fobj, "\ng %s_%05X_%s\n", name, binoffset, terrain2str(terrain));
 
-      INFO("Loading %u triangles of terrain %X\n", cur_tcount, terrain);
+      INFO("Loading %u triangles of terrain %02X\n", cur_tcount, terrain);
       offset += 4;
       for (i = 0; i < cur_tcount; i++) {
          vidx[0] = read_u16_be(&data[offset + i*v_per_t*2]);
@@ -1253,7 +1254,8 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      {
                         sprintf(outfilename, "%s.0x%05X.collision.obj", sec->label, offset);
                         sprintf(outfilepath, "%s/%s", model_dir, outfilename);
-                        collision2obj(binfilename, offset, outfilepath, sec->label);
+                        INFO("Generating collision model %s\n", outfilename);
+                        collision2obj(binfilename, offset, outfilepath, sec->label, args->scale);
                         break;
                      }
                      default:
@@ -1405,19 +1407,21 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
 
 static void print_usage(void)
 {
-   ERROR("Usage: n64split [-c CONFIG] [-o OUTPUT_DIR] [-t] [-v] ROM\n"
+   ERROR("Usage: n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] ROM\n"
          "\n"
          "n64split v" N64SPLIT_VERSION ": N64 ROM splitter, texture ripper, recursive disassembler\n"
          "\n"
          "Optional arguments:\n"
          " -c CONFIG     ROM configuration file (default: determine from checksum)\n"
          " -o OUTPUT_DIR output directory (default: {CONFIG.basename}.split)\n"
+         " -s SCALE      amount to scale models by (default: %f)\n"
          " -p            generate procedure table for analysis\n"
          " -t            generate large texture for MIO0 blocks\n"
          " -v            verbose progress output\n"
          "\n"
          "File arguments:\n"
-         " ROM        input ROM file\n");
+         " ROM        input ROM file\n",
+         default_args.scale);
    exit(1);
 }
 
@@ -1447,6 +1451,12 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                break;
             case 'p':
                config->gen_proc_table = 1;
+               break;
+            case 's':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               config->scale = strtof(argv[i], NULL);
                break;
             case 't':
                config->large_texture = 1;
