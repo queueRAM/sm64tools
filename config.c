@@ -46,6 +46,8 @@ static texture_format str2format(const char *format_name)
          format = FORMAT_IA;
       } else if (0 == strcmp("skybox", format_name)) {
          format = FORMAT_SKYBOX;
+      } else if (0 == strcmp("collision", format_name)) {
+         format = FORMAT_COLLISION;
       }
    }
    return format;
@@ -209,19 +211,20 @@ int parse_config_file(const char *filename, rom_config *config)
                   for (j = 0; j < extra_count; j++) {
                      config_setting_t *t = config_setting_get_elem(e, j);
                      int tex_count = config_setting_length(t);
-                     if (tex_count != 5) {
-                        ERROR("Error: %s:%d - expected 5 fields for texture, got %d\n", filename, e->line, tex_count);
-                        return -1;
-                     }
                      tex[j].offset = config_setting_get_int_elem(t, 0);
-                     tex[j].depth  = config_setting_get_int_elem(t, 2);
-                     tex[j].width  = config_setting_get_int_elem(t, 3);
-                     tex[j].height = config_setting_get_int_elem(t, 4);
                      type = config_setting_get_string_elem(t, 1);
                      tex[j].format = str2format(type);
                      if (tex[j].format == FORMAT_INVALID) {
                         ERROR("Error: %s:%d - invalid texture format '%s'\n", filename, t->line, type);
                         return -1;
+                     } else if (tex[j].format != FORMAT_COLLISION) {
+                        if (tex_count != 5) {
+                           ERROR("Error: %s:%d - expected 5 fields for texture, got %d\n", filename, e->line, tex_count);
+                           return -1;
+                        }
+                        tex[j].depth  = config_setting_get_int_elem(t, 2);
+                        tex[j].width  = config_setting_get_int_elem(t, 3);
+                        tex[j].height = config_setting_get_int_elem(t, 4);
                      }
                   }
                   sec[i].extra = tex;

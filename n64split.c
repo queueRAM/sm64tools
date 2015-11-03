@@ -711,6 +711,90 @@ static void generate_ld_script(arg_config *args, rom_config *config)
    fclose(fld);
 }
 
+void collision2obj(char *binfilename, unsigned int offset, char *objfilename, char *name)
+{
+   unsigned char *data;
+   FILE *fobj;
+   long in_size;
+   unsigned vcount;
+   unsigned tcount;
+   unsigned cur_tcount;
+   unsigned terrain;
+   unsigned v_per_t;
+   unsigned processing;
+   unsigned i;
+   unsigned vidx[3];
+   short x, y, z;
+   float scale = 1024.0f; // scale models by this amount TODO: configurable
+
+   fobj = fopen(objfilename, "w");
+   if (fobj == NULL) {
+      ERROR("Error opening \"%s\" for writing\n", objfilename);
+      exit(EXIT_FAILURE);
+   }
+
+   in_size = read_file(binfilename, &data);
+   if (in_size <= 0) {
+      ERROR("Error reading input file \"%s\"\n", binfilename);
+      exit(EXIT_FAILURE);
+   }
+
+   if (data[offset] != 0x00 || data[offset+1] != 0x40) {
+      ERROR("Unknown collision data: %08X\n", read_u32_be(data));
+      return;
+   }
+
+   fprintf(fobj, "g %s\n", name);
+
+   vcount = read_u16_be(&data[offset+2]);
+   INFO("Loading %u vertices\n", vcount);
+   offset += 4;
+   for (i = 0; i < vcount; i++) {
+      x = read_s16_be(&data[offset + i*6]);
+      y = read_s16_be(&data[offset + i*6+2]);
+      z = read_s16_be(&data[offset + i*6+4]);
+      fprintf(fobj, "v %f %f %f\n", (float)x/scale, (float)y/scale, (float)z/scale);
+   }
+   fprintf(fobj, "\n");
+   offset += vcount*6;
+   tcount = 0;
+   processing = 1;
+   while (processing) {
+      terrain = read_u16_be(&data[offset]);
+      cur_tcount = read_u16_be(&data[offset+2]);
+      if (terrain == 0x41 || terrain > 0xFF) {
+         processing = 0;
+         break;
+      }
+      switch (terrain) {
+         case 0x0E:
+         case 0x2C:
+         case 0x24:
+         case 0x25:
+         case 0x27:
+         case 0x2D:
+            v_per_t = 4;
+            break;
+         default:
+            v_per_t = 3;
+            break;
+      }
+      INFO("Loading %u triangles of terrain %X\n", cur_tcount, terrain);
+      offset += 4;
+      for (i = 0; i < cur_tcount; i++) {
+         vidx[0] = read_u16_be(&data[offset + i*v_per_t*2]);
+         vidx[1] = read_u16_be(&data[offset + i*v_per_t*2+2]);
+         vidx[2] = read_u16_be(&data[offset + i*v_per_t*2+4]);
+         fprintf(fobj, "f %d %d %d\n", vidx[0]+1, vidx[1]+1, vidx[2]+1);
+      }
+      tcount += cur_tcount;
+      offset += cur_tcount*v_per_t*2;
+   }
+
+   fclose(fobj);
+   free(data);
+}
+
 static void split_file(unsigned char *data, unsigned int length, proc_table *procs, arg_config *args, rom_config *config)
 {
 #define BIN_SUBDIR      "bin"
@@ -718,6 +802,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
 #define TEXTURE_SUBDIR  "textures"
 #define GEO_SUBDIR      "geo"
 #define LEVEL_SUBDIR    "levels"
+#define MODEL_SUBDIR    "models"
 #define BEHAVIOR_SUBDIR "."
    char makefile_name[FILENAME_MAX];
    char bin_dir[FILENAME_MAX];
@@ -725,6 +810,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    char texture_dir[FILENAME_MAX];
    char geo_dir[FILENAME_MAX];
    char level_dir[FILENAME_MAX];
+   char model_dir[FILENAME_MAX];
    char behavior_dir[FILENAME_MAX];
    char asmfilename[FILENAME_MAX];
    char outfilename[FILENAME_MAX];
@@ -754,6 +840,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    sprintf(texture_dir, "%s/%s", args->output_dir, TEXTURE_SUBDIR);
    sprintf(geo_dir, "%s/%s", args->output_dir, GEO_SUBDIR);
    sprintf(level_dir, "%s/%s", args->output_dir, LEVEL_SUBDIR);
+   sprintf(model_dir, "%s/%s", args->output_dir, MODEL_SUBDIR);
    sprintf(behavior_dir, "%s/%s", args->output_dir, BEHAVIOR_SUBDIR);
    make_dir(args->output_dir);
    make_dir(bin_dir);
@@ -761,6 +848,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    make_dir(texture_dir);
    make_dir(geo_dir);
    make_dir(level_dir);
+   make_dir(model_dir);
    make_dir(behavior_dir);
 
    // open main assembly file and write header
@@ -1105,8 +1193,15 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
                         break;
                      }
+                     case FORMAT_COLLISION:
+                     {
+                        sprintf(outfilename, "%s.0x%05X.collision.obj", sec->label, offset);
+                        sprintf(outfilepath, "%s/%s", model_dir, outfilename);
+                        collision2obj(binfilename, offset, outfilepath, sec->label);
+                        break;
+                     }
                      default:
-                        ERROR("Don't know what to do with type %d\n", sec->type);
+                        ERROR("Don't know what to do with format %d\n", texts[t].format);
                         exit(1);
                   }
                }

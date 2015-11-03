@@ -39,6 +39,7 @@ typedef enum
    FORMAT_RGBA,
    FORMAT_IA,
    FORMAT_SKYBOX,
+   FORMAT_COLLISION,
 } texture_format;
 
 typedef struct _texture
