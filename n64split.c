@@ -719,7 +719,7 @@ typedef struct
    char *name;
 } terrain_t;
 
-static terrain_t terrain_table[] =
+static const terrain_t terrain_table[] =
 {
    {0x0000, "normal"},
    {0x0001, "lethal_lava"},
@@ -737,7 +737,7 @@ static terrain_t terrain_table[] =
    {0x002E, "icy"},
    {0x0030, "flat"},
    {0x0036, "snowy"},
-   {0x0037, "snowy"},
+   {0x0037, "snowy2"},
    {0x0076, "fence"},
    {0x007B, "vanishing_wall"},
    {0x00FD, "pool_warp"},
@@ -801,7 +801,9 @@ void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename,
    }
 
    fprintf(fobj, "# collision model generated from n64split v%s\n"
-                 "# level %s %05X\n\n", N64SPLIT_VERSION, name, binoffset);
+                 "# level %s %05X\n"
+                 "\n"
+                 "mtllib collision.mtl\n\n", N64SPLIT_VERSION, name, binoffset);
    vcount = read_u16_be(&data[offset+2]);
    INFO("Loading %u vertices\n", vcount);
    offset += 4;
@@ -817,6 +819,7 @@ void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename,
    while (processing) {
       terrain = read_u16_be(&data[offset]);
       cur_tcount = read_u16_be(&data[offset+2]);
+      // 0041 indicates the end, followed by 0042 or 0043
       if (terrain == 0x41 || terrain > 0xFF) {
          processing = 0;
          break;
@@ -835,6 +838,7 @@ void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename,
             break;
       }
       fprintf(fobj, "\ng %s_%05X_%s\n", name, binoffset, terrain2str(terrain));
+      fprintf(fobj, "usemtl %s\n", terrain2str(terrain));
 
       INFO("Loading %u triangles of terrain %02X\n", cur_tcount, terrain);
       offset += 4;
