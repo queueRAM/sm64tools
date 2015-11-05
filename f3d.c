@@ -10,7 +10,7 @@
 
 #define F3D_MOVEMEM    0x03
 #define F3D_VTX        0x04
-#define F3D_DL         0x05
+#define F3D_DL         0x06
 #define F3D_QUAD       0xB5
 #define F3D_CLRGEOMODE 0xB6
 #define F3D_SETGEOMODE 0xB7
@@ -321,6 +321,9 @@ int main(int argc, char *argv[])
       fprintf(fout, "%05X: ", i);
       print_f3d(fout, &data[i]);
       fprintf(fout, "\n");
+      if (F3D_ENDDL == data[i]) {
+         break;
+      }
    }
 
    free(data);
