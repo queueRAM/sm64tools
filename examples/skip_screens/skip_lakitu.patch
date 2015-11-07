@@ -1,0 +1,12 @@
+diff -Naur gen.orig/sm64.s gen/sm64.s
+--- gen.orig/sm64.s	2015-08-12 03:20:23.389677672 +0500
++++ gen/sm64.s	2015-08-12 03:33:37.841327531 +0500
+@@ -6115,7 +6115,7 @@
+   lh    $a0, 0x8032ddf4 # lui $a0, 0x8033/lh $a0, -0x220c($a0)
+   jal   proc_80279E44
+   addiu $a0, $a0, -1
+-  sltiu $s0, $v0, 1
++  li    $s0, 0
+   lui   $at, 0x8034
+   sb    $s0, %lo(0x8033B26E)($at) # $s0, -0x4d92($at)
+   lw    $t6, 0x2c($sp)
