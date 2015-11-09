@@ -107,10 +107,15 @@ static void write_behavior(FILE *out, unsigned char *data, rom_config *config, i
          case 0x0C:
          case 0x13:
          case 0x14:
+         case 0x16:
+         case 0x17:
          case 0x23:
          case 0x27:
          case 0x2A:
+         case 0x2E:
          case 0x2F:
+         case 0x31:
+         case 0x36:
          case 0x37:
             len = 8;
             break;
