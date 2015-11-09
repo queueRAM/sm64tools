@@ -105,6 +105,7 @@ static void write_behavior(FILE *out, unsigned char *data, rom_config *config, i
          case 0x02:
          case 0x04:
          case 0x0C:
+         case 0x13:
          case 0x14:
          case 0x23:
          case 0x27:
