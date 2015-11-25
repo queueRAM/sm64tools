@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
                   default:
                      continue;
                }
-               fprintf(out, "        -label '%05X\\n%s\\n%dx%d' ../gen/textures/%s \\\n", offset, format, w, h, name);
+               fprintf(out, "        -label '%05X\\n%s\\n%dx%d' ../sm64.split/textures/%s \\\n", offset, format, w, h, name);
             }
             int x = MIN(10, sec->extra_len);
             int y = MAX(1, (sec->extra_len + 9) / 10);
