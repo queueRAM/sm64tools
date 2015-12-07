@@ -116,6 +116,7 @@ static void write_behavior(FILE *out, unsigned char *data, rom_config *config, i
          case 0x2E:
          case 0x2F:
          case 0x31:
+         case 0x33:
          case 0x36:
          case 0x37:
             len = 8;
