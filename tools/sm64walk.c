@@ -175,9 +175,25 @@ static void walk_scripts(unsigned char *data)
    level_t levelscripts[100];
    unsigned lcount = 0;
    unsigned l = 0;
+   unsigned checksum = read_u32_be(&data[0x10]);
    // add main entry level script
-   levelscripts[0].start = 0x108A10;
-   levelscripts[0].end   = 0x108A40;
+   switch (checksum) {
+      case 0x4EAA3D0E: // (J)
+         levelscripts[0].start = 0x1076A0;
+         levelscripts[0].end   = 0x1076D0;
+         break;
+      case 0x635A2BFF: // (U)
+         levelscripts[0].start = 0x108A10;
+         levelscripts[0].end   = 0x108A40;
+         break;
+      case 0xA03CF036: // (E)
+         levelscripts[0].start = 0xDE160;
+         levelscripts[0].end   = 0xDE190;
+         break;
+      default:
+         ERROR("Unknown ROM checksum: 0x%08X\n", checksum);
+         exit(1);
+   }
    lcount++;
    while (l < lcount) {
       decode_level(data, levelscripts, l, &lcount);
