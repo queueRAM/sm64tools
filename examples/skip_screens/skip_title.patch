@@ -1,6 +1,6 @@
---- gen/levels/game_over_level.orig.s	2015-06-30 15:19:02.339548628 -0500
-+++ gen/levels/game_over_level.s	2015-06-30 16:55:12.665636696 -0500
-@@ -2,9 +2,9 @@
+--- sm64.split.orig/levels/game_over_level.s
++++ sm64.split/levels/game_over_level.s
+@@ -9,9 +9,9 @@
  .word 0x16100000, 0x8016F000, 0x0021F4C0, 0x00269EA0
  .word 0x170C0013, __load_behavior_data, __load_behavior_data_end
  .word 0x180C0007, wood_trademark, wood_trademark_end

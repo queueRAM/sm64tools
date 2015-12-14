@@ -1,9 +1,9 @@
---- gen/sm64.orig.s	2015-07-07 22:24:24.070151641 +0200
-+++ gen/sm64.s	2015-07-08 23:56:38.204091547 +0200
-@@ -69949,11 +69949,11 @@
+--- sm64.split.orig/sm64.s
++++ sm64.split/sm64.s
+@@ -69951,11 +69951,11 @@
    lw    $t6, 0x40($sp)
    lui   $at, 0x8034
-   sw    $t6, -0x3430($at)
+   sw    $t6, %lo(0x8033CBD0)($at) # $t6, -0x3430($at)
 -  jal   ChangeCameraStatus
 +  jal   HandleToggleHud
    lw    $a0, 0x40($sp)
@@ -14,7 +14,7 @@
    nop   
    jal   proc_80288624
    move  $a0, $zero
-@@ -72378,73 +72378,37 @@
+@@ -72380,73 +72380,37 @@
    jr    $ra
    nop
  
@@ -115,7 +115,7 @@
  
  proc_80288F5C: # begin 80288F5C (043F5C)
    addiu $sp, $sp, -0x98
-@@ -168909,10 +168873,9 @@
+@@ -168911,10 +168875,9 @@
    addiu $sp, $sp, -0x20
    sw    $ra, 0x14($sp)
    lh    $t6, 0x8033b26a # lui $t6, 0x8034/lh $t6, -0x4d96($t6)
@@ -126,10 +126,10 @@
 -  nop   
 +
    lui   $at, 0x8033
-   sb    $zero, 0x25f0($at)
+   sb    $zero, %lo(0x803325F0)($at) # $zero, 0x25f0($at)
    addiu $t8, $zero, 8
-@@ -168935,6 +168898,9 @@
-   jal   RenderHud_CannonReticle
+@@ -168937,6 +168900,9 @@
+   jal   RenderHudCannonReticle
    nop   
  .LRenderHud_74: # 802E3DA0
 +  lh    $t1, 0x8033AFA0 # lui $t1, 0x8034 / lh $t1, -0x5060($t1)
@@ -138,17 +138,17 @@
    lh    $t2, 0x1e($sp)
    andi  $t3, $t2, 1
    beqz  $t3, .LRenderHud_8C
-@@ -168969,7 +168935,7 @@
+@@ -168971,7 +168937,7 @@
    nop   
-   jal   RenderHud_Hp
+   jal   RenderHudHp
    nop   
 -  jal   ShowCameraStatus
 +  nop
    nop   
  .LRenderHud_F4: # 802E3E20
    lh    $t2, 0x1e($sp)
-@@ -168979,9 +168945,6 @@
-   jal   RenderHud_Timer
+@@ -168981,9 +168947,6 @@
+   jal   RenderHudTimer
    nop   
  .LRenderHud_10C: # 802E3E38
 -  b     .LRenderHud_114

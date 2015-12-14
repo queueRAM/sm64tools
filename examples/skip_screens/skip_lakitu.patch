@@ -1,6 +1,5 @@
-diff -Naur gen.orig/sm64.s gen/sm64.s
---- gen.orig/sm64.s	2015-08-12 03:20:23.389677672 +0500
-+++ gen/sm64.s	2015-08-12 03:33:37.841327531 +0500
+--- sm64.split.orig/sm64.s
++++ sm64.split/sm64.s
 @@ -6115,7 +6115,7 @@
    lh    $a0, 0x8032ddf4 # lui $a0, 0x8033/lh $a0, -0x220c($a0)
    jal   proc_80279E44

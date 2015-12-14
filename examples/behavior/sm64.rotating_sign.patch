@@ -1,6 +1,6 @@
---- gen/behavior_data.orig.s	2015-05-31 10:18:13.894941354 +0200
-+++ gen/behavior_data.s	2015-05-31 10:18:08.784941132 +0200
-@@ -2819,7 +2819,7 @@
+--- sm64.split.orig/behavior_data.s
++++ sm64.split/behavior_data.s
+@@ -2799,7 +2799,7 @@
  .word 0x08000000
  .word 0x10050000
  .word 0x0C000000, ProcessCollision

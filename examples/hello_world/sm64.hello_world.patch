@@ -1,7 +1,7 @@
-diff -aur gen/behavior_data.s gen.hello/behavior_data.s
---- gen/behavior_data.s	2015-07-12 22:13:40.403201383 -0500
-+++ gen.hello/behavior_data.s	2015-07-12 21:29:16.962374817 -0500
-@@ -4692,3 +4692,8 @@
+diff -aur sm64.split.orig/behavior_data.s sm64.split/behavior_data.s
+--- sm64.split.orig/behavior_data.s
++++ sm64.split/behavior_data.s
+@@ -4663,3 +4663,8 @@
  .word 0x0C000000, BehIntroSceneLoop
  .word 0x09000000
  .word 0x00000000
@@ -10,10 +10,10 @@ diff -aur gen/behavior_data.s gen.hello/behavior_data.s
 +.word 0x0C000000, BehHelloWorld
 +.word 0x09000000
 +.word 0x00000000
-diff -aur gen/levels/castle_grounds_level.s gen.hello/levels/castle_grounds_level.s
---- gen/levels/castle_grounds_level.s	2015-07-12 22:13:40.929860245 -0500
-+++ gen.hello/levels/castle_grounds_level.s	2015-07-12 21:27:17.144092979 -0500
-@@ -49,7 +49,7 @@
+diff -aur sm64.split.orig/levels/castle_grounds_level.s sm64.split/levels/castle_grounds_level.s
+--- sm64.split.orig/levels/castle_grounds_level.s
++++ sm64.split/levels/castle_grounds_level.s
+@@ -56,7 +56,7 @@
  .word 0x24181F37, 0xF1050D14, 0xE6090000, 0x00000000, 0x00000000, beh_castle_flag_waving
  .word 0x24181F37, 0x0EFB0D14, 0xE6090000, 0x00000000, 0x00000000, beh_castle_flag_waving
  .word 0x07040000
@@ -22,10 +22,11 @@ diff -aur gen/levels/castle_grounds_level.s gen.hello/levels/castle_grounds_leve
  .word 0x24181FBB, 0xEEC80196, 0x11940000, 0x00000000, 0x00000000, beh_butterfly
  .word 0x24181FBB, 0xED9C0196, 0x10040000, 0x00000000, 0x00000000, beh_butterfly
  .word 0x24181FBB, 0xE88D01D9, 0xF5C30000, 0x00000000, 0x00000000, beh_butterfly
-diff -aur gen/sm64.s gen.hello/sm64.s
---- gen/sm64.s	2015-07-12 22:13:41.009859059 -0500
-+++ gen.hello/sm64.s	2015-07-12 22:22:39.551889324 -0500
-@@ -141122,49 +141122,30 @@
+Only in sm64.split/levels: castle_grounds_level.s.orig
+diff -aur sm64.split.orig/sm64.s sm64.split/sm64.s
+--- sm64.split.orig/sm64.s
++++ sm64.split/sm64.s
+@@ -141124,49 +141124,30 @@
    addiu $sp, $sp, 8
  # end proc_802C9A3C
  
