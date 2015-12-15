@@ -13,20 +13,34 @@ pairs to macro instructions (like LUI/ADDIU to LA and LUI/LW pairs to LW) and
 adds proper labels JALs and local branches.
 
 Usage:
-n64split -c configs/sm64.u.config "Super Mario 64 (U).z64"
+$ n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] ROM
+
+Optional arguments:
+ -c CONFIG     ROM configuration file (default: determine from checksum)
+ -o OUTPUT_DIR output directory (default: {CONFIG.basename}.split)
+ -s SCALE      amount to scale models by (default: 1024.000000)
+ -p            generate procedure table for analysis
+ -t            generate large texture for MIO0 blocks
+ -v            verbose progress output
+
+File arguments:
+ ROM        input ROM file
+
+Example usage:
+$ n64split "Super Mario 64 (U).z64"
 
 This will split the ROM based on the contents of the configuration file 
 "sm64.u.config".  See the comments in that file if you want to adapt it.
 
 Output:
-gen/
+sm64.split/
  +- behavior_data.s - behavior command bank
  +- sm64.s - top level assembly
  +- bin/ - raw binary data from undecoded sections and MIO0 blocks
  +- geo/ - decoded geo layout data
  +- levels/ - decoded level data
  +- textures/ - all ripped textures
- +- Makefile.gen - generated Makefile with texture and level dependencies
+ +- Makefile.split - generated Makefile with texture and level dependencies
  
 Build System: build system to reconstruct ROM after making changes
 --------
@@ -54,8 +68,8 @@ mips64-elf-objcopy build/sm64.elf build/sm64.bin -O binary
 ./tools/n64cksum build/sm64.bin sm64.gen.z64
 
 Output:
-build artifacts will go in build directory.
-Complete ROM is sm64.gen.z64
+build artifacts will go in 'build' directory.
+Complete ROM is sm64.z64
 
 Source is MIT licensed and available at:
 https://github.com/queueRAM/sm64tools/
@@ -67,6 +81,22 @@ more information:
  - libconfig: config file reading
 
 Changelog:
+v0.4: More data: music, collision, more configs
+ - new config files: SM64 (J), SM64 (E), MK64 (U)
+ - add IA4 and IA1 graphics types
+ - add command line options:
+   - generate large texture from MIO0 block
+   - generate procedure table
+   - specify output directory
+ - disassembler changes:
+   - add more address detection and %hi/%lo macro insertion
+   - handle BAL instructions
+ - add automatic config file detection based on header checksum
+ - corrected a lot of textures in the SM64 configs
+ - add music sequence bank and instrument set parsing
+ - add collision data parser and export to Wavefront OBJ
+ - add sm64walk tool to walk through SM64 level scripts
+ - correct SM64 behavior script lengths
 v0.3.1a: Bugfixes and cleanup
  - fix major bug introduced in n64graphics due to texture renaming
  - update INFO and stats messages from n64split
