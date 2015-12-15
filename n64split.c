@@ -804,7 +804,7 @@ void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename,
 
    offset = binoffset;
    if (data[offset] != 0x00 || data[offset+1] != 0x40) {
-      ERROR("Unknown collision data: %08X\n", read_u32_be(data));
+      ERROR("Unknown collision data %s.%X: %08X\n", name, offset, read_u32_be(data));
       return;
    }
 
@@ -1422,6 +1422,9 @@ static void print_usage(void)
    ERROR("Usage: n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] ROM\n"
          "\n"
          "n64split v" N64SPLIT_VERSION ": N64 ROM splitter, texture ripper, recursive disassembler\n"
+         "  capstone: %s\n"
+         "  libpng: %s\n"
+         "  libconfig: %s\n"
          "\n"
          "Optional arguments:\n"
          " -c CONFIG     ROM configuration file (default: determine from checksum)\n"
@@ -1433,7 +1436,7 @@ static void print_usage(void)
          "\n"
          "File arguments:\n"
          " ROM        input ROM file\n",
-         default_args.scale);
+         disasm_get_version(), graphics_get_version(), config_get_version(), default_args.scale);
    exit(1);
 }
 

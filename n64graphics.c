@@ -690,6 +690,10 @@ pngfile2ia_close:
    return img;
 }
 
+const char *graphics_get_version(void)
+{
+   return PNG_LIBPNG_VER_STRING;
+}
 
 #ifdef N64GRAPHICS_STANDALONE
 #include <string.h>

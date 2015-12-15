@@ -79,4 +79,7 @@ int parse_config_file(const char *filename, rom_config *config);
 void print_config(const rom_config *config);
 int validate_config(const rom_config *config, unsigned int max_len);
 
+// get version of underlying config library
+const char *config_get_version(void);
+
 #endif // CONFIG_H_

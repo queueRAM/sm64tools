@@ -414,3 +414,9 @@ int validate_config(const rom_config *config, unsigned int max_len)
    return ret_val;
 }
 
+const char *config_get_version(void)
+{
+   static char version[16];
+   sprintf(version, "%d.%d.%d", LIBCONFIG_VER_MAJOR, LIBCONFIG_VER_MINOR, LIBCONFIG_VER_REVISION);
+   return version;
+}

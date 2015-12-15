@@ -79,4 +79,7 @@ void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *
 // returns the RAM address of the end of disassembly
 unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config);
 
+// get version string of raw disassembler
+const char *disasm_get_version(void);
+
 #endif // MIPSDISASM_H_

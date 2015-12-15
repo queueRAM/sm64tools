@@ -39,4 +39,7 @@ int ia2png(ia *img, int width, int height, char *pngname);
 // convert PNG image to IA data
 ia *pngfile2ia(char *pngname, int *width, int *height);
 
+// get version of underlying graphics library
+const char *graphics_get_version(void);
+
 #endif // N64GRAPHICS_H_

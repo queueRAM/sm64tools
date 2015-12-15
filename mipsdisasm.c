@@ -653,6 +653,15 @@ void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *
    }
 }
 
+const char *disasm_get_version(void)
+{
+   static char version[16];
+   int major, minor;
+   (void)cs_version(&major, &minor);
+   sprintf(version, "%d.%d", major, minor);
+   return version;
+}
+
 #ifdef MIPSDISASM_STANDALONE
 typedef struct
 {
