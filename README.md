@@ -3,17 +3,21 @@ Collection of tools for manipulating the Super Mario 64 ROM
 
 ## n64split
 N64 ROM Splitter and Build System
- - splits ROM into assets: asm, textures, level, geo, behavior data
+ - splits ROM into assets: asm, textures, models, levels, behavior data
  - generates build files to rebuild the ROM
- - built-in recursive disassembler
- - generic config file system to support other games
+ - intelligent recursive disassembler
+ - generic config file system to support multiple games
 
 ### Usage
 ```console
-n64split [-c CONFIG] [-v] ROM
+n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] ROM
 ```
 Options:
- - <code>-c CONFIG</code> ROM configuration file (default: config/sm64.u.config).
+ - <code>-c CONFIG</code> ROM configuration file (default: auto-detect).
+ - <code>-o OUTPUT_DIR</code> output directory (default: {CONFIG.basename}.split).
+ - <code>-s SCALE</code> amount to scale models by (default: 1024.000000).
+ - <code>-p</code> generate procedure table for analysis.
+ - <code>-t</code> generate large texture for MIO0 blocks.
  - <code>-v</code> Verbose output.
 
 Output files are stored in the 'gen' directory.
@@ -38,9 +42,9 @@ Super Mario 64 ROM Extender
 sm64extend [-s SIZE] [-p PADDING] [-a ALIGNMENT] [-d] [-f] [-v] FILE [OUT_FILE]
 ```
 Options:
- - <code>-s size</code> Size of the extended ROM in MB (default: 64).
- - <code>-p padding</code> Padding to insert between MIO0 blocks in KB (default = 32).
- - <code>-a alignment</code> Byte boundary to align MIO0 blocks (default = 1).
+ - <code>-s SIZE</code> Size of the extended ROM in MB (default: 64).
+ - <code>-p PADDING</code> Padding to insert between MIO0 blocks in KB (default = 32).
+ - <code>-a ALIGNMENT</code> Byte boundary to align MIO0 blocks (default = 1).
  - <code>-d</code> Dump MIO0 blocks to files in mio0 directory.
  - <code>-f</code> Fill old MIO0 blocks with 0x01.
  - <code>-v</code> Verbose output.
