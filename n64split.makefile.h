@@ -41,7 +41,7 @@ static const char makefile_data[] =
 "all: $(TARGET).z64\n"
 "\n"
 "clean:\n"
-"\trm -f $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).o $(BUILD_DIR)/$(TARGET).bin $(TARGET).v64\n"
+"\trm -f $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).o $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/$(TARGET).map $(TARGET).z64\n"
 "\n"
 "$(MIO0_DIR)/%%.mio0: $(MIO0_DIR)/%%.bin\n"
 "\t$(MIO0TOOL) $< $@\n"
