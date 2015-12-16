@@ -1419,25 +1419,32 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
 
 static void print_usage(void)
 {
-   ERROR("Usage: n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] ROM\n"
+   ERROR("Usage: n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] [-V] ROM\n"
          "\n"
-         "n64split v" N64SPLIT_VERSION ": N64 ROM splitter, texture ripper, recursive disassembler\n"
-         "  capstone: %s\n"
-         "  libpng: %s\n"
-         "  libconfig: %s\n"
+         "n64split v" N64SPLIT_VERSION ": N64 ROM splitter, resource ripper, disassembler\n"
          "\n"
          "Optional arguments:\n"
          " -c CONFIG     ROM configuration file (default: determine from checksum)\n"
          " -o OUTPUT_DIR output directory (default: {CONFIG.basename}.split)\n"
-         " -s SCALE      amount to scale models by (default: %f)\n"
+         " -s SCALE      amount to scale models by (default: %.1f)\n"
          " -p            generate procedure table for analysis\n"
          " -t            generate large texture for MIO0 blocks\n"
          " -v            verbose progress output\n"
+         " -V            print version information\n"
          "\n"
          "File arguments:\n"
          " ROM        input ROM file\n",
-         disasm_get_version(), graphics_get_version(), config_get_version(), default_args.scale);
+         default_args.scale);
    exit(1);
+}
+
+static void print_version(void)
+{
+   ERROR("n64split v" N64SPLIT_VERSION ", using:\n"
+         "  capstone %s\n"
+         "  libpng %s\n"
+         "  libconfig %s\n",
+         disasm_get_version(), graphics_get_version(), config_get_version());
 }
 
 // parse command line arguments
@@ -1478,6 +1485,10 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                break;
             case 'v':
                g_verbosity = 1;
+               break;
+            case 'V':
+               print_version();
+               exit(0);
                break;
             default:
                print_usage();
