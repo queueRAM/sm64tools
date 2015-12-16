@@ -72,6 +72,7 @@ typedef struct
 static void add_level(level_t levels[], unsigned *lcount, unsigned start, unsigned end)
 {
    unsigned i;
+   INFO("Adding level %06X - %06X\n", start, end);
    for (i = 0; i < *lcount; i++) {
       if (levels[i].start == start) {
          return;
@@ -95,6 +96,7 @@ static void decode_level(unsigned char *data, level_t levels[], unsigned int l, 
    a = levels[l].start;
    // length = 0 ends level script
    while (a < levels[l].end && data[a+1] != 0) {
+      printf("%06X ", a);
       switch (data[a]) {
          case 0x00: printf("LoadJump0"); break; // load and jump from ROM into a RAM segment
          case 0x01: printf("LoadJump1"); break; // load and jump from ROM into a RAM segment
