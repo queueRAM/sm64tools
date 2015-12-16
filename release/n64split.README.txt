@@ -13,7 +13,7 @@ pairs to macro instructions (like LUI/ADDIU to LA and LUI/LW pairs to LW) and
 adds proper labels JALs and local branches.
 
 Usage:
-$ n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] ROM
+$ n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] [-V] ROM
 
 Optional arguments:
  -c CONFIG     ROM configuration file (default: determine from checksum)
@@ -22,6 +22,7 @@ Optional arguments:
  -p            generate procedure table for analysis
  -t            generate large texture for MIO0 blocks
  -v            verbose progress output
+ -V            print version information
 
 File arguments:
  ROM        input ROM file
@@ -81,7 +82,7 @@ more information:
  - libconfig: config file reading
 
 Changelog:
-v0.4: More data: music, collision, more configs
+v0.4a: More data: music, collision, more configs
  - new config files: SM64 (J), SM64 (E), MK64 (U)
  - add IA4 and IA1 graphics types
  - add command line options:

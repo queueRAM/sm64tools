@@ -10,7 +10,7 @@ N64 ROM Splitter and Build System
 
 ### Usage
 ```console
-n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] ROM
+n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] ] [-V] ROM
 ```
 Options:
  - <code>-c CONFIG</code> ROM configuration file (default: auto-detect).

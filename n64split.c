@@ -9,7 +9,7 @@
 #include "n64graphics.h"
 #include "utils.h"
 
-#define N64SPLIT_VERSION "0.3.1a"
+#define N64SPLIT_VERSION "0.4a"
 
 #define GLOBALS_FILE "globals.inc"
 
