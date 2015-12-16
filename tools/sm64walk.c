@@ -91,35 +91,53 @@ static void decode_level(unsigned char *data, level_t levels[], unsigned int l, 
       switch (data[a]) {
          case 0x00: printf("LoadJump0"); break; // load and jump from ROM into a RAM segment
          case 0x01: printf("LoadJump1"); break; // load and jump from ROM into a RAM segment
-         case 0x03: printf("Delay3   "); break; // delay frames
-         case 0x04: printf("Delay4   "); break; // delay frames and signal end
+         case 0x02: printf("EndLevel "); break; // end of level layout data
+         case 0x03: printf("Delay03  "); break; // delay frames
+         case 0x04: printf("Delay04  "); break; // delay frames and signal end
          case 0x05: printf("JumpSeg  "); break; // jump to level script at segmented address
          case 0x06: printf("PushJump "); break; // push script stack and jump to segmented address
          case 0x07: printf("PopScript"); break; // pop script stack, return to prev 0x06 or 0x0C
+         case 0x08: printf("Push16   "); break; // push script stack and 16-bit value
+         case 0x09: printf("Pop16    "); break; // pop script stack and 16-bit value
+         case 0x0A: printf("PushNull "); break; // push script stack and 32-bit 0x00000000
          case 0x0B: printf("CondPop  "); break; // conditional stack pop
          case 0x0C: printf("CondJump "); break; // conditional jump to segmented address
-         case 0x11: printf("CallFunc1"); break; // call function
-         case 0x12: printf("CallFuncM"); break; // call function
+         case 0x0D: printf("CondPush "); break; // conditional stack push
+         case 0x0E: printf("CondSkip "); break; // conditional skip over following 0x0F and 0x10 commands
+         case 0x0F: printf("SkipNext "); break; // skip over following 0x10 commands
+         case 0x10: printf("NoOp     "); break; // no operation
+         case 0x11: printf("AccumAsm1"); break; // set accumulator from ASM function
+         case 0x12: printf("AccumAsm2"); break; // actively set accumulator from ASM function
+         case 0x13: printf("SetAccum "); break; // set accumulator to constant value
+         case 0x14: printf("PushPool "); break; // push pool state
+         case 0x15: printf("PopPool  "); break; // pop pool state
          case 0x16: printf("LoadASM  "); break; // load ASM into RAM
-         case 0x17: printf("CopyData "); break; // copy uncompressed data from ROM to a RAM segment
-         case 0x18: printf("CopyMIO0 "); break; // decompress MIO0 data from ROM and copy it into a RAM segment
-         case 0x1A: printf("CopyMIO0 "); break; // decompress MIO0 data from ROM and copy it into a RAM segment (for texture only segments?)
+         case 0x17: printf("ROM->Seg "); break; // copy uncompressed data from ROM to a RAM segment
+         case 0x18: printf("MIO0->Seg"); break; // decompress MIO0 data from ROM and copy it into a RAM segment
+         case 0x19: printf("MarioFace"); break; // create Mario face for demo screen
+         case 0x1A: printf("MIO0Textr"); break; // decompress MIO0 data from ROM and copy it into a RAM segment (for texture only segments?)
          case 0x1B: printf("StartLoad"); break; // start RAM loading sequence (before 17, 18, 1A)
-         case 0x1D: printf("EndLoad  "); break; // end RAM loading sequence (before 17, 18, 1A)
+         case 0x1D: printf("EndLoad  "); break; // end RAM loading sequence (after 17, 18, 1A)
          case 0x1F: printf("StartArea"); break; // start of an area
          case 0x20: printf("EndArea  "); break; // end of an area
          case 0x21: printf("LoadPoly "); break; // load polygon data without geo layout
          case 0x22: printf("LdPolyGeo"); break; // load polygon data with geo layout
-         case 0x24: printf("LoadObjct"); break; // load object with behavior
+         case 0x24: printf("PlaceObj "); break; // place object in level with behavior
          case 0x25: printf("LoadMario"); break; // load mario object with behavior
          case 0x26: printf("ConctWarp"); break; // connect warps
          case 0x27: printf("PaintWarp"); break; // level warps for paintings
+         case 0x28: printf("Transport"); break; // transport Mario to an area
          case 0x2B: printf("MarioStrt"); break; // Mario's default position
          case 0x2E: printf("Collision"); break; // load collision data
-         case 0x31: printf("Terrain  "); break; // terrain type
+         case 0x2F: printf("RendrArea"); break; // decide which area of level geo to render
+         case 0x31: printf("Terrain  "); break; // set default terrain type
+         case 0x33: printf("FadeColor"); break; // fade/overlay screen with color
          case 0x34: printf("Blackout "); break; // blackout screen
-         case 0x36: printf("Music    "); break; // music
+         case 0x36: printf("Music36  "); break; // set music
+         case 0x37: printf("Music37  "); break; // set music
          case 0x39: printf("MulObject"); break; // multiple objects from main level segment
+         case 0x3B: printf("JetStream"); break; // define jet streams that repulse / pull Mario
+         case 0x3C: printf("GetPut   "); break; // get/put remote value
          default:   printf("         "); break;
       }
       printf(" %02X %02X %02X%02X ", data[a], data[a+1], data[a+2], data[a+3]);
