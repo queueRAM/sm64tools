@@ -238,11 +238,8 @@ int main(int argc, char *argv[])
 
    // confirm valid SM64
    rom_type = sm64_rom_type(in_buf, in_size);
-   if (rom_type < 1) {
+   if (rom_type < 0) {
       ERROR("This does not appear to be a valid SM64 ROM\n");
-      exit(EXIT_FAILURE);
-   } else if (rom_type == 0) {
-      ERROR("This ROM is already extended!\n");
       exit(EXIT_FAILURE);
    } else if (rom_type == 1) {
       // byte-swapped BADC format, swap to big-endian ABCD format for processing
