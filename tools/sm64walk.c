@@ -14,6 +14,7 @@ static void print_usage(void)
          "sm64walk v" SM64WALK_VERSION ": Super Mario 64 script walker\n"
          "\n"
          "Optional arguments:\n"
+         " -o OFFSET    start decoding level scripts at OFFSET (default: auto-detect)\n"
          " -v           verbose progress output\n"
          "\n"
          "File arguments:\n"
@@ -22,7 +23,7 @@ static void print_usage(void)
 }
 
 // parse command line arguments
-static void parse_arguments(int argc, char *argv[], char *in_filename)
+static void parse_arguments(int argc, char *argv[], unsigned *offset, char *in_filename)
 {
    int i;
    int file_count = 0;
@@ -32,6 +33,12 @@ static void parse_arguments(int argc, char *argv[], char *in_filename)
    for (i = 1; i < argc; i++) {
       if (argv[i][0] == '-') {
          switch (argv[i][1]) {
+            case 'o':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               *offset = strtoul(argv[i], NULL, 0);
+               break;
             case 'v':
                g_verbosity = 1;
                break;
@@ -188,29 +195,35 @@ static void decode_level(unsigned char *data, level_t levels[], unsigned int l, 
    printf("Done %X\n\n", levels[l].start);
 }
 
-static void walk_scripts(unsigned char *data)
+static void walk_scripts(unsigned char *data, unsigned offset)
 {
    level_t levelscripts[100];
    unsigned lcount = 0;
    unsigned l = 0;
-   unsigned checksum = read_u32_be(&data[0x10]);
-   // add main entry level script
-   switch (checksum) {
-      case 0x4EAA3D0E: // (J)
-         levelscripts[0].start = 0x1076A0;
-         levelscripts[0].end   = 0x1076D0;
-         break;
-      case 0x635A2BFF: // (U)
-         levelscripts[0].start = 0x108A10;
-         levelscripts[0].end   = 0x108A40;
-         break;
-      case 0xA03CF036: // (E)
-         levelscripts[0].start = 0xDE160;
-         levelscripts[0].end   = 0xDE190;
-         break;
-      default:
-         ERROR("Unknown ROM checksum: 0x%08X\n", checksum);
-         exit(1);
+   unsigned checksum;
+   if (offset == 0x0) {
+      checksum = read_u32_be(&data[0x10]);
+      // add main entry level script
+      switch (checksum) {
+         case 0x4EAA3D0E: // (J)
+            levelscripts[0].start = 0x1076A0;
+            levelscripts[0].end   = 0x1076D0;
+            break;
+         case 0x635A2BFF: // (U)
+            levelscripts[0].start = 0x108A10;
+            levelscripts[0].end   = 0x108A40;
+            break;
+         case 0xA03CF036: // (E)
+            levelscripts[0].start = 0xDE160;
+            levelscripts[0].end   = 0xDE190;
+            break;
+         default:
+            ERROR("Unknown ROM checksum: 0x%08X\n", checksum);
+            exit(1);
+      }
+   } else {
+      levelscripts[0].start = offset;
+      levelscripts[0].end   = offset + 0x30;
    }
    lcount++;
    while (l < lcount) {
@@ -223,11 +236,13 @@ int main(int argc, char *argv[])
 {
    char in_filename[FILENAME_MAX];
    unsigned char *in_buf = NULL;
+   unsigned offset;
    long in_size;
    int rom_type;
 
    // get configuration from arguments
-   parse_arguments(argc, argv, in_filename);
+   offset = 0;
+   parse_arguments(argc, argv, &offset, in_filename);
 
    // read input file into memory
    in_size = read_file(in_filename, &in_buf);
@@ -248,7 +263,7 @@ int main(int argc, char *argv[])
    }
 
    // walk those scripts
-   walk_scripts(in_buf);
+   walk_scripts(in_buf, offset);
 
    // cleanup
    free(in_buf);
