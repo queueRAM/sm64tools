@@ -15,10 +15,11 @@ n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] ROM
 Options:
  - <code>-c CONFIG</code> ROM configuration file (default: auto-detect).
  - <code>-o OUTPUT_DIR</code> output directory (default: {CONFIG.basename}.split).
- - <code>-s SCALE</code> amount to scale models by (default: 1024.000000).
+ - <code>-s SCALE</code> amount to scale models by (default: 1024.0).
  - <code>-p</code> generate procedure table for analysis.
  - <code>-t</code> generate large texture for MIO0 blocks.
- - <code>-v</code> Verbose output.
+ - <code>-v</code> verbose output.
+ - <code>-V</code> print version information.
 
 Output files are stored in the 'gen' directory.
               
@@ -47,7 +48,7 @@ Options:
  - <code>-a ALIGNMENT</code> Byte boundary to align MIO0 blocks (default = 1).
  - <code>-d</code> Dump MIO0 blocks to files in mio0 directory.
  - <code>-f</code> Fill old MIO0 blocks with 0x01.
- - <code>-v</code> Verbose output.
+ - <code>-v</code> verbose output.
 
 Output file: If unspecified, it is constructed by replacing input file extension with .ext.z64
               
@@ -87,9 +88,9 @@ sm64compress [-a ALIGNMENT] [-c] [-d] [-v] FILE [OUT_FILE]
 ```
 Options:
  - <code>-a alignment</code> Byte boundary to align MIO0 blocks (default = 16).
- - <code>-c</code> Compress all blocks using MIO0.
- - <code>-d</code> Dump MIO0 blocks to files in mio0 directory.
- - <code>-v</code> Verbose output.
+ - <code>-c</code> compress all blocks using MIO0.
+ - <code>-d</code> dump MIO0 blocks to files in mio0 directory.
+ - <code>-v</code> verbose output.
 
 Output file: If unspecified, it is constructed by replacing input file extension with .out.z64
 
