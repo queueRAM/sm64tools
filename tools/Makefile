@@ -36,9 +36,6 @@ matchsigs: match_signatures.c ../utils.c
 sm64collision: sm64collision.c ../utils.c
 	$(CC) $(CFLAGS) -o $@ $^
 
-sm64walk: sm64walk.c ../utils.c ../libsm64.a
-	$(CC) $(CFLAGS) -o $@ $^
-
 clean:
 	rm -f $(TARGET)
 

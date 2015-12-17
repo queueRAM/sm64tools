@@ -10,6 +10,7 @@ GEO_TARGET      := sm64geo
 GRAPHICS_TARGET := n64graphics
 MIO0_TARGET     := mio0
 SPLIT_TARGET    := n64split
+WALK_TARGET     := sm64walk
 
 LIB_SRC_FILES  := libmio0.c    \
                   libsm64.c    \
@@ -78,7 +79,7 @@ DEP_FILES = $(OBJ_FILES:.o=.d)
 default: all
 
 all: $(EXTEND_TARGET) $(COMPRESS_TARGET) $(MIO0_TARGET) $(CKSUM_TARGET) $(SPLIT_TARGET) \
-	  $(F3D_TARGET) $(GRAPHICS_TARGET) $(DISASM_TARGET) $(GEO_TARGET)
+	  $(F3D_TARGET) $(GRAPHICS_TARGET) $(DISASM_TARGET) $(GEO_TARGET) $(WALK_TARGET)
 
 $(OBJ_DIR)/%.o: %.c
 	@[ -d $(OBJ_DIR) ] || mkdir -p $(OBJ_DIR)
@@ -114,6 +115,9 @@ $(DISASM_TARGET): $(DISASM_SRC_FILES)
 
 $(SPLIT_TARGET): $(SPLIT_OBJ_FILES)
 	$(LD) $(LDFLAGS) -o $@ $^ $(SPLIT_LIBS)
+
+$(WALK_TARGET): sm64walk.c $(SM64_LIB)
+	$(CC) $(CFLAGS) -o $@ $^
 
 rawmips: rawmips.c utils.c
 	$(CC) $(CFLAGS) -o $@ $^ -lcapstone

@@ -23,6 +23,9 @@ target_link_libraries(sm64extend sm64)
 add_executable(sm64compress sm64compress.c)
 target_link_libraries(sm64compress sm64)
 
+add_executable(sm64walk sm64walk.c)
+target_link_libraries(sm64walk sm64)
+
 add_executable(f3d f3d.c utils.c)
 
 add_executable(sm64geo sm64geo.c utils.c)
