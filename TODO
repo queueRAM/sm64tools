@@ -1,0 +1,117 @@
+0.4:
+*add batch files to patch examples
+*fix 'make clean' not deleting sm64.map
+*fill in sm64.j asm and RAM/ROM mappings
+*add option to specify output dir
+*name 'gen' dir based on config name
+*add TYPE_M64 to support M64 music data and find references
+*add GNU patch for windows
+*update libcapstone
+*add some mk64 asm
+
+0.5:
+rip models and collision?
+improve sw %lo() detection
+scan procedure at a time to find instruction pairs to collapse
+ - lui/addiu, lui/ori, lui/sw (possibly .set at or at least %hi/%lo), slt/bne
+add TYPE_TEXTURE and support arbitrary types within MIO0 (and other compressed?) blocks
+add standalone sm64level, sm64behavior tools?
+add 0x39 level references to table at EC7E0
+add way to include jump tables or define data types of tables
+ - autodetect through JR?
+add RAM labels for tables
+add VS compiler flags to reduce build size
+add document or script release
+ - bump version in changed tools
+ - update release/n64split.README
+ - update README with any changes to usage
+ - create new build-vM.m.b
+ - cd build-vM.m.b
+ - cmake -DCMAKE_BUILD_TYPE=Release ..
+ - call command line tool to build all projects?
+ - create new n64split-vM.m.b-win32
+   - copy licenses/
+   - copy configs/
+   - copy release/split.bat
+   - copy release/n64split.README.txt README.txt
+   - copy build-vM.m.b/Release/ tools/
+   - delete libsm64.lib
+add version, help, flags to n64graphics
+add ./test/
+remove hacks for overlapping asm procedures
+create directories for mipsdisasm, libmio0
+merge rawmips into mipsdisasm
+rename mipsdisasm to mipsrdisasm - MIPS recursive disasm
+add parens and arguments in function name
+use segmented addresses for more level script callouts
+ - move data to segmented address (possibly overlay)
+ - add symbols for LOAD addresses
+add asm macros for level scripts
+add asm macros for geo layout
+ - add labels for asm and other references
+add asm macros for behavior scripts
+create common label database (config lables, ROM labels, behavior labels, HW register labels, jump tables)
+update linker script for RAM/ROM AT addressing
+find way to have data labels
+ - in config file
+ - linker script
+figure out remaining cut scenes
+maybe:
+use shygoo's 0x1A level command with uncompressed data
+convert texture encoding to:
+  split --> textures/A.0x0.png, A.s
+  textures/A.0x0.png --n64graphics--> bin/textures/A.0x0.bin
+  .include "A.s" .incbin "bin/textures/A.0x0.bin"
+  A.bin -> A.mio0: remove this step
+
+Examples:
+hello world example
+ - hook into mario function instead of butterfly behavior
+hello world 2 example
+  http://www.hastebin.com/unuqiwetov <-- use this one
+  http://www.hastebin.com/ayoqopoyeq
+switch to Green Stars method of HUD toggle
+ - still need show star status
+look into what importer does for bounds extending
+import custom levels
+look into m64 music importing
+add new .text section at 0x80400000 and setup DMAs for it
+
+Other:
+add f3d parsing?
+see what else the level importer changed
+figure out where music and samples are located and split out
+switch emulator to cen64
+see what data is after geo layout after main_level_scripts
+improve mio0 compressor
+check capstone disassembly of COP instructions
+ -> appears to do some COP2, need to validate assembly again
+ -> does not do RSP, need to implement in custom callback for data
+   - probably also requires switching to callback for each instruction
+http://sprunge.us/VYYI?gas
+
+figure out what these functions are for:
+JALs:
+// recursive, only called by self 802C9AD8
+Looking for 802C9AD8 0C0B26B6
+084AFC: 0C0B26B6
+084B28: 0C0B26B6
+
+// recursive, only called by self 8017E430
+Looking for 8017E430 0C05F90C
+22E96C: 0C05F90C
+
+// recursive, only called by self 8017F350
+Looking for 8017F350 0C05FCD4
+22F96C: 0C05FCD4
+
+// recursive, only called by self 8018837C
+Looking for 8018837C 0C0620DF
+238968: 0C0620DF
+
+Looking for 8017C810 0C05F204
+257A28: 0C05F204
+
+Looking for 8017EF9C 0C05FBE7
+257B88: 0C05FBE7
+
