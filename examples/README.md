@@ -1,9 +1,12 @@
 # Example modifications
 
-This directory contains examples for replacing textures, patching assembly source, and updating binaries.
+This directory contains examples for replacing textures, patching assembly 
+source, and updating binaries. The steps for applying the examples to a split 
+ROM are given below. Most examples include a batch file to automate the process.
 
 ## Hello World
-Print Hello World to the screen by hooking into a behavior and overriding an used function
+Print Hello World to the screen by hooking into a behavior and overriding an 
+unused function. Kills a butterfly.
 
 1. patch -p0 < sm64.hello\_world.patch
 
@@ -13,24 +16,24 @@ http://www.smwcentral.net/?p=viewthread&t=68900
 ## Texture swap
 
 ### Castle grounds
-castle grounds texture swap (RGBA)
+Adds a little color to the castle exterior texture in castle grounds (RGBA).
 
 1. copy texture\_swap/castle\_grounds\_textures.0x01000.png to sm64.split/textures/
 
 ### Peach's signature
-replace peach's signature (IA8) with my hero's autograph
+Replace Peach's signature (IA8) with someone else's.
 
-1. copy signature/castle\_grounds\_segment7.0x0EAE8.ia8.png to sm64.split/textures/
+1. copy texture\_swap/castle\_grounds\_segment7.0x0EAE8.ia8.png to sm64.split/textures/
 
 ### Transition
-swap star transition with mushroom
+Swap star transition with mushroom.
 
-1. copy transition/font\_graphics.0x122B8.ia8.png to sm64.split/textures/
+1. copy texture\_swap/font\_graphics.0x122B8.ia8.png to sm64.split/textures/
 
 ### Skybox
-replace water skybox with night sky from Lylat System.
+Replace water skybox with night sky from Lylat System.
 
-1. copy skybox/water\_skybox.0x00000.skybox.png to sm64.split/textures/
+1. copy texture\_swap/water\_skybox.0x00000.skybox.png to sm64.split/textures/
 
 ## HUD toggle
 Source patch for R-button toggle show HUD ASM
@@ -42,7 +45,7 @@ https://sites.google.com/site/supermario64starroad/home/sm64-documents/skelux
 http://smwc.me/1208284
 
 ## Coin colors
-coin colors and texture replacement
+Coin vertex colors and texture replacement.
 
 1. copy the png files from coin\_colors/ to sm64.split/textures/
 2. Apply coin\_colors.ips IPS patch to sm64.split/bin/doors\_trees\_coins.bin
@@ -56,7 +59,7 @@ Source patch for modifying the sign posts behavior to rotate about the Y-axis
 1. patch -p0 < sm64.rotating\_sign.patch
 
 ## Skip Screens
-Skip title, Mario, menu screens at startup or Peach and Lakitu
+Skip title, Mario, menu screens at startup or Peach and Lakitu intros.
 
 1. patch -p0 < skip\_mario.patch
 2. patch -p0 < skip\_title.patch
