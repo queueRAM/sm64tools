@@ -40,8 +40,9 @@ static const arg_config default_args =
    0,  // procedure table
 };
 
-// static makefile
+// static files
 #include "n64split.makefile.h"
+#include "n64split.collision.mtl.h"
 
 const char asm_header[] = 
    "# %s disassembly and split file\n"
@@ -1412,6 +1413,12 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    sprintf(makefile_name, "%s/Makefile", args->output_dir);
    fmake = fopen(makefile_name, "w");
    fprintf(fmake, makefile_data);
+   fclose(fmake);
+
+   // output collision model material file
+   sprintf(makefile_name, "%s/collision.mtl", model_dir);
+   fmake = fopen(makefile_name, "w");
+   fprintf(fmake, collision_mtl_data);
    fclose(fmake);
 
    generate_ld_script(args, config);
