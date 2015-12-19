@@ -1,24 +1,44 @@
 n64split: N64 ROM splitter, texture ripper, recursive MIPS disassembler
 --------
 
-The idea behind n64split is to be able to split a ROM into various components:
-assembly code, textures, level data, geometry data, behavior data, audio data;
+n64split is a tool capable of splitting N64 ROMs into assets that can be reused
+and rebuilt. Using and outline defined in a config file, n64split will produce
+assembly code, textures, levels, geometry, behavior scripts, music, and models;
 and add on a build system that is able to take changes made to those files and 
-reconstruct a ROM.  The resulting ROM is almost bit for bit compatible, with 
-exception of some macro instruction translation and relocation of MIO0 data.
+reconstruct a ROM.  The resulting ROM is almost bit for bit compatible with the
+input ROM (exceptions: some macro instructions and relocation of MIO0 data).
 
 The disassembler is recursive, so it will disassemble all procedures it 
 discovers through JALs.  It also somewhat intelligently decodes instruction 
 pairs to macro instructions (like LUI/ADDIU to LA and LUI/LW pairs to LW) and 
 adds proper labels JALs and local branches.
 
-Usage:
-$ n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] [-V] ROM
+Basic Usage
+--------
+Drag and drop a ROM on the split.bat file.
+This will split the ROM based on the contents of the configuration file 
+"sm64.u.config".  See the comments in that file if you want to adapt it.
+
+Output goes in directory named {CONFIG.name}.split.  e.g.:
+sm64.split/
+ +- bin/ - raw binary data from undecoded sections and MIO0 blocks
+ +- geo/ - decoded geo layout data
+ +- levels/ - decoded level data
+ +- models/ - level and collision models
+ +- music/ - M64 music files
+ +- textures/ - all ripped textures
+ +- behavior_data.s - behavior command bank
+ +- sm64.s - top level assembly
+ +- Makefile.split - generated Makefile with texture and level dependencies
+
+Detailed Usage
+--------
+  > n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] [-V] ROM
 
 Optional arguments:
  -c CONFIG     ROM configuration file (default: determine from checksum)
  -o OUTPUT_DIR output directory (default: {CONFIG.basename}.split)
- -s SCALE      amount to scale models by (default: 1024.000000)
+ -s SCALE      amount to scale models by (default: 1024.0)
  -p            generate procedure table for analysis
  -t            generate large texture for MIO0 blocks
  -v            verbose progress output
@@ -28,20 +48,7 @@ File arguments:
  ROM        input ROM file
 
 Example usage:
-$ n64split "Super Mario 64 (U).z64"
-
-This will split the ROM based on the contents of the configuration file 
-"sm64.u.config".  See the comments in that file if you want to adapt it.
-
-Output:
-sm64.split/
- +- behavior_data.s - behavior command bank
- +- sm64.s - top level assembly
- +- bin/ - raw binary data from undecoded sections and MIO0 blocks
- +- geo/ - decoded geo layout data
- +- levels/ - decoded level data
- +- textures/ - all ripped textures
- +- Makefile.split - generated Makefile with texture and level dependencies
+  > n64split "Super Mario 64 (U).z64"
  
 Build System: build system to reconstruct ROM after making changes
 --------
@@ -53,24 +60,22 @@ inefficient MIO0 compressor.  A win32 build of make is included, but you'll
 need to either build or obtain** mips64-elf binutils on your own if you want 
 to rebuild the image.
 
-**  The developer of cen64 also makes n64tool which provides prebuilt
-    mips64 toolchains.  The current list is below, but you can find more info
-    on his website: http://git.cen64.com/?p=n64tool.git
-  Windows (IA-32) : http://downloads.cen64.com/n64tool-win32-latest.zip
-  Windows (x86_64) : http://downloads.cen64.com/n64tool-win64-latest.zip
-  Linux (x86_64): http://downloads.cen64.com/n64tool-linux64-latest.tgz
+**  The developer of cen64 also makes n64chain which provides a prebuilt
+    mips64 toolchain.  The current list is below, but you can find more info
+    on his website: http://git.cen64.com/?p=n64chain.git
+  Windows (x86_64) : http://downloads.cen64.com/n64chain/n64chain-win64.zip
+  Linux (x86_64): http://downloads.cen64.com/n64chain/n64chain-linux64.tgz
 
 Usage: With mips64-elf bin directory in your PATH, just run 'make' from the
-command line, and it will handle the rest.
-$ make
-mips64-elf-as -mtune=vr4300 -march=vr4300 -o build/sm64.o gen/sm64.s
-mips64-elf-ld -Tn64.ld -Map build/sm64.map -o build/sm64.elf build/sm64.o 
-mips64-elf-objcopy build/sm64.elf build/sm64.bin -O binary
-./tools/n64cksum build/sm64.bin sm64.gen.z64
+command prompt within the 'sm64.split' directory, and it will handle the rest.
+  > make
+  mips64-elf-as -mtune=vr4300 -march=vr4300 -o build/sm64.o gen/sm64.s
+  mips64-elf-ld -Tn64.ld -Map build/sm64.map -o build/sm64.elf build/sm64.o 
+  mips64-elf-objcopy build/sm64.elf build/sm64.bin -O binary
+  tools/n64cksum build/sm64.bin sm64.gen.z64
 
-Output:
-build artifacts will go in 'build' directory.
-Complete ROM is sm64.z64
+Build output:
+build artifacts will go in 'build' subdirectory. Complete ROM is sm64.z64
 
 Source is MIT licensed and available at:
 https://github.com/queueRAM/sm64tools/
