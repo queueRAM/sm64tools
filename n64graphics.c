@@ -696,11 +696,19 @@ const char *graphics_get_version(void)
 }
 
 #ifdef N64GRAPHICS_STANDALONE
+#define N64GRAPHICS_VERSION "0.2"
 #include <string.h>
 
 static void print_usage(void)
 {
-   ERROR("n64graphics <binfile> [png files]\n");
+   ERROR("Usage: n64graphics BINFILE [PNGFILE ...]\n"
+         "\n"
+         "n64graphics v" N64GRAPHICS_VERSION ": N64 graphics manipulator\n"
+         "\n"
+         "File arguments:\n"
+         " BINFILE binary file to update\n"
+         " PNGFILE list of PNG files to insert with filename: \"*.<offset>.<format><depth>.png\"\n");
+   exit(EXIT_FAILURE);
 }
 
 // decode offset, format, and depth based on filename: <offset>.<format><depth>.png
@@ -779,7 +787,6 @@ int main(int argc, char *argv[])
 
    if (argc < 3) {
       print_usage();
-      return 1;
    }
 
    binfilename = argv[1];
