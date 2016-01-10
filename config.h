@@ -8,6 +8,7 @@ typedef enum
    TYPE_BEHAVIOR,
    TYPE_BIN,
    TYPE_GEO,
+   TYPE_GZIP,
    TYPE_HEADER,
    TYPE_INSTRUMENT_SET,
    TYPE_LEVEL,

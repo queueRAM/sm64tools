@@ -61,7 +61,7 @@ CFLAGS    = -Wall -Wextra -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(
 LDFLAGS   = -s -Wl,--gc-sections
 #DBG_LDFLAGS   =
 LIBS      = 
-SPLIT_LIBS = -lcapstone -lpng -lconfig
+SPLIT_LIBS = -lcapstone -lpng -lconfig -lz
 
 LIB_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(LIB_SRC_FILES:.c=.o))
 CKSUM_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(CKSUM_SRC_FILES:.c=.o))

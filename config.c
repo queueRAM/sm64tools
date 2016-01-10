@@ -31,6 +31,8 @@ static section_type str2section(const char *type_name)
          type = TYPE_MIO0;
       } else if (0 == strcmp("ptr", type_name)) {
          type = TYPE_PTR;
+      } else if (0 == strcmp("gzip", type_name)) {
+         type = TYPE_GZIP;
       }
    }
    return type;
@@ -181,6 +183,7 @@ int parse_config_file(const char *filename, rom_config *config)
                   break;
                case TYPE_BEHAVIOR:
                case TYPE_MIO0:
+               case TYPE_GZIP:
                   if (r_count < 4 || r_count > 5) {
                      ERROR("Error: %s:%d - expected 4-5 fields for section\n", filename, r->line);
                      return -1;
@@ -202,6 +205,7 @@ int parse_config_file(const char *filename, rom_config *config)
          if (r_count > 4) {
             switch (sec[i].type) {
                case TYPE_MIO0:
+               case TYPE_GZIP:
                {
                   // parse texture
                   texture *tex;

@@ -3,6 +3,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <zlib.h>
+
 #include "config.h"
 #include "libmio0.h"
 #include "mipsdisasm.h"
@@ -76,6 +78,44 @@ static n64_rom_format n64_rom_type(unsigned char *buf, unsigned int length)
       }
    }
    return N64_ROM_INVALID;
+}
+
+static void gzip_decode_file(char *gzfilename, int offset, char *binfilename)
+{
+#define CHUNK 0x4000
+   FILE *file;
+   FILE *fout;
+   z_stream strm = {0};
+   unsigned char in[CHUNK];
+   unsigned char out[CHUNK];
+
+   // TODO: add some error checking
+   strm.zalloc = Z_NULL;
+   strm.zfree = Z_NULL;
+   strm.opaque = Z_NULL;
+   strm.avail_in = 0;
+   inflateInit2(&strm, 16+MAX_WBITS);
+
+   file = fopen(gzfilename, "rb");
+   fout = fopen(binfilename, "wb");
+   while (1) {
+      int bytes_read;
+      bytes_read = fread(in, sizeof(char), sizeof(in), file);
+      strm.avail_in = bytes_read;
+      strm.next_in = in;
+      do {
+         strm.avail_out = CHUNK;
+         strm.next_out = out;
+         inflate(&strm, Z_NO_FLUSH);
+         fwrite(out, sizeof(char), CHUNK - strm.avail_out, fout);
+      } while (strm.avail_out == 0);
+      if (feof(file)) {
+         inflateEnd(&strm);
+         break;
+      }
+   }
+   fclose(file);
+   fclose(fout);
 }
 
 static void write_behavior(FILE *out, unsigned char *data, rom_config *config, int s)
@@ -1027,6 +1067,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             break;
          case TYPE_GEO:
          case TYPE_MIO0:
+         case TYPE_GZIP:
             // fill previous geometry and MIO0 blocks
             fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
             break;
@@ -1094,6 +1135,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             count += i + strlen(sec->label) + 4;
             break;
          case TYPE_MIO0:
+            count += i + strlen(sec->label) + 4;
+            break;
+         case TYPE_GZIP:
             count += i + strlen(sec->label) + 4;
             break;
          case TYPE_LEVEL:
@@ -1278,6 +1322,149 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                }
                fprintf(fmake, "\n\t$(N64GRAPHICS) $@ $^\n\n");
             }
+            if (args->large_texture) {
+               INFO("Generating large texture for %s\n", sec->label);
+               w = 32;
+               h = filesize(binfilename) / (w * 2);
+               rgba *img = file2rgba(binfilename, 0, w, h);
+               if (img) {
+                  sprintf(outfilename, "%s.ALL.png", sec->label);
+                  sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                  rgba2png(img, w, h, outfilepath);
+                  free(img);
+                  fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
+                  img = NULL;
+               }
+            }
+            // touch bin, then mio0 files so 'make' doesn't rebuild them right away
+            touch_file(binfilename);
+            touch_file(mio0filename);
+            break;
+         }
+         case TYPE_GZIP:
+         {
+            char binfilename[FILENAME_MAX];
+            INFO("Section GZIP: %s %X-%X\n", sec->label, sec->start, sec->end);
+            if (sec->label == NULL || sec->label[0] == '\0') {
+               sprintf(outfilename, "%06X.gz", sec->start);
+            } else {
+               sprintf(outfilename, "%s.gz", sec->label);
+            }
+            sprintf(mio0filename, "%s/%s", mio0_dir, outfilename);
+            write_file(mio0filename, &data[sec->start], sec->end - sec->start);
+            if (sec->label == NULL || sec->label[0] == '\0') {
+               sprintf(start_label, "L%06X", sec->start);
+            } else {
+               strcpy(start_label, sec->label);
+            }
+            fprintf(fasm, "\n.align 4, 0x01\n");
+            fprintf(fasm, ".global %s\n", start_label);
+            fprintf(fasm, "%s:\n", start_label);
+            fprintf(fasm, ".incbin \"%s/%s\"\n", MIO0_SUBDIR, outfilename);
+            fprintf(fasm, "%s_end:\n", start_label);
+            // append to Makefile
+            sprintf(maketmp, " \\\n$(MIO0_DIR)/%s", outfilename);
+            strcat(makeheader_mio0, maketmp);
+            if (sec->label == NULL || sec->label[0] == '\0') {
+               sprintf(binfilename, "%s/%06X.raw", mio0_dir, sec->start);
+            } else {
+               sprintf(binfilename, "%s/%s", mio0_dir, sec->label);
+            }
+
+            // extract gzip data
+            gzip_decode_file(mio0filename, 0, binfilename);
+
+            // extract texture data
+            if (sec->extra) {
+               texture *texts = sec->extra;
+               int t;
+               unsigned int offset = 0;
+               if (sec->label == NULL || sec->label[0] == '\0') {
+                  fprintf(fmake, "$(MIO0_DIR)/%06X.raw:", sec->start);
+               } else {
+                  fprintf(fmake, "$(MIO0_DIR)/%s: ", sec->label);
+               }
+               INFO("Extracting textures from %s\n", sec->label);
+               for (t = 0; t < sec->extra_len; t++) {
+                  w = texts[t].width;
+                  h = texts[t].height;
+                  offset = texts[t].offset;
+                  switch (texts[t].format) {
+                     case FORMAT_IA:
+                     {
+                        ia *img = file2ia(binfilename, offset, w, h, texts[t].depth);
+                        if (img) {
+                           sprintf(outfilename, "%s.0x%05X.ia%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                           ia2png(img, w, h, outfilepath);
+                           free(img);
+                           fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
+                        }
+                        break;
+                     }
+                     case FORMAT_RGBA:
+                     {
+                        rgba *img = file2rgba(binfilename, offset, w, h);
+                        if (img) {
+                           sprintf(outfilename, "%s.0x%05X.png", sec->label, offset);
+                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                           rgba2png(img, w, h, outfilepath);
+                           free(img);
+                           fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
+                        }
+                        break;
+                     }
+                     case FORMAT_SKYBOX:
+                     {
+                        // read in grid of MxN 32x32 tiles and save them as M*31xN*31 image
+                        rgba *img;
+                        unsigned int sky_offset = offset;
+                        int m, n;
+                        int tx, ty;
+                        m = w/32;
+                        n = h/32;
+                        img = malloc(w*h*sizeof(rgba));
+                        w -= m; // adjust for overlap
+                        h -= n;
+                        for (ty = 0; ty < n; ty++) {
+                           for (tx = 0; tx < m; tx++) {
+                              rgba *tile = file2rgba(binfilename, sky_offset, 32, 32);
+                              int cx, cy;
+                              for (cy = 0; cy < 31; cy++) {
+                                 for (cx = 0; cx < 31; cx++) {
+                                    int out_off = 31*w*ty + 31*tx + w*cy + cx;
+                                    int in_off = 32*cy+cx;
+                                    img[out_off] = tile[in_off];
+                                 }
+                              }
+                              free(tile);
+                              sky_offset += 32*32*2;
+                           }
+                        }
+                        sprintf(outfilename, "%s.0x%05X.skybox.png", sec->label, offset);
+                        sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                        rgba2png(img, w, h, outfilepath);
+                        free(img);
+                        fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
+                        break;
+                     }
+                     case FORMAT_COLLISION:
+                     {
+                        sprintf(outfilename, "%s.0x%05X.collision.obj", sec->label, offset);
+                        sprintf(outfilepath, "%s/%s", model_dir, outfilename);
+                        INFO("Generating collision model %s\n", outfilename);
+                        collision2obj(binfilename, offset, outfilepath, sec->label, args->scale);
+                        break;
+                     }
+                     default:
+                        ERROR("Don't know what to do with format %d\n", texts[t].format);
+                        exit(1);
+                  }
+               }
+               fprintf(fmake, "\n\t$(N64GRAPHICS) $@ $^\n\n");
+            }
+
+            // extract texture data
             if (args->large_texture) {
                INFO("Generating large texture for %s\n", sec->label);
                w = 32;
