@@ -16,13 +16,13 @@ typedef struct _ia
 } ia;
 
 // extract RGBA image from file at offset to RGBA data
-rgba *file2rgba(char *filename, int offset, int width, int height);
+rgba *file2rgba(char *filename, int offset, int width, int height, int depth);
 
 // extract IA image from file at offset to RGBA data
 ia *file2ia(char *filename, int offset, int width, int height, int depth);
 
 // save RGBA data to raw file at offset
-int rgba2file(rgba *img, int offset, int width, int height, char *filename);
+int rgba2file(rgba *img, int offset, int width, int height, int depth, char *filename);
 
 // save IA data to raw file at offset
 int ia2file(ia *img, int offset, int width, int height, int depth, char *filename);

@@ -1263,7 +1263,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      }
                      case FORMAT_RGBA:
                      {
-                        rgba *img = file2rgba(binfilename, offset, w, h);
+                        rgba *img = file2rgba(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
                            sprintf(outfilename, "%s.0x%05X.png", sec->label, offset);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
@@ -1287,7 +1287,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         h -= n;
                         for (ty = 0; ty < n; ty++) {
                            for (tx = 0; tx < m; tx++) {
-                              rgba *tile = file2rgba(binfilename, sky_offset, 32, 32);
+                              rgba *tile = file2rgba(binfilename, sky_offset, 32, 32, texts[t].depth);
                               int cx, cy;
                               for (cy = 0; cy < 31; cy++) {
                                  for (cx = 0; cx < 31; cx++) {
@@ -1326,7 +1326,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                INFO("Generating large texture for %s\n", sec->label);
                w = 32;
                h = filesize(binfilename) / (w * 2);
-               rgba *img = file2rgba(binfilename, 0, w, h);
+               rgba *img = file2rgba(binfilename, 0, w, h, 16);
                if (img) {
                   sprintf(outfilename, "%s.ALL.png", sec->label);
                   sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
@@ -1404,7 +1404,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      }
                      case FORMAT_RGBA:
                      {
-                        rgba *img = file2rgba(binfilename, offset, w, h);
+                        rgba *img = file2rgba(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
                            sprintf(outfilename, "%s.0x%05X.png", sec->label, offset);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
@@ -1428,7 +1428,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         h -= n;
                         for (ty = 0; ty < n; ty++) {
                            for (tx = 0; tx < m; tx++) {
-                              rgba *tile = file2rgba(binfilename, sky_offset, 32, 32);
+                              rgba *tile = file2rgba(binfilename, sky_offset, 32, 32, texts[t].depth);
                               int cx, cy;
                               for (cy = 0; cy < 31; cy++) {
                                  for (cx = 0; cx < 31; cx++) {
@@ -1469,7 +1469,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                INFO("Generating large texture for %s\n", sec->label);
                w = 32;
                h = filesize(binfilename) / (w * 2);
-               rgba *img = file2rgba(binfilename, 0, w, h);
+               rgba *img = file2rgba(binfilename, 0, w, h, 16);
                if (img) {
                   sprintf(outfilename, "%s.ALL.png", sec->label);
                   sprintf(outfilepath, "%s/%s", texture_dir, outfilename);

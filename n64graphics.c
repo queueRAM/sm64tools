@@ -21,7 +21,7 @@ typedef enum
    IMG_FORMAT_SKYBOX,
 } img_format;
 
-rgba *file2rgba(char *filename, int offset, int width, int height)
+rgba *file2rgba(char *filename, int offset, int width, int height, int depth)
 {
    FILE *fp;
    rgba *img = NULL;
@@ -40,7 +40,7 @@ rgba *file2rgba(char *filename, int offset, int width, int height)
       goto file2rgba_close;
    }
 
-   size = width * height * 2; // 16-bit
+   size = width * height * depth / 8;
    raw = malloc(size);
    if (!raw) {
       ERROR("Error allocating %u bytes\n", size);
@@ -58,11 +58,20 @@ rgba *file2rgba(char *filename, int offset, int width, int height)
       goto file2rgba_free;
    }
 
-   for (i = 0; i < width * height; i++) {
-      img[i].red   = SCALE_5_8((raw[i*2] & 0xF8) >> 3);
-      img[i].green = SCALE_5_8(((raw[i*2] & 0x07) << 2) | ((raw[i*2+1] & 0xC0) >> 6));
-      img[i].blue  = SCALE_5_8((raw[i*2+1] & 0x3E) >> 1);
-      img[i].alpha = (raw[i*2+1] & 0x01) ? 0xFF : 0x00;
+   if (depth == 16) {
+      for (i = 0; i < width * height; i++) {
+         img[i].red   = SCALE_5_8((raw[i*2] & 0xF8) >> 3);
+         img[i].green = SCALE_5_8(((raw[i*2] & 0x07) << 2) | ((raw[i*2+1] & 0xC0) >> 6));
+         img[i].blue  = SCALE_5_8((raw[i*2+1] & 0x3E) >> 1);
+         img[i].alpha = (raw[i*2+1] & 0x01) ? 0xFF : 0x00;
+      }
+   } else if (depth == 32) {
+      for (i = 0; i < width * height; i++) {
+         img[i].red   = raw[i*4];
+         img[i].green = raw[i*4+1];
+         img[i].blue  = raw[i*4+2];
+         img[i].alpha = raw[i*4+3];
+      }
    }
 
 file2rgba_free:
@@ -89,25 +98,25 @@ ia *file2ia(char *filename, int offset, int width, int height, int depth)
 
    if (fseek(fp, offset, SEEK_SET)) {
       ERROR("Error seeking to 0x%X in file '%s'\n", offset, filename);
-      goto file2rgba_close;
+      goto file2ia_close;
    }
 
    size = width * height * 2; // 16-bit
    raw = malloc(size);
    if (!raw) {
       ERROR("Error allocating %u bytes\n", size);
-      goto file2rgba_close;
+      goto file2ia_close;
    }
    if (fread(raw, 1, size, fp) != size) {
       ERROR("Error reading 0x%X bytes at 0x%X from '%s'\n", size, offset, filename);
-      goto file2rgba_free;
+      goto file2ia_free;
    }
 
    img_size = width * height * sizeof(*img);
    img = malloc(img_size);
    if (!img) {
       ERROR("Error allocating %u bytes\n", img_size);
-      goto file2rgba_free;
+      goto file2ia_free;
    }
 
    switch (depth) {
@@ -152,15 +161,15 @@ ia *file2ia(char *filename, int offset, int width, int height, int depth)
          break;
    }
 
-file2rgba_free:
+file2ia_free:
    free(raw);
-file2rgba_close:
+file2ia_close:
    fclose(fp);
 
    return img;
 }
 
-int rgba2file(rgba *img, int offset, int width, int height, char *filename)
+int rgba2file(rgba *img, int offset, int width, int height, int depth, char *filename)
 {
    FILE *fp;
    char *raw;
@@ -177,21 +186,30 @@ int rgba2file(rgba *img, int offset, int width, int height, char *filename)
       goto rgba2file_close;
    }
 
-   size = width * height * 2; // 16-bit
+   size = width * height * depth / 8;
    raw = malloc(size);
    if (!raw) {
       ERROR("Error allocating %u bytes\n", size);
       goto rgba2file_close;
    }
 
-   for (i = 0; i < width * height; i++) {
-      char r, g, b, a;
-      r = SCALE_8_5(img[i].red);
-      g = SCALE_8_5(img[i].green);
-      b = SCALE_8_5(img[i].blue);
-      a = img[i].alpha ? 0x1 : 0x0;
-      raw[i*2]   = (r << 3) | (g >> 2);
-      raw[i*2+1] = ((g & 0x3) << 6) | (b << 1) | a;
+   if (depth == 16) {
+      for (i = 0; i < width * height; i++) {
+         char r, g, b, a;
+         r = SCALE_8_5(img[i].red);
+         g = SCALE_8_5(img[i].green);
+         b = SCALE_8_5(img[i].blue);
+         a = img[i].alpha ? 0x1 : 0x0;
+         raw[i*2]   = (r << 3) | (g >> 2);
+         raw[i*2+1] = ((g & 0x3) << 6) | (b << 1) | a;
+      }
+   } else if (depth == 32) {
+      for (i = 0; i < width * height; i++) {
+         raw[i*4]   = img[i].red;
+         raw[i*4+1] = img[i].green;
+         raw[i*4+2] = img[i].blue;
+         raw[i*4+3] = img[i].alpha;
+      }
    }
    if (fwrite(raw, 1, size, fp) != size) {
       ERROR("Error writing %u bytes to output file '%s'\n", size, filename);
@@ -764,6 +782,9 @@ static void get_image_info(char *filename, int *offset, img_format *format, int 
                } else if (!strcmp("ia16", strformat)) {
                   *format = IMG_FORMAT_IA;
                   *depth = 16;
+               } else if (!strcmp("rgba32", strformat)) {
+                  *format = IMG_FORMAT_RGBA;
+                  *depth = 32;
                } else if (!strcmp("skybox", strformat)) {
                   *format = IMG_FORMAT_SKYBOX;
                   *depth = 16;
@@ -797,7 +818,7 @@ int main(int argc, char *argv[])
          case IMG_FORMAT_RGBA:
             imgr = pngfile2rgba(argv[i], &width, &height);
             if (imgr) {
-               rgba2file(imgr, offset, width, height, binfilename);
+               rgba2file(imgr, offset, width, height, depth, binfilename);
             } else {
                exit(EXIT_FAILURE);
             }
