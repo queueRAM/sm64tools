@@ -22,6 +22,7 @@ typedef struct _arg_config
    char output_dir[FILENAME_MAX];
    float scale;
    int  large_texture;
+   int  large_texture_depth;
    int  gen_proc_table;
 } arg_config;
 
@@ -38,7 +39,8 @@ static const arg_config default_args =
    "", // config filename
    "", // output directory
    1024.0f, // scale
-   0,  // all textures
+   0,  // large textures
+   16, // large textures depth
    0,  // procedure table
 };
 
@@ -1325,8 +1327,8 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             if (args->large_texture) {
                INFO("Generating large texture for %s\n", sec->label);
                w = 32;
-               h = filesize(binfilename) / (w * 2);
-               rgba *img = file2rgba(binfilename, 0, w, h, 16);
+               h = filesize(binfilename) / (w * (args->large_texture_depth / 8));
+               rgba *img = file2rgba(binfilename, 0, w, h, args->large_texture_depth);
                if (img) {
                   sprintf(outfilename, "%s.ALL.png", sec->label);
                   sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
@@ -1468,8 +1470,8 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             if (args->large_texture) {
                INFO("Generating large texture for %s\n", sec->label);
                w = 32;
-               h = filesize(binfilename) / (w * 2);
-               rgba *img = file2rgba(binfilename, 0, w, h, 16);
+               h = filesize(binfilename) / (w * (args->large_texture_depth / 8));
+               rgba *img = file2rgba(binfilename, 0, w, h, args->large_texture_depth);
                if (img) {
                   sprintf(outfilename, "%s.ALL.png", sec->label);
                   sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
