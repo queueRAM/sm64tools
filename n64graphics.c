@@ -101,7 +101,7 @@ ia *file2ia(char *filename, int offset, int width, int height, int depth)
       goto file2ia_close;
    }
 
-   size = width * height * 2; // 16-bit
+   size = width * height * depth / 8;
    raw = malloc(size);
    if (!raw) {
       ERROR("Error allocating %u bytes\n", size);
@@ -226,7 +226,7 @@ int ia2file(ia *img, int offset, int width, int height, int depth, char *filenam
 {
    FILE *fp;
    char *raw;
-   unsigned size = 0;
+   unsigned size;
    int i;
 
    fp = fopen(filename, "r+b");
@@ -239,26 +239,21 @@ int ia2file(ia *img, int offset, int width, int height, int depth, char *filenam
       goto ia2file_close;
    }
 
+   size = width * height * depth / 8;
+   raw = malloc(size);
+   if (!raw) {
+      ERROR("Error allocating %u bytes\n", size);
+      goto ia2file_close;
+   }
+
    switch (depth) {
       case 16:
-         size = width * height * 2; // 16-bit
-         raw = malloc(size);
-         if (!raw) {
-            ERROR("Error allocating %u bytes\n", size);
-            goto ia2file_close;
-         }
          for (i = 0; i < width * height; i++) {
             raw[i*2]   = img[i].intensity;
             raw[i*2+1] = img[i].alpha;
          }
          break;
       case 8:
-         size = width * height; // 8-bit
-         raw = malloc(size);
-         if (!raw) {
-            ERROR("Error allocating %u bytes\n", size);
-            goto ia2file_close;
-         }
          for (i = 0; i < width * height; i++) {
             unsigned char val = SCALE_8_4(img[i].intensity);
             unsigned char alpha = SCALE_8_4(img[i].alpha);
@@ -266,12 +261,6 @@ int ia2file(ia *img, int offset, int width, int height, int depth, char *filenam
          }
          break;
       case 4:
-         size = width * height / 2; // 4-bit
-         raw = malloc(size);
-         if (!raw) {
-            ERROR("Error allocating %u bytes\n", size);
-            goto ia2file_close;
-         }
          for (i = 0; i < width * height; i++) {
             unsigned char val = SCALE_8_3(img[i].intensity);
             unsigned char alpha = img[i].alpha ? 0x01 : 0x00;
@@ -284,12 +273,6 @@ int ia2file(ia *img, int offset, int width, int height, int depth, char *filenam
          }
          break;
       case 1:
-         size = width * height / 8; // 1-bit
-         raw = malloc(size);
-         if (!raw) {
-            ERROR("Error allocating %u bytes\n", size);
-            goto ia2file_close;
-         }
          for (i = 0; i < width * height; i++) {
             unsigned char val = img[i].intensity;
             unsigned char old = raw[i/8];
