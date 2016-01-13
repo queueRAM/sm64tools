@@ -14,8 +14,10 @@ typedef struct
    const char *name;
 } procedure;
 
+// input procedure table
 static const procedure proc_table[] =
 {
+   // RAM start, RAM end, ROM start, ROM end, label
    {0x80173C6C, 0x80173D64, 0x22412C, 0x224224, "PutString1"},
    {0x80173D64, 0x80173E54, 0x224224, 0x224314, "PutString2"},
    {0x80173FD4, 0x80174324, 0x224494, 0x2247E4, "SaveMenu"},
@@ -461,14 +463,14 @@ static const procedure proc_table[] =
    {0x8037E0B4, 0x8037E19C, 0x0FAE34, 0x0FAF1C, "ProcessGeoLayout"},
    {0x8037E1A0, 0x8037E2C4, 0x0FAF20, 0x0FB044, "LevelAccumOp"},
    {0x803839CC, 0x80383B6C, 0x10074C, 0x1008EC, "ProcessCollision"},
-   {0x802DB08C, 0x802DB350, 0x09608C, 0x096350, "RenderHud_CannonReticle"},
-   {0x802E2CF0, 0x802E2E58, 0x09DCF0, 0x09DE58, "RenderHud_Camera"},
-   {0x802E2E58, 0x802E30B4, 0x09DE58, 0x09E0B4, "RenderHud_CButtons"},
-   {0x802E3654, 0x802E3744, 0x09E654, 0x09E744, "RenderHud_Hp"},
-   {0x802E3744, 0x802E37A8, 0x09E744, 0x09E7A8, "RenderHud_MarioLives"},
-   {0x802E37A8, 0x802E380C, 0x09E7A8, 0x09E80C, "RenderHud_Coins"},
-   {0x802E380C, 0x802E38E4, 0x09E80C, 0x09E8E4, "RenderHud_Stars"},
-   {0x802E395C, 0x802E3B1C, 0x09E95C, 0x09EB1C, "RenderHud_Timer"},
+   {0x802DB08C, 0x802DB350, 0x09608C, 0x096350, "RenderHudCannonReticle"},
+   {0x802E2CF0, 0x802E2E58, 0x09DCF0, 0x09DE58, "RenderHudCamera"},
+   {0x802E2E58, 0x802E30B4, 0x09DE58, 0x09E0B4, "RenderHudCButtons"},
+   {0x802E3654, 0x802E3744, 0x09E654, 0x09E744, "RenderHudHp"},
+   {0x802E3744, 0x802E37A8, 0x09E744, 0x09E7A8, "RenderHudMarioLives"},
+   {0x802E37A8, 0x802E380C, 0x09E7A8, 0x09E80C, "RenderHudCoins"},
+   {0x802E380C, 0x802E38E4, 0x09E80C, 0x09E8E4, "RenderHudStars"},
+   {0x802E395C, 0x802E3B1C, 0x09E95C, 0x09EB1C, "RenderHudTimer"},
    {0x802E3D2C, 0x802E3E50, 0x09ED2C, 0x09EE50, "RenderHud"},
    {0x8016F5B0, 0x8016F670, 0x21FA70, 0x21FB30, "LevelProc_8016F5B0"},
    {0x801766DC, 0x801768A0, 0x226B9C, 0x226D60, "LevelProc_801766DC"},
@@ -1656,6 +1658,7 @@ typedef struct
    unsigned int start;
    unsigned int end;
 } section;
+// input sections SM64 (U)
 static const section sections[] =
 {
    {0x001000, 0x0F557F},
@@ -1715,11 +1718,14 @@ static int in_list(unsigned int offset, instruction *insn)
 static unsigned int rom_to_ram(unsigned int rom)
 {
    const unsigned int mapping[] = {
-      // 0x8016F000, 0x801B99DF, 0x7FF4FB40, // 21F4C0-269E9F  4A9E0
-      0x8016F000, 0x801B99DF, 0x7FF51830, // 21D7D0-26801F  4A9E0
-      0x80246000, 0x8033A57F, 0x80245000, // 001000-0F557F  F4580
-      // 0x80378800, 0x8038BC8F, 0x80283280  // 0F5580-108A0F  13490
-      0x80378800, 0x8038BC8F, 0x802845F0  // F4210-10769F 13490
+   // SM64 (J)
+   //   0x8016F000, 0x801B99DF, 0x7FF51830, // 21D7D0-26801F  4A9E0
+   //   0x80246000, 0x8033A57F, 0x80245000, // 001000-0F557F  F4580
+   //   0x80378800, 0x8038BC8F, 0x802845F0  // F4210-10769F 13490
+   // SM64 (E)
+      0x8016F000, 0x801B8D7F, 0x7FF6EF60, // 2000A0-249E1F  49D80
+      0x80241800, 0x80335D7F, 0x80240800, // 001000-0F557F  F4580
+      0x80370F00, 0x80386A0F, 0x802A88B0  // 0C8650-0DE15F  15B10
    };
    unsigned i;
    for (i = 0; i < DIM(mapping)/3; i++) {
