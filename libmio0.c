@@ -144,7 +144,6 @@ int mio0_decode_header(const unsigned char *buf, mio0_header_t *head)
    return 0;
 }
 
-// encode MIO0 header
 void mio0_encode_header(unsigned char *buf, const mio0_header_t *head)
 {
    memcpy(buf, "MIO0", 4);
@@ -153,7 +152,6 @@ void mio0_encode_header(unsigned char *buf, const mio0_header_t *head)
    write_u32_be(&buf[12], head->uncomp_offset);
 }
 
-// decode MIO0 data in memory
 int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end)
 {
    mio0_header_t head;
@@ -225,10 +223,6 @@ int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end)
    return bytes_written;
 }
 
-// encode MIO0 data in memory
-// in: buffer containing raw data
-// out: buffer for MIO0 data allocated by this function
-// returns size of output buffer
 int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out)
 {
    unsigned char *bit_buf;
@@ -458,6 +452,7 @@ free_all:
    return ret_val;
 }
 
+// mio0 standalone executable
 #ifdef MIO0_STANDALONE
 typedef struct
 {

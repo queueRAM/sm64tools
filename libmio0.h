@@ -26,19 +26,26 @@ void mio0_encode_header(unsigned char *buf, const mio0_header_t *head);
 
 // decode MIO0 data in memory
 // in: buffer containing MIO0 data
-// out: buffer for output data - allocated by this function
+// out: buffer for output data
 // end: output offset of the last byte decoded from in (set to NULL if unwanted)
-// returns bytes extracted into output or negative value on failure
+// returns bytes extracted to 'out' or negative value on failure
 int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end);
 
 // encode MIO0 data in memory
 // in: buffer containing raw data
-// out: buffer for MIO0 data allocated by this function
-// returns size of compressed data in out, including MIO0 header
+// out: buffer for MIO0 data
+// returns size of compressed data in 'out' including MIO0 header
 int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out);
 
+// decode an entire MIO0 block at an offset from file to output file
+// in_file: input filename
+// offset: offset to start decoding from in_file
+// out_file: output filename
 int mio0_decode_file(const char *in_file, unsigned long offset, const char *out_file);
 
+// encode an entire file
+// in_file: input filename containing raw data to be encoded
+// out_file: output filename to write MIO0 compressed data to
 int mio0_encode_file(const char *in_file, const char *out_file);
 
 #endif // LIBMIO0_H_
