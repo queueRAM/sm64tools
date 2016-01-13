@@ -1659,6 +1659,7 @@ typedef struct
    unsigned int start;
    unsigned int end;
 } section;
+
 // new input sections
 static const section sections[] =
 {
@@ -1667,12 +1668,26 @@ static const section sections[] =
    {0x00000, 0x0A4410},
 };
 
-#define MAX_OFFSETS (512*KB)
 typedef struct
 {
-   uint32_t offsets[MAX_OFFSETS];
+   uint32_t *offsets;
    unsigned int count;
+   unsigned int allocation;
 } instruction;
+
+static void add_offset(instruction *ins, uint32_t offset)
+{
+   if (ins->count >= ins->allocation) {
+      if (ins->allocation == 0) {
+         ins->allocation = 256;
+      } else {
+         ins->allocation *= 2;
+      }
+      ins->offsets = realloc(ins->offsets, ins->allocation * sizeof(*ins->offsets));
+   }
+   ins->offsets[ins->count] = offset;
+   ins->count++;
+}
 
 static void fill_table(instruction *ins_table, unsigned char *data, long size)
 {
@@ -1682,8 +1697,6 @@ static void fill_table(instruction *ins_table, unsigned char *data, long size)
    unsigned s;
    int i, b;
    int icount;
-
-   printf("disassembling %ld (%lX) bytes\n", size, size);
 
    // open capstone disassembler
    if (cs_open(CS_ARCH_MIPS, CS_MODE_MIPS64 + CS_MODE_BIG_ENDIAN, &handle) != CS_ERR_OK) {
@@ -1695,18 +1708,15 @@ static void fill_table(instruction *ins_table, unsigned char *data, long size)
    for (s = 0; s < DIM(sections); s++) {
       int length = sections[s].end - sections[s].start;
       int blocks = (length + (BLOCK_SIZE-1)) / BLOCK_SIZE;
-      printf("%d len: %d (%X) [%d blocks of 0x%X]\n", s, length, length, blocks, BLOCK_SIZE);
+      assert(sections[s].end <= size);
+      INFO("Disassembling section %d len: %d (%X) [%d blocks of 0x%X]\n", s, length, length, blocks, BLOCK_SIZE);
       for (b = 0; b < blocks; b++) {
          int start = b*BLOCK_SIZE + sections[s].start;
          int blen = MIN(sections[s].end - start, BLOCK_SIZE);
          icount = cs_disasm(handle, &data[start], blen, 0x80000000, 0, &insn);
          for (i = 0; i < icount; i++) {
             unsigned int op = (unsigned int)insn[i].id;
-            ins_table[op].offsets[ins_table[op].count] = start + i*4;
-            ins_table[op].count++;
-            if (ins_table[op].count >= MAX_OFFSETS) {
-               ERROR("Offset for %d > %d\n", op, MAX_OFFSETS);
-            }
+            add_offset(&ins_table[op], start+i*4);
          }
          cs_free(insn, icount);
       }
@@ -1757,8 +1767,8 @@ static void find_matches(instruction *ins_table, unsigned char *srcdata)
    unsigned j, o;
    int i;
    int count;
-   int best_matched;
-   unsigned int best_offset;
+   unsigned best_matched;
+   uint32_t best_offset;
 
    // open capstone disassembler
    if (cs_open(CS_ARCH_MIPS, CS_MODE_MIPS64 + CS_MODE_BIG_ENDIAN, &handle) != CS_ERR_OK) {
@@ -1777,7 +1787,7 @@ static void find_matches(instruction *ins_table, unsigned char *srcdata)
       best_matched = 0;
       for (o = 0; o < ins_table[op].count; o++) {
          unsigned newoffset = ins_table[op].offsets[o];
-         int matched = 0;
+         unsigned matched = 0;
          for (i = 0; i < count; i++) {
             if (!in_list(newoffset + i*4, &ins_table[insn[i].id])) {
                matched = i*4;
@@ -1785,7 +1795,7 @@ static void find_matches(instruction *ins_table, unsigned char *srcdata)
             }
          }
          if (matched == 0) {
-            printf("   (0x%X, \"%s\"), // %X\n", rom_to_ram(newoffset), p->name, newoffset);
+            printf("   (0x%X, \"%s\"),\n", rom_to_ram(newoffset), p->name);
             matched = count*4;
          } else {
             if (matched > best_matched) {
@@ -1796,7 +1806,7 @@ static void find_matches(instruction *ins_table, unsigned char *srcdata)
       }
       if (best_offset != 0x0) {
          if (best_matched > (p_length * 3)/4) {
-            printf("   (0x%X, \"%s\"), // %X best: %d/%d\n", rom_to_ram(best_offset), p->name, best_offset, best_matched, p_length);
+            printf("   (0x%X, \"%s\"), // best: %d/%d\n", rom_to_ram(best_offset), p->name, best_matched, p_length);
          }
       }
       cs_free(insn, count);
@@ -1827,7 +1837,7 @@ int main(int argc, char *argv[])
 
    if (srcsize >= 8*MB) {
       long size = MIPS_INS_ENDING * sizeof(*ins_table);
-      printf("allocationg %d * %d = %ld (%lX) bytes (%ld MB)\n",
+      INFO("Allocating %d * %lu = %ld (%lX) bytes (%ld MB)\n",
             MIPS_INS_ENDING, sizeof(*ins_table),
             size, size, size/1024/1024);
       ins_table = calloc(MIPS_INS_ENDING, sizeof(*ins_table));
