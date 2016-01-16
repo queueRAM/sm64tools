@@ -45,14 +45,11 @@ int decode_block1(u8 *in, int length, int type, u8 *out)
    while (length != 0) {
       t0 = read_u16_be(in); // a0
       in += 2; // a0
-      INFO("%04X: ", t0);
-
       if ((t0 & 0x8000) == 0) {
          t1 = (t0 & 0xFFC0) << 1;
          t0 &= 0x3F;
          t0 = t0 | t1;
          write_u16_be(out, t0);
-         INFO("raw %04X\n", t0);
          out += 2; // a3
          len += 2;
          length -= 2; // a1
@@ -61,7 +58,6 @@ int decode_block1(u8 *in, int length, int type, u8 *out)
          t0 = (t0 & 0x7FFF) >> 5; // lookback offset
          length -= 2; // a1
          t2 = out - t0; // t2 - lookback pointer from current out
-         INFO("copy %04X %04X\n", t1, t0);
          while (t1 != 0) {
             t3 = read_u16_be(t2);
             t2 += 2;
