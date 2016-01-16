@@ -491,8 +491,8 @@ int sm64_compress_mio0(const sm64_config_t *config,
 
    // detect audio patch and fix it
    if (out_buf[0xd48b6] == 0x80 && out_buf[0xd48b7] == 0x3D) {
-      INFO("Moving sound allocation from 0x803D0000 to 0x807B0000\n");
-      out_buf[0xd48b7] = 0x7B;
+      INFO("Moving sound allocation from 0x803D0000 to 0x805C0000\n");
+      out_buf[0xd48b7] = 0x5C;
    }
 
    out_length = in_length;
