@@ -7,52 +7,63 @@
 #include "config.h"
 #include "utils.h"
 
+typedef struct
+{
+   const char *name;
+   const section_type section;
+} section_entry;
+
+typedef struct
+{
+   const char *name;
+   const texture_format format;
+} format_entry;
+
+static const section_entry section_table[] = {
+   {"asm",      TYPE_ASM},
+   {"behavior", TYPE_BEHAVIOR},
+   {"bin",      TYPE_BIN},
+   {"geo",      TYPE_GEO},
+   {"header",   TYPE_HEADER},
+   {"instrset", TYPE_INSTRUMENT_SET},
+   {"level",    TYPE_LEVEL},
+   {"m64",      TYPE_M64},
+   {"mio0",     TYPE_MIO0},
+   {"ptr",      TYPE_PTR},
+   {"gzip",     TYPE_GZIP},
+};
+
+static const format_entry format_table[] = {
+   {"rgba",      FORMAT_RGBA},
+   {"ia",        FORMAT_IA},
+   {"skybox",    FORMAT_SKYBOX},
+   {"collision", FORMAT_COLLISION},
+};
+
 static section_type str2section(const char *type_name)
 {
-   section_type type = TYPE_INVALID;
+   unsigned i;
    if (type_name != NULL) {
-      if (0 == strcmp("asm", type_name)) {
-         type = TYPE_ASM;
-      } else if (0 == strcmp("behavior", type_name) || 0 == strcmp("behaviour", type_name)) {
-         type = TYPE_BEHAVIOR;
-      } else if (0 == strcmp("bin", type_name)) {
-         type = TYPE_BIN;
-      } else if (0 == strcmp("geo", type_name)) {
-         type = TYPE_GEO;
-      } else if (0 == strcmp("header", type_name)) {
-         type = TYPE_HEADER;
-      } else if (0 == strcmp("instrset", type_name)) {
-         type = TYPE_INSTRUMENT_SET;
-      } else if (0 == strcmp("level", type_name)) {
-         type = TYPE_LEVEL;
-      } else if (0 == strcmp("m64", type_name)) {
-         type = TYPE_M64;
-      } else if (0 == strcmp("mio0", type_name)) {
-         type = TYPE_MIO0;
-      } else if (0 == strcmp("ptr", type_name)) {
-         type = TYPE_PTR;
-      } else if (0 == strcmp("gzip", type_name)) {
-         type = TYPE_GZIP;
+      for (i = 0; i < DIM(section_table); i++) {
+         if (0 == strcmp(section_table[i].name, type_name)) {
+            return section_table[i].section;
+         }
       }
    }
-   return type;
+   return TYPE_INVALID;
 }
 
 static texture_format str2format(const char *format_name)
 {
-   texture_format format = FORMAT_INVALID;
+   unsigned i;
    if (format_name != NULL) {
-      if (0 == strcmp("rgba", format_name)) {
-         format = FORMAT_RGBA;
-      } else if (0 == strcmp("ia", format_name)) {
-         format = FORMAT_IA;
-      } else if (0 == strcmp("skybox", format_name)) {
-         format = FORMAT_SKYBOX;
-      } else if (0 == strcmp("collision", format_name)) {
-         format = FORMAT_COLLISION;
+      for (i = 0; i < DIM(format_table); i++) {
+         if (0 == strcmp(format_table[i].name, format_name)) {
+            return format_table[i].format;
+         }
       }
    }
-   return format;
+   return FORMAT_INVALID;
 }
 
 
