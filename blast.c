@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <assert.h>
 
+#include "n64graphics.h"
 #include "utils.h"
 
 typedef uint32_t u32;
@@ -117,7 +118,7 @@ int decode_block2(u8 *in, int length, int type, u8 *out)
 }
 
 // 802A5C5C (06149C)
-int decode_block4(u8 *in, int length, int type, u8 *out, u8 *other)
+int decode_block4(u8 *in, int length, int type, u8 *out, u8 *lut)
 {
    u8 *look;
    u32 t3;
@@ -129,7 +130,7 @@ int decode_block4(u8 *in, int length, int type, u8 *out, u8 *other)
       if ((t0 & 0x8000) == 0) {
          t1 = t0 >> 8;
          t2 = t1 & 0xFE;
-         look = other + t2; // t2 += t4; // t4 set in proc_802A57DC: lw    $t4, 0xc($a0)
+         look = lut + t2; // t2 += t4; // t4 set in proc_802A57DC: lw    $t4, 0xc($a0)
          t2 = read_u16_be(look);
          t1 &= 1;
          t2 <<= 1;
@@ -137,7 +138,7 @@ int decode_block4(u8 *in, int length, int type, u8 *out, u8 *other)
          write_u16_be(out, t1);
          out += 2;
          t1 = t0 & 0xFE;
-         look = other + t1;
+         look = lut + t1;
          t1 = read_u16_be(look);
          t0 &= 1;
          length -= 2;
@@ -166,7 +167,7 @@ int decode_block4(u8 *in, int length, int type, u8 *out, u8 *other)
 }
 
 // 802A5D34 (061574)
-int decode_block5(u8 *in, int length, int type, u8 *out, u8 *other)
+int decode_block5(u8 *in, int length, int type, u8 *out, u8 *lut)
 {
    u8 *tmp;
    u16 t0, t1;
@@ -178,7 +179,7 @@ int decode_block5(u8 *in, int length, int type, u8 *out, u8 *other)
       if ((t0 & 0x8000) == 0) { // bltz
          t1 = t0 >> 4;
          t1 = t1 << 1;
-         tmp = t1 + other; // t1 += t4
+         tmp = t1 + lut; // t1 += t4
          t1 = read_u16_be(tmp);
          t0 &= 0xF;
          t0 <<= 4;
@@ -333,6 +334,72 @@ int proc_802A57DC(block_t *a0, u8 **copy, u8 *rom)
    return v0;
 }
 
+static void convert_to_png(char *fname, u16 len, u16 type)
+{
+   char pngname[512];
+   int height, width, depth;
+   rgba *rimg;
+   ia   *img;
+   generate_filename(fname, pngname, "png");
+   switch (type) {
+      case 0:
+         // TODO: memcpy, no info
+         break;
+      case 1: // RBGA16?
+         // guess at dims
+         switch (len) {
+            case 512:  width = 16; height = 16; break;
+            case 1*KB: width = 16; height = 32; break;
+            case 2*KB: width = 32; height = 32; break;
+            case 4*KB: width = 32; height = 64; break;
+            case 8*KB: width = 64; height = 64; break;
+            default:   width = 32; height = len/width/2; break;
+         }
+         rimg = file2rgba(fname, 0, width, height, 16);
+         if (rimg) rgba2png(rimg, width, height, pngname);
+         break;
+      case 2: // RGBA32?
+         // guess at dims
+         switch (len) {
+            case 1*KB: width = 16; height = 16; break;
+            case 2*KB: width = 16; height = 32; break;
+            case 4*KB: width = 32; height = 32; break;
+            case 8*KB: width = 32; height = 64; break;
+            default: width = 32; height = len/width/4; break;
+         }
+         rimg = file2rgba(fname, 0, width, height, 32);
+         if (rimg) rgba2png(rimg, width, height, pngname);
+         break;
+      case 3: // IA16?
+         // guess at dims
+         switch (len) {
+            case 1*KB: width = 16; height = 32; break;
+            case 2*KB: width = 32; height = 32; break;
+            case 4*KB: width = 32; height = 64; break;
+            case 8*KB: width = 64; height = 64; break;
+            default: width = 32; height = len/width/2; break;
+         }
+         img = file2ia(fname, 0, width, height, 16);
+         if (img) ia2png(img, width, height, pngname);
+         break;
+      case 4:
+         // TODO: add this once LUT is figured out
+         break;
+      case 5:
+         // TODO: add this once LUT is figured out
+         break;
+      case 6: // IA8? IA4 always has alpha (lsb) clear
+         // TODO: do i have alpha bit in IA4 decoded wrong in n64graphics?
+         // guess at dims
+         depth = 8;
+         width = 16;
+         height = (len*8/depth)/width;
+         img = file2ia(fname, 0, width, height, depth);
+         if (img) ia2png(img, width, height, pngname);
+         break;
+   }
+}
+
 int main(int argc, char *argv[])
 {
 #define ROM_OFFSET 0x4CE0
@@ -363,10 +430,12 @@ int main(int argc, char *argv[])
          block.w8 = type;
          printf("%X (%X) %X %d\n", start, start+ROM_OFFSET, len, type);
          out_size = proc_802A57DC(&block, &out, data);
-         sprintf(out_fname, "%s.%06X.%d.decoded",
+         sprintf(out_fname, "%s.%06X.%d.bin",
                argv[1], start, type);
          printf("writing %s: %04X -> %04X\n", out_fname, len, out_size);
          write_file(out_fname, out, out_size);
+         // attempt to convert to PNG
+         convert_to_png(out_fname, out_size, type);
       }
    }
 
