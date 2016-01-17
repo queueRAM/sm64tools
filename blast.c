@@ -301,10 +301,10 @@ int decode_block6(u8 *in, int length, int type, u8 *out)
 }
 
 // 802A57DC (06101C)
-int proc_802A57DC(block_t *a0, u8 **copy)
+// a0 is only real parameters in ROM
+int proc_802A57DC(block_t *a0, u8 **copy, u8 *rom)
 {
    u8 *src;
-   u8 *other;
    u32 len;
    u32 type;
    int v0 = -1;
@@ -312,8 +312,6 @@ int proc_802A57DC(block_t *a0, u8 **copy)
    len = a0->w4;
    *copy = malloc(100*len);
    src = a0->w0;
-   // TODO: need to figure out where this is set for decoders 4 and 5
-   other = calloc(100, len);
 
    type = a0->w8;
    switch (type) {
@@ -325,19 +323,20 @@ int proc_802A57DC(block_t *a0, u8 **copy)
       case 0: v0 = decode_block0(src, len, type, *copy); break;
       case 1: v0 = decode_block1(src, len, type, *copy); break;
       case 2: v0 = decode_block2(src, len, type, *copy); break;
-      case 4: v0 = decode_block4(src, len, type, *copy, other); break;
-      case 5: v0 = decode_block5(src, len, type, *copy, other); break;
+      // TODO: need to figure out where last param is set for decoders 4 and 5
+      case 4: v0 = decode_block4(src, len, type, *copy, rom); break;
+      case 5: v0 = decode_block5(src, len, type, *copy, rom); break;
       case 3: v0 = decode_block3(src, len, type, *copy); break;
       case 6: v0 = decode_block6(src, len, type, *copy); break;
       default: printf("Need type %d\n", type); break;
    }
-   free(other);
    return v0;
 }
 
 int main(int argc, char *argv[])
 {
 #define ROM_OFFSET 0x4CE0
+#define END_OFFSET 0xCCE0
    block_t block;
    char out_fname[512];
    unsigned char *data;
@@ -351,18 +350,19 @@ int main(int argc, char *argv[])
    // read in Blast Corps ROM
    size = read_file(argv[1], &data);
 
-   // loop through from 0x4CE0 to +0x5E90
-   for (off = ROM_OFFSET; off < ROM_OFFSET+0x5E98; off += 8) {
+   // loop through from 0x4CE0 to 0xCCE0
+   for (off = ROM_OFFSET; off < END_OFFSET; off += 8) {
       u32 start = read_u32_be(&data[off]);
       u16 len   = read_u16_be(&data[off+4]);
       u16 type  = read_u16_be(&data[off+6]);
       assert(size >= start);
+      // TODO: there are large sections of len=0, possibly LUTs for 4 & 5?
       if (len > 0) {
          block.w0 = &data[start+ROM_OFFSET];
          block.w4 = len;
          block.w8 = type;
          printf("%X (%X) %X %d\n", start, start+ROM_OFFSET, len, type);
-         out_size = proc_802A57DC(&block, &out);
+         out_size = proc_802A57DC(&block, &out, data);
          sprintf(out_fname, "%s.%06X.%d.decoded",
                argv[1], start, type);
          printf("writing %s: %04X -> %04X\n", out_fname, len, out_size);
