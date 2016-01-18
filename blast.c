@@ -499,8 +499,9 @@ int main(int argc, char *argv[])
                   case 512:  width = 16; height = 16; break;
                   case 1*KB: width = 16; height = 32; break;
                   case 2*KB: width = 32; height = 32; break;
-                  case 4*KB: width = 32; height = 64; break;
+                  case 4*KB: width = 64; height = 32; break;
                   case 8*KB: width = 64; height = 64; break;
+                  case 3200: width = 40; height = 40; break;
                   default:   width = 32; height = out_size/width/2; break;
                }
                format = "\"rgba\"";
@@ -514,7 +515,7 @@ int main(int argc, char *argv[])
                   case 1*KB: width = 16; height = 16; break;
                   case 2*KB: width = 16; height = 32; break;
                   case 4*KB: width = 32; height = 32; break;
-                  case 8*KB: width = 32; height = 64; break;
+                  case 8*KB: width = 64; height = 32; break;
                   default: width = 32; height = out_size/width/4; break;
                }
                format = "\"rgba\"";
