@@ -23,14 +23,15 @@ static const section_entry section_table[] = {
    {"asm",      TYPE_ASM},
    {"behavior", TYPE_BEHAVIOR},
    {"bin",      TYPE_BIN},
+   {"blast",    TYPE_BLAST},
    {"geo",      TYPE_GEO},
+   {"gzip",     TYPE_GZIP},
    {"header",   TYPE_HEADER},
    {"instrset", TYPE_INSTRUMENT_SET},
    {"level",    TYPE_LEVEL},
    {"m64",      TYPE_M64},
    {"mio0",     TYPE_MIO0},
    {"ptr",      TYPE_PTR},
-   {"gzip",     TYPE_GZIP},
 };
 
 static const format_entry format_table[] = {
@@ -193,6 +194,7 @@ int parse_config_file(const char *filename, rom_config *config)
                   }
                   break;
                case TYPE_BEHAVIOR:
+               case TYPE_BLAST:
                case TYPE_MIO0:
                case TYPE_GZIP:
                   if (r_count < 4 || r_count > 5) {
@@ -209,12 +211,20 @@ int parse_config_file(const char *filename, rom_config *config)
             return -1;
          }
          if (r_count > 3) {
-            label = config_setting_get_string_elem(r, 3);
-            strcpy(sec[i].label, label);
+            switch (sec[i].type) {
+               case TYPE_BLAST:
+                  sec[i].subtype = config_setting_get_int64_elem(r, 3);
+                  break;
+               default:
+                  label = config_setting_get_string_elem(r, 3);
+                  strcpy(sec[i].label, label);
+                  break;
+            }
          }
          // extra parameters for some types
          if (r_count > 4) {
             switch (sec[i].type) {
+               case TYPE_BLAST:
                case TYPE_MIO0:
                case TYPE_GZIP:
                {

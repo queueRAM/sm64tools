@@ -7,6 +7,7 @@ typedef enum
    TYPE_ASM,
    TYPE_BEHAVIOR,
    TYPE_BIN,
+   TYPE_BLAST,
    TYPE_GEO,
    TYPE_GZIP,
    TYPE_HEADER,
@@ -30,6 +31,7 @@ typedef struct _split_section
    unsigned int start;
    unsigned int end;
    section_type type;
+   int subtype;
    void *extra;
    int extra_len;
 } split_section;

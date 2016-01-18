@@ -6,6 +6,7 @@
 #include <zlib.h>
 
 #include "config.h"
+#include "libblast.h"
 #include "libmio0.h"
 #include "mipsdisasm.h"
 #include "n64graphics.h"
@@ -100,6 +101,7 @@ static void gzip_decode_file(char *gzfilename, int offset, char *binfilename)
 
    file = fopen(gzfilename, "rb");
    fout = fopen(binfilename, "wb");
+   fseek(file, offset, SEEK_SET);
    while (1) {
       int bytes_read;
       bytes_read = fread(in, sizeof(char), sizeof(in), file);
@@ -1067,6 +1069,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             fprintf(fasm, ".incbin \"%s\"\n", outfilename);
             fprintf(fasm, "%s_end:\n", start_label);
             break;
+         case TYPE_BLAST:
          case TYPE_GEO:
          case TYPE_MIO0:
          case TYPE_GZIP:
@@ -1133,6 +1136,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    for (s = 0; s < config->section_count; s++) {
       split_section *sec = &sections[s];
       switch (sec->type) {
+         case TYPE_BLAST:
+            count += i + 20 + 4; // no label for Blast
+            break;
          case TYPE_GEO:
             count += i + strlen(sec->label) + 4;
             break;
@@ -1200,6 +1206,92 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             // append to Makefile
             sprintf(maketmp, " \\\n$(GEO_DIR)/%s", geofilename);
             strcat(makeheader_level, maketmp);
+            break;
+         }
+         case TYPE_BLAST:
+         {
+            char binfilename[FILENAME_MAX];
+            INFO("Section Blast: %d %s %X-%X\n", sec->subtype, sec->label, sec->start, sec->end);
+            sprintf(outfilename, "%06X", sec->start);
+            sprintf(mio0filename, "%s/%s.bc%d", mio0_dir, outfilename, sec->subtype);
+            write_file(mio0filename, &data[sec->start], sec->end - sec->start);
+            sprintf(start_label, "L%06X", sec->start);
+            fprintf(fasm, "\n.align 4, 0x01\n");
+            fprintf(fasm, ".global %s\n", start_label);
+            fprintf(fasm, "%s:\n", start_label);
+            fprintf(fasm, ".incbin \"%s/%s\"\n", MIO0_SUBDIR, outfilename);
+            fprintf(fasm, "%s_end:\n", start_label);
+            // append to Makefile
+            sprintf(maketmp, " \\\n$(MIO0_DIR)/%s", outfilename);
+            strcat(makeheader_mio0, maketmp);
+            sprintf(binfilename, "%s/%06X.bin", mio0_dir, sec->start);
+
+            printf("Decoding blast %s %d %s\n", mio0filename, sec->subtype, binfilename);
+            // extract texture data
+            blast_decode_file(mio0filename, sec->subtype, binfilename, data);
+
+            // extract texture data
+            if (sec->extra) {
+               texture *texts = sec->extra;
+               int t;
+               unsigned int offset = 0;
+               fprintf(fmake, "$(MIO0_DIR)/%06X.raw:", sec->start);
+               INFO("Extracting textures from %s\n", sec->label);
+               for (t = 0; t < sec->extra_len; t++) {
+                  w = texts[t].width;
+                  h = texts[t].height;
+                  offset = texts[t].offset;
+                  switch (texts[t].format) {
+                     case FORMAT_IA:
+                     {
+                        ia *img = file2ia(binfilename, offset, w, h, texts[t].depth);
+                        if (img) {
+                           sprintf(outfilename, "%06X.0x%05X.ia%d.png", sec->start, offset, texts[t].depth);
+                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                           ia2png(img, w, h, outfilepath);
+                           free(img);
+                           fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
+                        }
+                        break;
+                     }
+                     case FORMAT_RGBA:
+                     {
+                        rgba *img = file2rgba(binfilename, offset, w, h, texts[t].depth);
+                        if (img) {
+                           sprintf(outfilename, "%06X.0x%05X.png", sec->start, offset);
+                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                           rgba2png(img, w, h, outfilepath);
+                           free(img);
+                           fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
+                        }
+                        break;
+                     }
+                     default:
+                        ERROR("Don't know what to do with format %d\n", texts[t].format);
+                        exit(1);
+                  }
+               }
+               fprintf(fmake, "\n\t$(N64GRAPHICS) $@ $^\n\n");
+            }
+
+            // extract texture data
+            if (args->large_texture) {
+               INFO("Generating large texture for %s\n", sec->label);
+               w = 32;
+               h = filesize(binfilename) / (w * (args->large_texture_depth / 8));
+               rgba *img = file2rgba(binfilename, 0, w, h, args->large_texture_depth);
+               if (img) {
+                  sprintf(outfilename, "%s.ALL.png", sec->label);
+                  sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                  rgba2png(img, w, h, outfilepath);
+                  free(img);
+                  fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
+                  img = NULL;
+               }
+            }
+            // touch bin, then mio0 files so 'make' doesn't rebuild them right away
+            touch_file(binfilename);
+            touch_file(mio0filename);
             break;
          }
          case TYPE_MIO0:

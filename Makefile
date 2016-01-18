@@ -36,6 +36,7 @@ GRAPHICS_SRC_FILES := n64graphics.c \
                       utils.c
 
 SPLIT_SRC_FILES := config.c \
+                   blast.c \
                    libmio0.c \
                    mipsdisasm.c \
                    n64graphics.c \
@@ -55,11 +56,12 @@ AR        = $(CROSS)ar
 
 INCLUDES  = 
 DEFS      = 
+# Release flags
 CFLAGS    = -Wall -Wextra -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(DEFS) -MMD
-#DBG_CFLAGS    = -Wall -Wextra -O0 -g $(INCLUDES) $(DEFS) -MMD
-
 LDFLAGS   = -s -Wl,--gc-sections
-#DBG_LDFLAGS   =
+# Debug flags
+#CFLAGS    = -Wall -Wextra -O0 -g $(INCLUDES) $(DEFS) -MMD
+#LDFLAGS   =
 LIBS      = 
 SPLIT_LIBS = -lcapstone -lpng -lconfig -lz
 
