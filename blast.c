@@ -501,7 +501,7 @@ int main(int argc, char *argv[])
                   case 2*KB: width = 32; height = 32; break;
                   case 4*KB: width = 32; height = 64; break;
                   case 8*KB: width = 64; height = 64; break;
-                  default:   width = 32; height = len/width/2; break;
+                  default:   width = 32; height = out_size/width/2; break;
                }
                format = "\"rgba\"";
                depth = 16;
@@ -509,23 +509,25 @@ int main(int argc, char *argv[])
             case 2: // RGBA32?
                // guess at dims
                switch (out_size) {
+                  case 256:  width = 8;  height = 8;  break;
+                  case 512:  width = 8;  height = 16; break;
                   case 1*KB: width = 16; height = 16; break;
                   case 2*KB: width = 16; height = 32; break;
                   case 4*KB: width = 32; height = 32; break;
                   case 8*KB: width = 32; height = 64; break;
-                  default: width = 32; height = len/width/4; break;
+                  default: width = 32; height = out_size/width/4; break;
                }
                format = "\"rgba\"";
                depth = 32;
                break;
             case 3: // IA16?
                // guess at dims
-               switch (len) {
+               switch (out_size) {
                   case 1*KB: width = 16; height = 32; break;
                   case 2*KB: width = 32; height = 32; break;
                   case 4*KB: width = 32; height = 64; break;
                   case 8*KB: width = 64; height = 64; break;
-                  default: width = 32; height = len/width/2; break;
+                  default: width = 32; height = out_size/width/2; break;
                }
                format = "\"ia\"";
                depth = 16;
@@ -541,7 +543,7 @@ int main(int argc, char *argv[])
                // guess at dims
                depth = 8;
                width = 16;
-               height = (len*8/depth)/width;
+               height = (out_size*8/depth)/width;
                format = "\"ia\"";
                break;
          }
