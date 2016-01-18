@@ -1,27 +1,10 @@
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
-#include <assert.h>
 
-#include "n64graphics.h"
 #include "utils.h"
-
-typedef uint32_t u32;
-typedef uint16_t u16;
-typedef uint8_t  u8;
-
-typedef struct
-{
-   u8 *w0; // source ptr
-   u32 w4; // length
-   u32 w8; // type
-   u32 wC;
-} block_t;
 
 // 802A5E10 (061650)
 // just a memcpy from a0 to a3
-int decode_block0(u8 *in, int length, int type, u8 *out)
+int decode_block0(unsigned char *in, int length, unsigned char *out)
 {
    int ret_len = length;
    length >>= 3; // a1 - gets number of dwords
@@ -38,10 +21,10 @@ int decode_block0(u8 *in, int length, int type, u8 *out)
 }
 
 // 802A5AE0 (061320)
-int decode_block1(u8 *in, int length, int type, u8 *out)
+int decode_block1(unsigned char *in, int length, unsigned char *out)
 {
-   u16 t0, t1, t3;
-   u8 *t2;
+   unsigned short t0, t1, t3;
+   unsigned char *t2;
    int len = 0;
    while (length != 0) {
       t0 = read_u16_be(in); // a0
@@ -73,11 +56,11 @@ int decode_block1(u8 *in, int length, int type, u8 *out)
 }
 
 // 802A5B90 (0613D0)
-int decode_block2(u8 *in, int length, int type, u8 *out)
+int decode_block2(unsigned char *in, int length, unsigned char *out)
 {
-   u8 *look;
-   u16 t0;
-   u32 t1, t2, t3;
+   unsigned char *look;
+   unsigned short t0;
+   unsigned int t1, t2, t3;
    int len = 0;
    while (length != 0) {
       t0 = read_u16_be(in);
@@ -118,11 +101,11 @@ int decode_block2(u8 *in, int length, int type, u8 *out)
 }
 
 // 802A5C5C (06149C)
-int decode_block4(u8 *in, int length, int type, u8 *out, u8 *lut)
+int decode_block4(unsigned char *in, int length, unsigned char *out, unsigned char *lut)
 {
-   u8 *look;
-   u32 t3;
-   u16 t0, t1, t2;
+   unsigned char *look;
+   unsigned int t3;
+   unsigned short t0, t1, t2;
    int len = 0;
    while (length != 0) {
       t0 = read_u16_be(in);
@@ -167,11 +150,11 @@ int decode_block4(u8 *in, int length, int type, u8 *out, u8 *lut)
 }
 
 // 802A5D34 (061574)
-int decode_block5(u8 *in, int length, int type, u8 *out, u8 *lut)
+int decode_block5(unsigned char *in, int length, unsigned char *out, unsigned char *lut)
 {
-   u8 *tmp;
-   u16 t0, t1;
-   u32 t2, t3;
+   unsigned char *tmp;
+   unsigned short t0, t1;
+   unsigned int t2, t3;
    int len = 0;
    while (length != 0) {
       t0 = read_u16_be(in);
@@ -216,10 +199,10 @@ int decode_block5(u8 *in, int length, int type, u8 *out, u8 *lut)
 }
 
 // 802A5A2C (06126C)
-int decode_block3(u8 *in, int length, int type, u8 *out)
+int decode_block3(unsigned char *in, int length, unsigned char *out)
 {
-   u16 t0, t1, t3;
-   u8 *t2;
+   unsigned short t0, t1, t3;
+   unsigned char *t2;
    int len = 0;
    while (length != 0) {
       t0 = read_u16_be(in);
@@ -227,10 +210,10 @@ int decode_block3(u8 *in, int length, int type, u8 *out)
       if ((0x8000 & t0) == 0) {
          t1 = t0 >> 8;
          t1 <<= 1;
-         *out = (u8)t1; // sb
+         *out = (char)t1; // sb
          t1 = t0 & 0xFF;
          t1 <<= 1;
-         *(out+1) = (u8)t1; // sb
+         *(out+1) = (char)t1; // sb
          out += 2;
          length -= 2;
          len += 2;
@@ -254,16 +237,16 @@ int decode_block3(u8 *in, int length, int type, u8 *out)
 }
 
 // 802A5958 (061198)
-int decode_block6(u8 *in, int length, int type, u8 *out)
+int decode_block6(unsigned char *in, int length, unsigned char *out)
 {
-   u16 t0, t1, t3;
+   unsigned short t0, t1, t3;
    int len = 0;
 // .Lproc_802A5958_20: # 802A5978
    while (length != 0) {
       t0 = read_u16_be(in);
       in += 2;
       if ((0x8000 & t0) == 0) {
-         u16 t2;
+         unsigned short t2;
          t1 = t0 >> 8;
          t2 = t1 & 0x38;
          t1 = t1 & 0x07;
@@ -282,7 +265,7 @@ int decode_block6(u8 *in, int length, int type, u8 *out)
          length -= 2;
          len += 2;
       } else {
-         u8 *t2;
+         unsigned char *t2;
          t1 = t0 & 0x1F;
          t0 = t0 & 0x7FFF;
          t0 >>= 5;
@@ -301,13 +284,83 @@ int decode_block6(u8 *in, int length, int type, u8 *out)
    return len;
 }
 
+int blast_decode_file(char *in_filename, int type, char *out_filename, unsigned char *lut)
+{
+   unsigned char *in_buf = NULL;
+   unsigned char *out_buf = NULL;
+   int in_len;
+   int write_len;
+   int out_len = 0;
+   int ret_val = 0;
+
+   in_len = read_file(in_filename, &in_buf);
+   if (in_len <= 0) {
+      return 1;
+   }
+
+   // estimate worst case size
+   out_buf = malloc(100*in_len);
+   if (out_buf == NULL) {
+      ret_val = 2;
+      goto free_all;
+   }
+
+   switch (type) {
+      // a0 - input buffer
+      // a1 - input length
+      // a2 - type (always unused)
+      // a3 - output buffer
+      // t4 - blocks 4 & 5 reference t4 which is set to FP
+      case 0: out_len = decode_block0(in_buf, in_len, out_buf); break;
+      case 1: out_len = decode_block1(in_buf, in_len, out_buf); break;
+      case 2: out_len = decode_block2(in_buf, in_len, out_buf); break;
+      // TODO: need to figure out where last param is set for decoders 4 and 5
+      case 4: out_len = decode_block4(in_buf, in_len, out_buf, lut); break;
+      case 5: out_len = decode_block5(in_buf, in_len, out_buf, lut); break;
+      case 3: out_len = decode_block3(in_buf, in_len, out_buf); break;
+      case 6: out_len = decode_block6(in_buf, in_len, out_buf); break;
+      default: ERROR("Unknown Blast type %d\n", type); break;
+   }
+
+   write_len = write_file(out_filename, out_buf, out_len);
+   if (write_len != out_len) {
+      ret_val = 2;
+   }
+
+free_all:
+   if (out_buf) {
+      free(out_buf);
+   }
+   if (in_buf) {
+      free(in_buf);
+   }
+
+   return ret_val;
+}
+
+#ifdef BLAST_STANDALONE
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#include <assert.h>
+
+#include "n64graphics.h"
+
+typedef struct
+{
+   unsigned char *w0; // source ptr
+   unsigned int w4;   // length
+   unsigned int w8;   // type
+   unsigned int wC;
+} block_t;
+
 // 802A57DC (06101C)
 // a0 is only real parameters in ROM
-int proc_802A57DC(block_t *a0, u8 **copy, u8 *rom)
+int proc_802A57DC(block_t *a0, unsigned char **copy, unsigned char *rom)
 {
-   u8 *src;
-   u32 len;
-   u32 type;
+   unsigned char *src;
+   unsigned int len;
+   unsigned int type;
    int v0 = -1;
 
    len = a0->w4;
@@ -321,20 +374,20 @@ int proc_802A57DC(block_t *a0, u8 **copy, u8 *rom)
       // a2 - type (always unused)
       // a3 - output buffer
       // t4 - blocks 4 & 5 reference t4 which is set to FP
-      case 0: v0 = decode_block0(src, len, type, *copy); break;
-      case 1: v0 = decode_block1(src, len, type, *copy); break;
-      case 2: v0 = decode_block2(src, len, type, *copy); break;
+      case 0: v0 = decode_block0(src, len, *copy); break;
+      case 1: v0 = decode_block1(src, len, *copy); break;
+      case 2: v0 = decode_block2(src, len, *copy); break;
       // TODO: need to figure out where last param is set for decoders 4 and 5
-      case 4: v0 = decode_block4(src, len, type, *copy, rom); break;
-      case 5: v0 = decode_block5(src, len, type, *copy, rom); break;
-      case 3: v0 = decode_block3(src, len, type, *copy); break;
-      case 6: v0 = decode_block6(src, len, type, *copy); break;
+      case 4: v0 = decode_block4(src, len, *copy, rom); break;
+      case 5: v0 = decode_block5(src, len, *copy, rom); break;
+      case 3: v0 = decode_block3(src, len, *copy); break;
+      case 6: v0 = decode_block6(src, len, *copy); break;
       default: printf("Need type %d\n", type); break;
    }
    return v0;
 }
 
-static void convert_to_png(char *fname, u16 len, u16 type)
+static void convert_to_png(char *fname, unsigned short len, unsigned short type)
 {
    char pngname[512];
    int height, width, depth;
@@ -409,8 +462,10 @@ int main(int argc, char *argv[])
    unsigned char *data;
    long size;
    int out_size;
-   u32 off;
-   u8 *out;
+   unsigned int off;
+   unsigned char *out;
+   int width, height, depth;
+   char *format;
 
    if (argc < 2) return 1;
 
@@ -419,20 +474,81 @@ int main(int argc, char *argv[])
 
    // loop through from 0x4CE0 to 0xCCE0
    for (off = ROM_OFFSET; off < END_OFFSET; off += 8) {
-      u32 start = read_u32_be(&data[off]);
-      u16 len   = read_u16_be(&data[off+4]);
-      u16 type  = read_u16_be(&data[off+6]);
+      unsigned int start = read_u32_be(&data[off]);
+      unsigned short len   = read_u16_be(&data[off+4]);
+      unsigned short type  = read_u16_be(&data[off+6]);
       assert(size >= start);
       // TODO: there are large sections of len=0, possibly LUTs for 4 & 5?
       if (len > 0) {
          block.w0 = &data[start+ROM_OFFSET];
          block.w4 = len;
          block.w8 = type;
-         printf("%X (%X) %X %d\n", start, start+ROM_OFFSET, len, type);
+         //printf("%X (%X) %X %d\n", start, start+ROM_OFFSET, len, type);
          out_size = proc_802A57DC(&block, &out, data);
          sprintf(out_fname, "%s.%06X.%d.bin",
                argv[1], start, type);
-         printf("writing %s: %04X -> %04X\n", out_fname, len, out_size);
+         //printf("writing %s: %04X -> %04X\n", out_fname, len, out_size);
+         depth = 0;
+         switch (type) {
+            case 0:
+               // TODO: memcpy, no info
+               break;
+            case 1: // RBGA16?
+               // guess at dims
+               switch (out_size) {
+                  case 512:  width = 16; height = 16; break;
+                  case 1*KB: width = 16; height = 32; break;
+                  case 2*KB: width = 32; height = 32; break;
+                  case 4*KB: width = 32; height = 64; break;
+                  case 8*KB: width = 64; height = 64; break;
+                  default:   width = 32; height = len/width/2; break;
+               }
+               format = "\"rgba\"";
+               depth = 16;
+               break;
+            case 2: // RGBA32?
+               // guess at dims
+               switch (out_size) {
+                  case 1*KB: width = 16; height = 16; break;
+                  case 2*KB: width = 16; height = 32; break;
+                  case 4*KB: width = 32; height = 32; break;
+                  case 8*KB: width = 32; height = 64; break;
+                  default: width = 32; height = len/width/4; break;
+               }
+               format = "\"rgba\"";
+               depth = 32;
+               break;
+            case 3: // IA16?
+               // guess at dims
+               switch (len) {
+                  case 1*KB: width = 16; height = 32; break;
+                  case 2*KB: width = 32; height = 32; break;
+                  case 4*KB: width = 32; height = 64; break;
+                  case 8*KB: width = 64; height = 64; break;
+                  default: width = 32; height = len/width/2; break;
+               }
+               format = "\"ia\"";
+               depth = 16;
+               break;
+            case 4:
+               // TODO: add this once LUT is figured out
+               break;
+            case 5:
+               // TODO: add this once LUT is figured out
+               break;
+            case 6: // IA8? IA4 always has alpha (lsb) clear
+               // TODO: do i have alpha bit in IA4 decoded wrong in n64graphics?
+               // guess at dims
+               depth = 8;
+               width = 16;
+               height = (len*8/depth)/width;
+               format = "\"ia\"";
+               break;
+         }
+         if (depth) {
+            printf("   (0x%06X, 0x%06X, \"blast\", %d, ((0x0, %6s, %2d, %2d, %2d))),\n",
+                  start+ROM_OFFSET, start+ROM_OFFSET+len, type, format, depth, width, height);
+         }
          write_file(out_fname, out, out_size);
          // attempt to convert to PNG
          convert_to_png(out_fname, out_size, type);
@@ -443,3 +559,5 @@ int main(int argc, char *argv[])
 
    return 0;
 }
+
+#endif // BLAST_STANDALONE
