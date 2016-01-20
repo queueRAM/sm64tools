@@ -1211,6 +1211,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
          case TYPE_BLAST:
          {
             char binfilename[FILENAME_MAX];
+            unsigned char *lut;
             INFO("Section Blast: %d %s %X-%X\n", sec->subtype, sec->label, sec->start, sec->end);
             sprintf(outfilename, "%06X", sec->start);
             sprintf(mio0filename, "%s/%s.bc%d", mio0_dir, outfilename, sec->subtype);
@@ -1227,7 +1228,13 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             sprintf(binfilename, "%s/%06X.bin", mio0_dir, sec->start);
 
             // extract texture data
-            blast_decode_file(mio0filename, sec->subtype, binfilename, data);
+            // TODO: make this configurable?
+            switch (sec->subtype) {
+               case 4: lut = &data[0x047480]; break;
+               case 5: lut = &data[0x0998E0]; break; // TODO: fix this
+               default: lut = data; break;
+            }
+            blast_decode_file(mio0filename, sec->subtype, binfilename, lut);
 
             // extract texture data
             if (sec->extra) {
