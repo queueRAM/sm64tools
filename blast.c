@@ -184,7 +184,7 @@ int decode_block5(unsigned char *in, int length, unsigned char *out, unsigned ch
          t0 &= 0x7FE0;
          t0 >>= 4;
          length -= 2;
-         tmp = out + t0; // t2
+         tmp = out - t0; // t2
          while (t1 != 0) {
             t3 = read_u32_be(tmp); //t2
             tmp += 4; // t2
@@ -210,10 +210,10 @@ int decode_block3(unsigned char *in, int length, unsigned char *out)
       if ((0x8000 & t0) == 0) {
          t1 = t0 >> 8;
          t1 <<= 1;
-         *out = (char)t1; // sb
+         *out = (unsigned char)t1; // sb
          t1 = t0 & 0xFF;
          t1 <<= 1;
-         *(out+1) = (char)t1; // sb
+         *(out+1) = (unsigned char)t1; // sb
          out += 2;
          length -= 2;
          len += 2;
@@ -378,8 +378,10 @@ int proc_802A57DC(block_t *a0, unsigned char **copy, unsigned char *rom)
       case 1: v0 = decode_block1(src, len, *copy); break;
       case 2: v0 = decode_block2(src, len, *copy); break;
       // TODO: need to figure out where last param is set for decoders 4 and 5
-      case 4: v0 = decode_block4(src, len, *copy, rom); break;
-      case 5: v0 = decode_block5(src, len, *copy, rom); break;
+      case 4: v0 = decode_block4(src, len, *copy, &rom[0x047480]); break;
+      //case 5: v0 = decode_block5(src, len, *copy, &rom[0x0998E0]); break;
+      case 5: v0 = decode_block5(src, len, *copy, &rom[0x152970]); break;
+      //case 5: v0 = decode_block5(src, len, *copy, &rom[0x1E2C00]); break;
       case 3: v0 = decode_block3(src, len, *copy); break;
       case 6: v0 = decode_block6(src, len, *copy); break;
       default: printf("Need type %d\n", type); break;
@@ -401,10 +403,11 @@ static void convert_to_png(char *fname, unsigned short len, unsigned short type)
       case 1: // RBGA16?
          // guess at dims
          switch (len) {
+            case 16:   width = 4;  height = 2;  break;
             case 512:  width = 16; height = 16; break;
             case 1*KB: width = 16; height = 32; break;
             case 2*KB: width = 32; height = 32; break;
-            case 4*KB: width = 32; height = 64; break;
+            case 4*KB: width = 64; height = 32; break;
             case 8*KB: width = 64; height = 64; break;
             default:   width = 32; height = len/width/2; break;
          }
@@ -417,7 +420,7 @@ static void convert_to_png(char *fname, unsigned short len, unsigned short type)
             case 1*KB: width = 16; height = 16; break;
             case 2*KB: width = 16; height = 32; break;
             case 4*KB: width = 32; height = 32; break;
-            case 8*KB: width = 32; height = 64; break;
+            case 8*KB: width = 64; height = 32; break;
             default: width = 32; height = len/width/4; break;
          }
          rimg = file2rgba(fname, 0, width, height, 32);
@@ -435,11 +438,29 @@ static void convert_to_png(char *fname, unsigned short len, unsigned short type)
          img = file2ia(fname, 0, width, height, 16);
          if (img) ia2png(img, width, height, pngname);
          break;
-      case 4:
-         // TODO: add this once LUT is figured out
+      case 4: // IA16?
+         // guess at dims
+         switch (len) {
+            case 1*KB: width = 32; height = 16; break;
+            case 2*KB: width = 32; height = 32; break;
+            case 4*KB: width = 32; height = 64; break;
+            case 8*KB: width = 64; height = 64; break;
+            default: width = 32; height = len/width/2; break;
+         }
+         img = file2ia(fname, 0, width, height, 16);
+         if (img) ia2png(img, width, height, pngname);
          break;
-      case 5:
-         // TODO: add this once LUT is figured out
+      case 5: // IA16?
+         // guess at dims
+         switch (len) {
+            case 1*KB: width = 16; height = 16; break;
+            case 2*KB: width = 32; height = 16; break;
+            case 4*KB: width = 32; height = 32; break;
+            case 8*KB: width = 64; height = 32; break;
+            default: width = 32; height = len/width/2; break;
+         }
+         rimg = file2rgba(fname, 0, width, height, 32);
+         if (rimg) rgba2png(rimg, width, height, pngname);
          break;
       case 6: // IA8? IA4 always has alpha (lsb) clear
          // TODO: do i have alpha bit in IA4 decoded wrong in n64graphics?
@@ -496,6 +517,7 @@ int main(int argc, char *argv[])
             case 1: // RBGA16?
                // guess at dims
                switch (out_size) {
+                  case 16:   width = 4;  height = 2;  break;
                   case 512:  width = 16; height = 16; break;
                   case 1*KB: width = 16; height = 32; break;
                   case 2*KB: width = 32; height = 32; break;
@@ -533,11 +555,29 @@ int main(int argc, char *argv[])
                format = "\"ia\"";
                depth = 16;
                break;
-            case 4:
-               // TODO: add this once LUT is figured out
+            case 4: // IA16?
+               // guess at dims
+               switch (out_size) {
+                  case 1*KB: width = 16; height = 32; break;
+                  case 2*KB: width = 32; height = 32; break;
+                  case 4*KB: width = 32; height = 64; break;
+                  case 8*KB: width = 64; height = 64; break;
+                  default: width = 32; height = out_size/width/2; break;
+               }
+               format = "\"ia\"";
+               depth = 16;
                break;
-            case 5:
-               // TODO: add this once LUT is figured out
+            case 5: // IA16?
+               // guess at dims
+               switch (out_size) {
+                  case 1*KB: width = 16; height = 16; break;
+                  case 2*KB: width = 32; height = 16; break;
+                  case 4*KB: width = 32; height = 32; break;
+                  case 8*KB: width = 64; height = 32; break;
+                  default: width = 32; height = out_size/width/2; break;
+               }
+               format = "\"rgba\"";
+               depth = 32;
                break;
             case 6: // IA8? IA4 always has alpha (lsb) clear
                // TODO: do i have alpha bit in IA4 decoded wrong in n64graphics?
@@ -549,6 +589,9 @@ int main(int argc, char *argv[])
                break;
          }
          if (depth) {
+            if (width == 0 || height == 0) {
+               ERROR("Error: %d x %d for %X at %X type %d\n", width, height, out_size, start+ROM_OFFSET, type);
+            }
             printf("   (0x%06X, 0x%06X, \"blast\", %d, ((0x0, %6s, %2d, %2d, %2d))),\n",
                   start+ROM_OFFSET, start+ROM_OFFSET+len, type, format, depth, width, height);
          }
