@@ -1226,7 +1226,6 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             strcat(makeheader_mio0, maketmp);
             sprintf(binfilename, "%s/%06X.bin", mio0_dir, sec->start);
 
-            printf("Decoding blast %s %d %s\n", mio0filename, sec->subtype, binfilename);
             // extract texture data
             blast_decode_file(mio0filename, sec->subtype, binfilename, data);
 
