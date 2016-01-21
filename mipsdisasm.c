@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -642,12 +641,15 @@ void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *
    while (proc_idx < procs->count) {
       ram_address = procs->procedures[proc_idx].start;
       rom_offset = ram_to_rom(config, ram_address);
-      assert(rom_offset < datalen);
-      if (ram_address > last_end) {
-         fprintf(out, "\n# missing section %X-%X (%06X-%06X) [%X]\n",
-               last_end, ram_address, ram_to_rom(config, last_end), ram_to_rom(config, ram_address), ram_address - last_end);
+      if (rom_offset < datalen) {
+         if (ram_address > last_end) {
+            fprintf(out, "\n# missing section %X-%X (%06X-%06X) [%X]\n",
+                  last_end, ram_address, ram_to_rom(config, last_end), ram_to_rom(config, ram_address), ram_address - last_end);
+         }
+         disassemble_proc(out, data, datalen, &procs->procedures[proc_idx], config);
+      } else {
+         ERROR("%s:%d: rom_offset >= datalen\n", __FILE__, __LINE__);
       }
-      disassemble_proc(out, data, datalen, &procs->procedures[proc_idx], config);
       last_end = procs->procedures[proc_idx].end;
       proc_idx++;
    }
