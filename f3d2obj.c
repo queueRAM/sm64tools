@@ -4,7 +4,7 @@
 
 #include "utils.h"
 
-#define F3D_VERSION "0.2"
+#define F3D2OBJ_VERSION "0.1"
 
 #define read_u24_be(buf) (unsigned int)(((buf)[0] << 16) + ((buf)[1] << 8) + ((buf)[2]))
 
@@ -64,6 +64,7 @@ static void get_mode_string(unsigned char *data, char *description)
 
 typedef struct
 {
+   int obj_idx;
    int x, y, z;
    int u, v;
    union
@@ -71,13 +72,23 @@ typedef struct
       unsigned char rgb[3];
       signed char xyz[3];
    };
+   unsigned char type; // rgb or xyz
    unsigned char a;
 } vertex;
 
-static vertex vertices[16];
-static int v_count = 0;
-static int v_idx = 1;
+// segment data
+#define MAX_SEGMENTS 0x10
+static char *seg_files[MAX_SEGMENTS] = {0};
+static unsigned char *seg_data[MAX_SEGMENTS] = {0};
+static int seg_lengths[MAX_SEGMENTS] = {0};
+
+// RSP vertex buffer
+static vertex vertex_buffer[16];
 static unsigned int material = 0;
+
+// OBJ vertices
+static vertex obj_vertices[1024];
+static int obj_vert_count = 0;
 
 int read_s16_be(unsigned char *buf)
 {
@@ -96,7 +107,7 @@ static void read_vertex(unsigned char *data, vertex *v, unsigned translate[])
    v->x = read_s16_be(&data[0x0]) + translate[0];
    v->y = read_s16_be(&data[0x2]) + translate[1];
    v->z = read_s16_be(&data[0x4]) + translate[2];
-   // skip 6
+   // skip 6-7
    v->u = read_s16_be(&data[0x8]);
    v->v = read_s16_be(&data[0xA]);
    v->rgb[0] = data[0xC];
@@ -105,15 +116,20 @@ static void read_vertex(unsigned char *data, vertex *v, unsigned translate[])
    v->a = data[0xF];
 }
 
-static void load_vertices(unsigned char *data, unsigned int offset, unsigned int count, unsigned translate[])
+static void load_vertices(unsigned char *data, unsigned int offset, unsigned int index, unsigned int count, unsigned translate[])
 {
    unsigned i;
    fprintf(stderr, "load: %X, %d\n", offset, count);
    for (i = 0; i < count; i++) {
-      read_vertex(&data[offset + i*16], &vertices[i], translate);
+      if (i + index < DIM(vertex_buffer)) {
+         read_vertex(&data[offset + i*16], &vertex_buffer[i+index], translate);
+         vertex_buffer[i+index].obj_idx = obj_vert_count;
+         obj_vertices[obj_vert_count] = vertex_buffer[i+index];
+         obj_vert_count++;
+      } else {
+         ERROR("%u + %u >= %lu\n", i, index, DIM(vertex_buffer));
+      }
    }
-   v_idx += v_count;
-   v_count = count;
 }
 
 static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_config *config)
@@ -121,7 +137,7 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
    char description[64];
    char tmp[8];
    unsigned char bank;
-   unsigned char bank2;
+   unsigned char offset;
    unsigned int address;
    unsigned int val;
    int i;
@@ -156,35 +172,41 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
          }
          break;
       case F3D_VTX:
-         bank  = data[1];
-         val = read_u16_be(&data[2]) / 0x10;
-         bank2 = data[4];
-         address = read_u24_be(&data[5]);
-         if (bank2 == 0x07) {
-            load_vertices(raw, address, val, config->translate);
-            for (i = 0; i < v_count; i++) {
+      {
+         unsigned int count = (data[1] >> 4) & 0xF;
+         unsigned int index = (data[1]) & 0xF;
+         //unsigned int length = read_u16_be(&data[2]);
+         unsigned int segment_addr = read_u32_be(&data[4]);
+         bank = data[4];
+         offset = segment_addr & 0x00FFFFFF;
+         if (seg_data[bank] == NULL) {
+            ERROR("Tried to load %d verts from bank %02X %06X\n", count, bank, offset);
+         } else {
+            load_vertices(seg_data[bank], offset, index, count, config->translate);
+            for (i = 0; i < count; i++) {
                fprintf(fout, "v %f %f %f\n",
-                     ((float)vertices[i].x) * config->scale,
-                     ((float)vertices[i].y) * config->scale,
-                     ((float)vertices[i].z) * config->scale);
+                     ((float)vertex_buffer[i+index].x) * config->scale,
+                     ((float)vertex_buffer[i+index].y) * config->scale,
+                     ((float)vertex_buffer[i+index].z) * config->scale);
             }
-            for (i = 0; i < v_count; i++) {
+            for (i = 0; i < count; i++) {
                fprintf(fout, "vt %f %f\n",
-                     ((float)vertices[i].u) / 1024.0f,
-                     ((float)vertices[i].v) / 1024.0f);
+                     ((float)vertex_buffer[i+index].u) / 1024.0f,
+                     ((float)vertex_buffer[i+index].v) / 1024.0f);
             }
-            for (i = 0; i < v_count; i++) {
+            for (i = 0; i < count; i++) {
                fprintf(stderr, "vn %d %d %d\n", 
-                     vertices[i].xyz[0],
-                     vertices[i].xyz[1],
-                     vertices[i].xyz[2]);
+                     vertex_buffer[i+index].xyz[0],
+                     vertex_buffer[i+index].xyz[1],
+                     vertex_buffer[i+index].xyz[2]);
                fprintf(fout, "vn %f %f %f\n",
-                     ((float)vertices[i].xyz[0]) / 127.0f,
-                     ((float)vertices[i].xyz[1]) / 127.0f,
-                     ((float)vertices[i].xyz[2]) / 127.0f);
+                     ((float)vertex_buffer[i+index].xyz[0]) / 127.0f,
+                     ((float)vertex_buffer[i+index].xyz[1]) / 127.0f,
+                     ((float)vertex_buffer[i+index].xyz[2]) / 127.0f);
             }
          }
          break;
+      }
       case F3D_DL:
          bank = data[4];
          address = read_u24_be(&data[5]);
@@ -243,9 +265,9 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
          vertex[0] = data[5] / 0x0A;
          vertex[1] = data[6] / 0x0A;
          vertex[2] = data[7] / 0x0A;
-         idx[0] = vertex[0] + v_idx;
-         idx[1] = vertex[1] + v_idx;
-         idx[2] = vertex[2] + v_idx;
+         idx[0] = vertex_buffer[vertex[0]].obj_idx;
+         idx[1] = vertex_buffer[vertex[1]].obj_idx;
+         idx[2] = vertex_buffer[vertex[2]].obj_idx;
          fprintf(fout, "f %d/%d/%d %d/%d/%d %d/%d/%d\n",
                idx[0], idx[0], idx[0],
                idx[1], idx[1], idx[1],
@@ -321,9 +343,9 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
 
 static void print_usage(void)
 {
-   ERROR("Usage: f3d [-l LENGTH] [-o OFFSET] FILE\n"
+   ERROR("Usage: f3d2obj [-l LENGTH] [-o OFFSET] FILE\n"
          "\n"
-         "f3d v" F3D_VERSION ": N64 Fast3D display list decoder\n"
+         "f3d v" F3D2OBJ_VERSION ": N64 Fast3D display list decoder\n"
          "\n"
          "Optional arguments:\n"
          " -i NUM       starting vertex index offset (default: %d)\n"
@@ -345,6 +367,7 @@ static void print_usage(void)
 static void parse_arguments(int argc, char *argv[], arg_config *config)
 {
    int i;
+   int seg;
    int file_count = 0;
    if (argc < 2) {
       print_usage();
@@ -352,52 +375,61 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
    }
    for (i = 1; i < argc; i++) {
       if (argv[i][0] == '-') {
-         switch (argv[i][1]) {
-            case 'i':
-               if (++i >= argc) {
-                  print_usage();
-               }
-               config->v_idx_offset = strtoul(argv[i], NULL, 0);
-               break;
-            case 'l':
-               if (++i >= argc) {
-                  print_usage();
-               }
-               config->length = strtoul(argv[i], NULL, 0);
-               break;
-            case 'o':
-               if (++i >= argc) {
-                  print_usage();
-               }
-               config->offset = strtoul(argv[i], NULL, 0);
-               break;
-            case 's':
-               if (++i >= argc) {
-                  print_usage();
-               }
-               config->scale = strtof(argv[i], NULL);
-               break;
-            case 'x':
-               if (++i >= argc) {
-                  print_usage();
-               }
-               config->translate[0] = strtoul(argv[i], NULL, 0);
-               break;
-            case 'y':
-               if (++i >= argc) {
-                  print_usage();
-               }
-               config->translate[1] = strtoul(argv[i], NULL, 0);
-               break;
-            case 'z':
-               if (++i >= argc) {
-                  print_usage();
-               }
-               config->translate[2] = strtoul(argv[i], NULL, 0);
-               break;
-            default:
+         // assign segment files
+         if (argv[i][1] >= '0' && argv[i][1] <= '9') {
+            seg = atoi(&argv[i][1]);
+            if (++i >= argc) {
                print_usage();
-               break;
+            }
+            seg_files[seg] = argv[i];
+         } else {
+            switch (argv[i][1]) {
+               case 'i':
+                  if (++i >= argc) {
+                     print_usage();
+                  }
+                  config->v_idx_offset = strtoul(argv[i], NULL, 0);
+                  break;
+               case 'l':
+                  if (++i >= argc) {
+                     print_usage();
+                  }
+                  config->length = strtoul(argv[i], NULL, 0);
+                  break;
+               case 'o':
+                  if (++i >= argc) {
+                     print_usage();
+                  }
+                  config->offset = strtoul(argv[i], NULL, 0);
+                  break;
+               case 's':
+                  if (++i >= argc) {
+                     print_usage();
+                  }
+                  config->scale = strtof(argv[i], NULL);
+                  break;
+               case 'x':
+                  if (++i >= argc) {
+                     print_usage();
+                  }
+                  config->translate[0] = strtoul(argv[i], NULL, 0);
+                  break;
+               case 'y':
+                  if (++i >= argc) {
+                     print_usage();
+                  }
+                  config->translate[1] = strtoul(argv[i], NULL, 0);
+                  break;
+               case 'z':
+                  if (++i >= argc) {
+                     print_usage();
+                  }
+                  config->translate[2] = strtoul(argv[i], NULL, 0);
+                  break;
+               default:
+                  print_usage();
+                  break;
+            }
          }
       } else {
          switch (file_count) {
@@ -439,6 +471,18 @@ int main(int argc, char *argv[])
          return EXIT_FAILURE;
       }
    }
+   
+   // open segment files
+   for (i = 0; i < DIM(seg_files); i++) {
+      if (seg_files[i] != NULL) {
+         size = read_file(seg_files[i], &seg_data[i]);
+         if (size < 0) {
+            perror("Error opening input file");
+            return EXIT_FAILURE;
+         }
+         seg_lengths[i] = size;
+      }
+   }
 
    // operation
    size = read_file(config.in_filename, &data);
@@ -460,7 +504,6 @@ int main(int argc, char *argv[])
       config.length = size - config.offset;
    }
 
-   v_idx = config.v_idx_offset;
    for (i = config.offset; i < config.offset + config.length; i += 8) {
       print_f3d(fout, &data[i], data, &config);
       if (done) break;
