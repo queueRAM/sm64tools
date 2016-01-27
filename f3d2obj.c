@@ -10,7 +10,7 @@
 
 #define F3D_MOVEMEM    0x03
 #define F3D_VTX        0x04
-#define F3D_DL         0x05
+#define F3D_DL         0x06
 #define F3D_QUAD       0xB5
 #define F3D_CLRGEOMODE 0xB6
 #define F3D_SETGEOMODE 0xB7
@@ -173,16 +173,17 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
          break;
       case F3D_VTX:
       {
-         unsigned int count = (data[1] >> 4) & 0xF;
+         unsigned int count = ((data[1] >> 4) & 0xF) + 1;
          unsigned int index = (data[1]) & 0xF;
          //unsigned int length = read_u16_be(&data[2]);
          unsigned int segment_addr = read_u32_be(&data[4]);
          bank = data[4];
-         offset = segment_addr & 0x00FFFFFF;
+         unsigned int seg_offset = segment_addr & 0x00FFFFFF;
+         fprintf(fout, "# F3D_VTX %u %u %08X (%02X %06X)\n", count, index, segment_addr, bank, seg_offset);
          if (seg_data[bank] == NULL) {
-            ERROR("Tried to load %d verts from bank %02X %06X\n", count, bank, offset);
+            ERROR("Tried to load %d verts from bank %02X %06X\n", count, bank, seg_offset);
          } else {
-            load_vertices(seg_data[bank], offset, index, count, config->translate);
+            load_vertices(seg_data[bank], seg_offset, index, count, config->translate);
             for (i = 0; i < count; i++) {
                fprintf(fout, "v %f %f %f\n",
                      ((float)vertex_buffer[i+index].x) * config->scale,
@@ -218,7 +219,7 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
          vertex[0] = data[1] / 0x0A;
          vertex[1] = data[2] / 0x0A;
          vertex[2] = data[3] / 0x0A;
-         // data[6] unused
+         // data[4] unused
          vertex[3] = data[5] / 0x0A;
          vertex[4] = data[6] / 0x0A;
          vertex[5] = data[7] / 0x0A;
@@ -236,7 +237,7 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
          fprintf(stderr, "%14s %s", "F3D_SETGEOMODE\n", description);
          break;
       case F3D_ENDDL:
-         // fprintf(fout, "%14s %s", "F3D_ENDL", description);
+         fprintf(stderr, "%14s %s", "F3D_ENDL", description);
          done = 1;
          break;
       case F3D_TEXTURE:
@@ -265,9 +266,9 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
          vertex[0] = data[5] / 0x0A;
          vertex[1] = data[6] / 0x0A;
          vertex[2] = data[7] / 0x0A;
-         idx[0] = vertex_buffer[vertex[0]].obj_idx;
-         idx[1] = vertex_buffer[vertex[1]].obj_idx;
-         idx[2] = vertex_buffer[vertex[2]].obj_idx;
+         idx[0] = vertex_buffer[vertex[0]].obj_idx+1;
+         idx[1] = vertex_buffer[vertex[1]].obj_idx+1;
+         idx[2] = vertex_buffer[vertex[2]].obj_idx+1;
          fprintf(fout, "f %d/%d/%d %d/%d/%d %d/%d/%d\n",
                idx[0], idx[0], idx[0],
                idx[1], idx[1], idx[1],
