@@ -6,8 +6,6 @@
 
 #define F3D_VERSION "0.2"
 
-#define read_u24_be(buf) (unsigned int)(((buf)[0] << 16) + ((buf)[1] << 8) + ((buf)[2]))
-
 #define F3D_MOVEMEM    0x03
 #define F3D_VTX        0x04
 #define F3D_DL         0x06
@@ -57,8 +55,7 @@ static void print_f3d(FILE *fout, unsigned char *data)
 {
    char description[64];
    char tmp[8];
-   unsigned char bank;
-   unsigned char bank2;
+   unsigned char offset;
    unsigned int address;
    unsigned int val;
    int i;
@@ -74,21 +71,18 @@ static void print_f3d(FILE *fout, unsigned char *data)
             case 0x86: sprintf(description, "light"); break;
             case 0x88: sprintf(description, "dark "); break;
          }
-         bank = data[4];
-         address = read_u24_be(&data[5]);
-         fprintf(fout, "%14s %s %02X %06X", "F3D_MOVEMEM", description, bank, address);
+         address = read_u32_be(&data[4]);
+         fprintf(fout, "%14s %s %08X", "F3D_MOVEMEM", description, address);
          break;
       case F3D_VTX:
-         bank  = data[1];
-         val = read_u16_be(&data[2]) / 0x10;
-         bank2 = data[4];
-         address = read_u24_be(&data[5]);
-         fprintf(fout, "%14s %02X %06X %02X %06X", "F3D_VTX", bank, val, bank2, address);
+         offset  = data[1];
+         val = read_u16_be(&data[2]);
+         address = read_u32_be(&data[4]);
+         fprintf(fout, "%14s %02X %04X (%d) %08X", "F3D_VTX", offset, val, val/0x10, address);
          break;
       case F3D_DL:
-         bank = data[4];
-         address = read_u24_be(&data[5]);
-         fprintf(fout, "%14s %02X %06X", "F3D_DL", bank, address);
+         address = read_u32_be(&data[4]);
+         fprintf(fout, "%14s %08X", "F3D_DL", address);
          break;
       case F3D_QUAD:
       {
@@ -202,9 +196,8 @@ static void print_f3d(FILE *fout, unsigned char *data)
          break;
       }
       case G_SETTIMG:
-         bank = data[4];
-         address = read_u24_be(&data[5]);
-         fprintf(fout, "%14s %02X %06X", "G_SETTIMG", bank, address);
+         address = read_u32_be(&data[4]);
+         fprintf(fout, "%14s %08X", "G_SETTIMG", address);
          break;
       default:
          fprintf(fout, "%14s %s", "Unknown", description);
