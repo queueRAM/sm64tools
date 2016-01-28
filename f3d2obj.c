@@ -6,8 +6,6 @@
 
 #define F3D2OBJ_VERSION "0.1"
 
-#define read_u24_be(buf) (unsigned int)(((buf)[0] << 16) + ((buf)[1] << 8) + ((buf)[2]))
-
 #define F3D_MOVEMEM    0x03
 #define F3D_VTX        0x04
 #define F3D_DL         0x06
@@ -29,6 +27,7 @@ typedef struct
 {
    char *in_filename;
    char *out_filename;
+   char *mtl_filename;
    unsigned int offset;
    unsigned int length;
    unsigned translate[3];
@@ -40,27 +39,13 @@ static arg_config default_config =
 {
    NULL,
    NULL,
+   NULL,
    0,
    0,
    {0, 0, 0},
    1.0f,
    1
 };
-
-
-static int done = 0;
-
-static void get_mode_string(unsigned char *data, char *description)
-{
-   unsigned int val = read_u32_be(&data[4]);
-   switch (val) {
-      case 0x00022000: sprintf(description, "vertex RGB, no culling"); break;
-      case 0x00020000: sprintf(description, "vertex RGB, culling"); break;
-      case 0x00000000: sprintf(description, "no vertex RGB, culling"); break;
-      case 0x00002200: sprintf(description, "no vertex RGB, no culling"); break;
-      default: sprintf(description, "unknown"); break;
-   }
-}
 
 typedef struct
 {
@@ -90,16 +75,20 @@ static unsigned int material = 0;
 static vertex obj_vertices[1024];
 static int obj_vert_count = 0;
 
-int read_s16_be(unsigned char *buf)
+// textures needed
+static unsigned int textures[4096] = {0};
+static int texture_count = 0;
+
+static void get_mode_string(unsigned char *data, char *description)
 {
-   unsigned tmp = read_u16_be(buf);
-   int ret;
-   if (tmp > 0x7FFF) {
-      ret = -((int)0x10000 - (int)tmp);
-   } else {
-      ret = (int)tmp;
+   unsigned int val = read_u32_be(&data[4]);
+   switch (val) {
+      case 0x00022000: sprintf(description, "vertex RGB, no culling"); break;
+      case 0x00020000: sprintf(description, "vertex RGB, culling"); break;
+      case 0x00000000: sprintf(description, "no vertex RGB, culling"); break;
+      case 0x00002200: sprintf(description, "no vertex RGB, no culling"); break;
+      default: sprintf(description, "unknown"); break;
    }
-   return ret;
 }
 
 static void read_vertex(unsigned char *data, vertex *v, unsigned translate[])
@@ -119,7 +108,7 @@ static void read_vertex(unsigned char *data, vertex *v, unsigned translate[])
 static void load_vertices(unsigned char *data, unsigned int offset, unsigned int index, unsigned int count, unsigned translate[])
 {
    unsigned i;
-   fprintf(stderr, "load: %X, %d\n", offset, count);
+   INFO("load: %X, %d\n", offset, count);
    for (i = 0; i < count; i++) {
       if (i + index < DIM(vertex_buffer)) {
          read_vertex(&data[offset + i*16], &vertex_buffer[i+index], translate);
@@ -132,14 +121,57 @@ static void load_vertices(unsigned char *data, unsigned int offset, unsigned int
    }
 }
 
-static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_config *config)
+static void add_texture(unsigned int offset)
+{
+   int i;
+   for (i = 0; i < texture_count; i++) {
+      if (textures[i] == offset) return;
+   }
+   textures[texture_count] = offset;
+   texture_count++;
+}
+
+static void generate_material_file(char *fname)
+{
+   unsigned char *rom;
+   FILE *fmtl;
+   long rom_size;
+   int i;
+   fmtl = fopen(fname, "w");
+   // TODO: this is specific to Blast Corps
+   rom_size = read_file("bc.u.z64", &rom);
+   if (rom_size < 0) {
+      perror("Error opening input file");
+      exit(EXIT_FAILURE);
+   }
+   if (fmtl) {
+      for (i = 0; i < texture_count; i++) {
+         // TODO: this is specific to Blast Corps
+         unsigned int rom_addr = read_u32_be(&rom[0x4CE0+8*textures[i]]) + 0x4CE0;
+         fprintf(fmtl, "newmtl M%06X\n", textures[i]);
+         // TODO: are these good values?
+         fprintf(fmtl,
+         "Ka 1.0 1.0 1.0\n" // ambiant color
+         "Kd 1.0 1.0 1.0\n" // diffuse color
+         "Ks 0.4 0.4 0.4\n" // specular color
+         "Ns 0\n"           // specular exponent
+         "d 1\n"            // dissolved
+         "Tr 1\n");         // inverted
+         // TODO: this is specific to Blast Corps
+         fprintf(fmtl, "map_Kd blast_corps.u.split/textures/%06X.0x00000.png\n\n", rom_addr);
+      }
+   }
+   free(rom);
+}
+
+static int print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_config *config)
 {
    char description[64];
    char tmp[8];
-   unsigned char bank;
-   unsigned char offset;
-   unsigned int address;
-   unsigned int val;
+   unsigned int seg_address;
+   unsigned int seg_offset;
+   unsigned int bank;
+   int done = 0;
    int i;
    // default description is raw bytes
    description[0] = '\0';
@@ -153,17 +185,22 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
             case 0x86: sprintf(description, "light"); break;
             case 0x88: sprintf(description, "dark "); break;
          }
+         seg_address = read_u32_be(&data[4]);
          bank = data[4];
-         address = read_u24_be(&data[5]);
-         if (bank == 0x07) {
+         seg_offset = seg_address & 0x00FFFFFF;
+         INFO("%14s %s %08X", "F3D_MOVEMEM", description, seg_address);
+         if (seg_data[bank] == NULL) {
+            ERROR("Tried to F3D_MOVEMEM from bank %02X %06X\n", bank, seg_offset);
+            fprintf(fout, "# F3D_MOVEMEM %02X %02X%02X %02X %06X\n", data[1], data[2], data[3], bank, seg_offset);
+         } else {
             float r, g, b;
-            r = (float)raw[address] / 255.0f;
-            g = (float)raw[address+1] / 255.0f;
-            b = (float)raw[address+2] / 255.0f;
+            r = (float)seg_data[bank][seg_offset] / 255.0f;
+            g = (float)seg_data[bank][seg_offset+1] / 255.0f;
+            b = (float)seg_data[bank][seg_offset+2] / 255.0f;
             if (data[1] == 0x86) {
-               fprintf(fout, "# newmtl M%06X\n", address);
+               fprintf(fout, "# newmtl M%06X\n", seg_offset);
                fprintf(fout, "# Ka %f %f %f\n", r, g, b);
-               material = address;
+               material = seg_offset;
             } else if (data[1] == 0x88) {
                fprintf(fout, "# Kd %f %f %f\n\n", r, g, b);
                fprintf(fout, "mtllib materials.mtl\n");
@@ -176,10 +213,11 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
          unsigned int count = ((data[1] >> 4) & 0xF) + 1;
          unsigned int index = (data[1]) & 0xF;
          //unsigned int length = read_u16_be(&data[2]);
-         unsigned int segment_addr = read_u32_be(&data[4]);
+         seg_address = read_u32_be(&data[4]);
          bank = data[4];
-         unsigned int seg_offset = segment_addr & 0x00FFFFFF;
-         fprintf(fout, "# F3D_VTX %u %u %08X (%02X %06X)\n", count, index, segment_addr, bank, seg_offset);
+         seg_offset = seg_address & 0x00FFFFFF;
+         INFO("%14s %u %u %08X (%02X %06X)", "F3D_VTX", count, index, seg_address, bank, seg_offset);
+         fprintf(fout, "# F3D_VTX %u %u %08X (%02X %06X)\n", count, index, seg_address, bank, seg_offset);
          if (seg_data[bank] == NULL) {
             ERROR("Tried to load %d verts from bank %02X %06X\n", count, bank, seg_offset);
          } else {
@@ -196,10 +234,6 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
                      ((float)vertex_buffer[i+index].v) / 1024.0f);
             }
             for (i = 0; i < count; i++) {
-               fprintf(stderr, "vn %d %d %d\n", 
-                     vertex_buffer[i+index].xyz[0],
-                     vertex_buffer[i+index].xyz[1],
-                     vertex_buffer[i+index].xyz[2]);
                fprintf(fout, "vn %f %f %f\n",
                      ((float)vertex_buffer[i+index].xyz[0]) / 127.0f,
                      ((float)vertex_buffer[i+index].xyz[1]) / 127.0f,
@@ -209,9 +243,9 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
          break;
       }
       case F3D_DL:
-         bank = data[4];
-         address = read_u24_be(&data[5]);
-         fprintf(stderr, "%14s %02X %06X\n", "F3D_DL", bank, address);
+         // TODO: implement as jump
+         seg_address = read_u32_be(&data[4]);
+         INFO("%14s %08X", "F3D_DL", seg_address);
          break;
       case F3D_QUAD:
       {
@@ -223,24 +257,29 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
          vertex[3] = data[5] / 0x0A;
          vertex[4] = data[6] / 0x0A;
          vertex[5] = data[7] / 0x0A;
-         fprintf(fout, "%14s %3d %3d %3d %3d %3d %3d", "F3D_QUAD",
+         INFO("%14s %3d %3d %3d %3d %3d %3d", "F3D_QUAD",
+               vertex[0], vertex[1], vertex[2],
+               vertex[3], vertex[4], vertex[5]);
+         fprintf(fout, "# %14s %3d %3d %3d %3d %3d %3d", "F3D_QUAD",
                vertex[0], vertex[1], vertex[2],
                vertex[3], vertex[4], vertex[5]);
          break;
       }
       case F3D_CLRGEOMODE:
          get_mode_string(data, description);
-         fprintf(stderr, "%14s %s", "F3D_CLRGEOMODE\n", description);
+         INFO("%14s %s", "F3D_CLRGEOMODE", description);
          break;
       case F3D_SETGEOMODE:
          get_mode_string(data, description);
-         fprintf(stderr, "%14s %s", "F3D_SETGEOMODE\n", description);
+         INFO("%14s %s", "F3D_SETGEOMODE", description);
          break;
       case F3D_ENDDL:
-         fprintf(stderr, "%14s %s", "F3D_ENDL", description);
+         INFO("%14s %s", "F3D_ENDL", description);
          done = 1;
          break;
       case F3D_TEXTURE:
+      {
+         unsigned int val;
          switch (data[3]) {
             case 0x00:
                val = read_u32_be(&data[4]);
@@ -257,8 +296,9 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
                }
                break;
          }
-         fprintf(stderr, "%14s %s\n", "F3D_TEXTURE", description);
+         INFO("%14s %s", "F3D_TEXTURE", description);
          break;
+      }
       case F3D_TRI1:
       {
          unsigned char vertex[3];
@@ -266,6 +306,7 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
          vertex[0] = data[5] / 0x0A;
          vertex[1] = data[6] / 0x0A;
          vertex[2] = data[7] / 0x0A;
+         INFO("%14s %3d %3d %3d", "F3D_TRI1", vertex[0], vertex[1], vertex[2]);
          idx[0] = vertex_buffer[vertex[0]].obj_idx+1;
          idx[1] = vertex_buffer[vertex[1]].obj_idx+1;
          idx[2] = vertex_buffer[vertex[2]].obj_idx+1;
@@ -280,17 +321,19 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
          unsigned short width, height;
          width  = (((data[5] << 8) | (data[6] & 0xF0)) >> 6) + 1;
          height = (((data[6] & 0x0F) << 8 | data[7]) >> 2) + 1;
-         fprintf(stderr, "%14s %2d %2d", "G_SETTILESIZE\n", width, height);
+         INFO("%14s %2d %2d", "G_SETTILESIZE", width, height);
          break;
       }
       case G_LOADBLOCK:
-         val = read_u32_be(&data[4]);
+      {
+         unsigned int val = read_u32_be(&data[4]);
          switch (val) {
             case 0x077FF100: sprintf(description, "RGBA 32x64 or 64x32"); break;
             case 0x073FF100: sprintf(description, "RGBA 32x32"); break;
          }
-         fprintf(stderr, "%14s %s", "G_LOADBLOCK\n", description);
+         INFO("%14s %s", "G_LOADBLOCK", description);
          break;
+      }
       case G_SETTILE:
       {
          struct {unsigned char data[7]; char *description;} table[] = 
@@ -307,14 +350,14 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
                strcpy(description, table[i].description);
             }
          }
-         fprintf(stderr, "%14s %s\n", "G_SETTILE", description);
+         INFO("%14s %s", "G_SETTILE", description);
          break;
       }
       case G_SETFOGCOLOR:
-         fprintf(stderr, "%14s %3d, %3d, %3d, %3d\n", "G_SETFOGCOLOR", data[4], data[5], data[6], data[7]);
+         INFO("%14s %3d, %3d, %3d, %3d", "G_SETFOGCOLOR", data[4], data[5], data[6], data[7]);
          break;
       case G_SETENVCOLOR:
-         fprintf(stderr, "%14s %3d, %3d, %3d, %3d\n", "G_SETENVCOLOR", data[4], data[5], data[6], data[7]);
+         INFO("%14s %3d, %3d, %3d, %3d", "G_SETENVCOLOR", data[4], data[5], data[6], data[7]);
          break;
       case G_SETCOMBINE:
       {
@@ -329,17 +372,23 @@ static void print_f3d(FILE *fout, unsigned char *data, unsigned char *raw, arg_c
                strcpy(description, table[i].description);
             }
          }
-         fprintf(stderr, "%14s %s\n", "G_SETCOMBINE", description);
+         INFO("%14s %s", "G_SETCOMBINE", description);
          break;
       }
       case G_SETTIMG:
+         seg_address = read_u32_be(&data[4]);
          bank = data[4];
-         address = read_u24_be(&data[5]);
-         fprintf(stderr, "%14s %02X %06X\n", "G_SETTIMG", bank, address);
+         seg_offset = seg_address & 0x00FFFFFF;
+         INFO("%14s %02X %06X\n", "G_SETTIMG", bank, seg_offset);
+         fprintf(fout, "\n# %s %02X %06X\n", "G_SETTIMG", bank, seg_offset);
+         fprintf(fout, "usemtl M%06X\n", seg_offset);
+         add_texture(seg_offset);
          break;
       default:
-         return;
+         INFO("%14s %s", "Unknown", description);
+         break;
    }
+   return done;
 }
 
 static void print_usage(void)
@@ -351,6 +400,7 @@ static void print_usage(void)
          "Optional arguments:\n"
          " -i NUM       starting vertex index offset (default: %d)\n"
          " -l LENGTH    length of data to decode in bytes (default: length of file)\n"
+         " -m MTLFILE   material .mtl filename (default: FILE_OFFSET.mtl)\n"
          " -o OFFSET    starting offset in FILE (default: %d)\n"
          " -x X         offset to add to all X values\n"
          " -y Y         offset to add to all Y values\n"
@@ -396,6 +446,12 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                      print_usage();
                   }
                   config->length = strtoul(argv[i], NULL, 0);
+                  break;
+               case 'm':
+                  if (++i >= argc) {
+                     print_usage();
+                  }
+                  config->mtl_filename = argv[i];
                   break;
                case 'o':
                   if (++i >= argc) {
@@ -454,10 +510,12 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
 
 int main(int argc, char *argv[])
 {
+   char mtl_filename[FILENAME_MAX];
    arg_config config;
    FILE *fout;
    unsigned char *data;
    long size;
+   int done;
    unsigned int i;
 
    // get configuration from arguments
@@ -472,7 +530,12 @@ int main(int argc, char *argv[])
          return EXIT_FAILURE;
       }
    }
-   
+   if (config.mtl_filename == NULL) {
+      sprintf(mtl_filename, "%s_%04X.mtl", config.in_filename, config.offset);
+   } else {
+      strcpy(mtl_filename, config.mtl_filename);
+   }
+
    // open segment files
    for (i = 0; i < DIM(seg_files); i++) {
       if (seg_files[i] != NULL) {
@@ -485,7 +548,7 @@ int main(int argc, char *argv[])
       }
    }
 
-   // operation
+   // read in file and error checking
    size = read_file(config.in_filename, &data);
    if (size < 0) {
       perror("Error opening input file");
@@ -505,10 +568,15 @@ int main(int argc, char *argv[])
       config.length = size - config.offset;
    }
 
-   for (i = config.offset; i < config.offset + config.length; i += 8) {
-      print_f3d(fout, &data[i], data, &config);
-      if (done) break;
+   // generate .obj file
+   fprintf(fout, "mtllib %s\n\n", mtl_filename);
+   done = 0;
+   for (i = config.offset; i < config.offset + config.length && !done; i += 8) {
+      done = print_f3d(fout, &data[i], data, &config);
    }
+
+   // generate .mtl file
+   generate_material_file(mtl_filename);
 
    free(data);
    if (fout != stdout) {
