@@ -17,6 +17,18 @@
 // global verbosity setting
 int g_verbosity = 0;
 
+int read_s16_be(unsigned char *buf)
+{
+   unsigned tmp = read_u16_be(buf);
+   int ret;
+   if (tmp > 0x7FFF) {
+      ret = -((int)0x10000 - (int)tmp);
+   } else {
+      ret = (int)tmp;
+   }
+   return ret;
+}
+
 int is_power2(unsigned int val)
 {
    while (((val & 1) == 0) && (val > 1)) {

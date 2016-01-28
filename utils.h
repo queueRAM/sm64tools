@@ -31,8 +31,6 @@
    (buf)[0] = ((val) >> 8) & 0xFF; \
    (buf)[1] = ((val)) & 0xFF; \
 } while(0)
-#define SWAP16(val) ((((val) & 0xFF) << 8) | (((val) & 0xFF00) >> 8))
-#define read_s16_be(buf) SWAP16(*((short*)(buf)))
 
 // print nibbles and bytes
 #define fprint_nibble(FP, NIB_) fputc((NIB_) < 10 ? ('0' + (NIB_)) : ('A' + (NIB_) - 0xA), FP)
@@ -66,6 +64,9 @@ extern int g_verbosity;
 #define INFO_HEX(...) if (g_verbosity) print_hex(__VA_ARGS__)
 
 // functions
+
+// convert two bytes in big-endian to signed int
+int read_s16_be(unsigned char *buf);
 
 // determine if value is power of 2
 // returns 1 if val is power of 2, 0 otherwise
