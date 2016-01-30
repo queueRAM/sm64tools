@@ -54,17 +54,11 @@ static void get_mode_string(unsigned char *data, char *description)
 static void print_f3d(FILE *fout, unsigned char *data)
 {
    char description[64];
-   char tmp[8];
    unsigned char offset;
    unsigned int address;
    unsigned int val;
-   int i;
-   // default description is raw bytes
+   // default description
    description[0] = '\0';
-   for (i = 0; i < 8; i++) {
-      sprintf(tmp, "%02X ", data[i]);
-      strcat(description, tmp);
-   }
    switch (data[0]) {
       case F3D_MOVEMEM:
          switch (data[1]) {
@@ -311,7 +305,7 @@ int main(int argc, char *argv[])
    }
 
    for (i = config.offset; i < config.offset + config.length; i += 8) {
-      fprintf(fout, "%05X: ", i);
+      fprintf(fout, "%05X: %08X %08X", i, read_u32_be(&data[i]), read_u32_be(&data[i+4]));
       print_f3d(fout, &data[i]);
       fprintf(fout, "\n");
       if (F3D_ENDDL == data[i]) {
