@@ -47,7 +47,8 @@ static int cmp_local(const void *a, const void *b)
 {
    const unsigned int *uia = a;
    const unsigned int *uib = b;
-   return (*uia - *uib);
+   return (*uia > *uib) ?  1 :
+          (*uib > *uia) ? -1 : 0;
 }
 
 static void add_proc(proc_table *procs, unsigned int start, unsigned int end)
@@ -201,9 +202,10 @@ static void collect_jals(unsigned char *data, long datalen, proc_table *procs, r
 
 static int proc_cmp(const void *a, const void *b)
 {
-   const procedure *proca = a;
-   const procedure *procb = b;
-   return (proca->start - procb->start);
+   const procedure *pa = a;
+   const procedure *pb = b;
+   return (pa->start > pb->start) ?  1 :
+          (pb->start > pa->start) ? -1 : 0;
 }
 
 // interpret MIPS pseudoinstructions
