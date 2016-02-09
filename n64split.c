@@ -534,6 +534,9 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
       if (ram_address > end_address) {
          ram_address = end_address;
       }
+      if (ram_address == end_address) {
+         break;
+      }
       if (ram_address > prev_end) {
          int is_dummy = disassemble_dummy(out, config, data, prev_end, ram_address);
          if (!is_dummy) {
@@ -568,9 +571,6 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
       }
       if (ram_address < prev_end) {
          ERROR("Warning: %08X < %08X\n", ram_address, prev_end);
-      }
-      if (ram_address == end_address) {
-         break;
       }
       disassemble_proc(out, data, len, &procs->procedures[proc_idx], config);
       prev_end = procs->procedures[proc_idx].end;
