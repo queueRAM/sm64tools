@@ -96,7 +96,7 @@ static void decode_level(unsigned char *data, level_t levels[], unsigned int l, 
    a = levels[l].start;
    // length = 0 ends level script
    while (a < levels[l].end && data[a+1] != 0) {
-      printf("%06X ", a);
+      printf("%06X [%03X] ", a, a - levels[l].start);
       switch (data[a]) {
          case 0x00: printf("LoadJump0"); break; // load and jump from ROM into a RAM segment
          case 0x01: printf("LoadJump1"); break; // load and jump from ROM into a RAM segment
