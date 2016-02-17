@@ -6,6 +6,7 @@ CKSUM_TARGET    := n64cksum
 DISASM_TARGET   := mipsdisasm
 EXTEND_TARGET   := sm64extend
 F3D_TARGET      := f3d
+F3D2OBJ_TARGET  := f3d2obj
 GEO_TARGET      := sm64geo
 GRAPHICS_TARGET := n64graphics
 MIO0_TARGET     := mio0
@@ -28,6 +29,9 @@ EXTEND_SRC_FILES := sm64extend.c
 
 F3D_SRC_FILES := f3d.c \
                  utils.c
+
+F3D2OBJ_SRC_FILES := f3d2obj.c \
+                     utils.c
 
 GEO_SRC_FILES := sm64geo.c \
                  utils.c
@@ -70,18 +74,21 @@ CKSUM_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(CKSUM_SRC_FILES:.c=.o))
 COMPRESS_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(COMPRESS_SRC_FILES:.c=.o))
 EXTEND_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(EXTEND_SRC_FILES:.c=.o))
 F3D_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(F3D_SRC_FILES:.c=.o))
+F3D2OBJ_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(F3D2OBJ_SRC_FILES:.c=.o))
 GEO_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(GEO_SRC_FILES:.c=.o))
 SPLIT_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(SPLIT_SRC_FILES:.c=.o))
-OBJ_FILES = $(LIB_OBJ_FILES) $(EXTEND_OBJ_FILES) $(COMPRESS_OBJ_FILES) $(SPLIT_OBJ_FILES) \
-				$(CKSUM_OBJ_FILES) $(F3D_OBJ_FILES) $(GEO_OBJ_FILES)
+OBJ_FILES = $(LIB_OBJ_FILES) $(EXTEND_OBJ_FILES) $(COMPRESS_OBJ_FILES) \
+            $(SPLIT_OBJ_FILES) $(CKSUM_OBJ_FILES) $(F3D_OBJ_FILES) \
+            $(F3D2OBJ_OBJ_FILES) $(GEO_OBJ_FILES)
 DEP_FILES = $(OBJ_FILES:.o=.d)
 
 ######################## Targets #############################
 
 default: all
 
-all: $(EXTEND_TARGET) $(COMPRESS_TARGET) $(MIO0_TARGET) $(CKSUM_TARGET) $(SPLIT_TARGET) \
-	  $(F3D_TARGET) $(GRAPHICS_TARGET) $(DISASM_TARGET) $(GEO_TARGET) $(WALK_TARGET)
+all: $(EXTEND_TARGET) $(COMPRESS_TARGET) $(MIO0_TARGET) $(CKSUM_TARGET) \
+     $(SPLIT_TARGET) $(F3D_TARGET) $(F3D2OBJ_TARGET) $(GRAPHICS_TARGET) \
+     $(DISASM_TARGET) $(GEO_TARGET) $(WALK_TARGET)
 
 $(OBJ_DIR)/%.o: %.c
 	@[ -d $(OBJ_DIR) ] || mkdir -p $(OBJ_DIR)
@@ -101,6 +108,9 @@ $(EXTEND_TARGET): $(EXTEND_OBJ_FILES) $(SM64_LIB)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(F3D_TARGET): $(F3D_OBJ_FILES)
+	$(LD) $(LDFLAGS) -o $@ $^
+
+$(F3D2OBJ_TARGET): $(F3D2OBJ_OBJ_FILES)
 	$(LD) $(LDFLAGS) -o $@ $^
 
 $(GEO_TARGET): $(GEO_OBJ_FILES)
@@ -131,10 +141,12 @@ clean:
 	rm -f $(DISASM_TARGET) $(DISASM_TARGET).exe
 	rm -f $(EXTEND_TARGET) $(EXTEND_TARGET).exe
 	rm -f $(F3D_TARGET) $(F3D_TARGET).exe
+	rm -f $(F3D2OBJ_TARGET) $(F3D2OBJ_TARGET).exe
 	rm -f $(GEO_TARGET) $(GEO_TARGET).exe
 	rm -f $(MIO0_TARGET) $(MIO0_TARGET).exe
 	rm -f $(GRAPHICS_TARGET) $(GRAPHICS_TARGET).exe
 	rm -f $(SPLIT_TARGET) $(SPLIT_TARGET).exe
+	rm -f $(WALK_TARGET) $(WALK_TARGET).exe
 	-@[ -d $(OBJ_DIR) ] && rmdir --ignore-fail-on-non-empty $(OBJ_DIR)
 
 .PHONY: all clean default

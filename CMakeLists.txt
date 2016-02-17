@@ -28,6 +28,8 @@ target_link_libraries(sm64walk sm64)
 
 add_executable(f3d f3d.c utils.c)
 
+add_executable(f3d2obj f3d2obj.c utils.c)
+
 add_executable(sm64geo sm64geo.c utils.c)
 
 add_executable(mio0 libmio0.c)
@@ -44,6 +46,6 @@ add_executable(n64graphics n64graphics.c utils.c)
 set_target_properties(n64graphics PROPERTIES COMPILE_DEFINITIONS "N64GRAPHICS_STANDALONE")
 target_link_libraries(n64graphics png z)
 
-add_executable(n64split config.c mipsdisasm.c n64split.c n64graphics.c)
+add_executable(n64split blast.c config.c mipsdisasm.c n64split.c n64graphics.c)
 target_link_libraries(n64split sm64 capstone config png z)
 
