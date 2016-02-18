@@ -21,14 +21,45 @@ typedef enum
    IMG_FORMAT_SKYBOX,
 } img_format;
 
+
+rgba *raw2rgba(char *raw, int width, int height, int depth)
+{
+   rgba *img = NULL;
+   unsigned img_size;
+   int i;
+
+   img_size = width * height * sizeof(*img);
+   img = malloc(img_size);
+   if (!img) {
+      ERROR("Error allocating %u bytes\n", img_size);
+      return NULL;
+   }
+
+   if (depth == 16) {
+      for (i = 0; i < width * height; i++) {
+         img[i].red   = SCALE_5_8((raw[i*2] & 0xF8) >> 3);
+         img[i].green = SCALE_5_8(((raw[i*2] & 0x07) << 2) | ((raw[i*2+1] & 0xC0) >> 6));
+         img[i].blue  = SCALE_5_8((raw[i*2+1] & 0x3E) >> 1);
+         img[i].alpha = (raw[i*2+1] & 0x01) ? 0xFF : 0x00;
+      }
+   } else if (depth == 32) {
+      for (i = 0; i < width * height; i++) {
+         img[i].red   = raw[i*4];
+         img[i].green = raw[i*4+1];
+         img[i].blue  = raw[i*4+2];
+         img[i].alpha = raw[i*4+3];
+      }
+   }
+
+   return img;
+}
+
 rgba *file2rgba(char *filename, int offset, int width, int height, int depth)
 {
    FILE *fp;
    rgba *img = NULL;
    char *raw;
    unsigned size;
-   unsigned img_size;
-   int i;
 
    fp = fopen(filename, "rb");
    if (!fp) {
@@ -51,28 +82,7 @@ rgba *file2rgba(char *filename, int offset, int width, int height, int depth)
       goto file2rgba_free;
    }
 
-   img_size = width * height * sizeof(*img);
-   img = malloc(img_size);
-   if (!img) {
-      ERROR("Error allocating %u bytes\n", img_size);
-      goto file2rgba_free;
-   }
-
-   if (depth == 16) {
-      for (i = 0; i < width * height; i++) {
-         img[i].red   = SCALE_5_8((raw[i*2] & 0xF8) >> 3);
-         img[i].green = SCALE_5_8(((raw[i*2] & 0x07) << 2) | ((raw[i*2+1] & 0xC0) >> 6));
-         img[i].blue  = SCALE_5_8((raw[i*2+1] & 0x3E) >> 1);
-         img[i].alpha = (raw[i*2+1] & 0x01) ? 0xFF : 0x00;
-      }
-   } else if (depth == 32) {
-      for (i = 0; i < width * height; i++) {
-         img[i].red   = raw[i*4];
-         img[i].green = raw[i*4+1];
-         img[i].blue  = raw[i*4+2];
-         img[i].alpha = raw[i*4+3];
-      }
-   }
+   img = raw2rgba(raw, width, height, depth);
 
 file2rgba_free:
    free(raw);

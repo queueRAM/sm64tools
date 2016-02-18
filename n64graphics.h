@@ -15,6 +15,9 @@ typedef struct _ia
    unsigned char alpha;
 } ia;
 
+// extract RGBA image from raw data
+rgba *raw2rgba(char *raw, int width, int height, int depth);
+
 // extract RGBA image from file at offset to RGBA data
 rgba *file2rgba(char *filename, int offset, int width, int height, int depth);
 
