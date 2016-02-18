@@ -454,7 +454,7 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
 
 static void print_usage(void)
 {
-   ERROR("Usage: f3d2obj [-0/-F] [-d DIR] [-i NUM] [-X/Y/Z OFF] [-s SCALE] SEGMENT_ADDR...\n"
+   ERROR("Usage: f3d2obj [-0/-F FILE] [-d DIR] [-i NUM] [-s SCALE] [-v] [-x/y/z OFF] SEG_ADDR...\n"
          "\n"
          "f3d2obj v" F3D2OBJ_VERSION ": Fast3D display list to Wavefront .obj converter\n"
          "\n"
@@ -464,12 +464,12 @@ static void print_usage(void)
          " -i NUM       starting vertex index offset (default: %d)\n"
          " -s SCALE     scale all values by this factor (float)\n"
          " -v           verbose output\n"
-         " -x X         offset to add to all X values\n"
-         " -y Y         offset to add to all Y values\n"
-         " -z Z         offset to add to all Z values\n"
+         " -x X         offset to add to all X values before scaling\n"
+         " -y Y         offset to add to all Y values before scaling\n"
+         " -z Z         offset to add to all Z values before scaling\n"
          "\n"
          "Input arguments:\n"
-         " SEGMENT_ADDR segment addresses to start decoding from\n",
+         " SEG_ADDR     segment addresses to start decoding from\n",
          default_config.v_idx_offset);
    exit(1);
 }
@@ -500,6 +500,12 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
             seg_files[seg] = argv[i];
          } else {
             switch (argv[i][1]) {
+               case 'd':
+                  if (++i >= argc) {
+                     print_usage();
+                  }
+                  config->out_dir = argv[i];
+                  break;
                case 'i':
                   if (++i >= argc) {
                      print_usage();
