@@ -31,6 +31,7 @@ F3D_SRC_FILES := f3d.c \
                  utils.c
 
 F3D2OBJ_SRC_FILES := f3d2obj.c \
+                     n64graphics.c \
                      utils.c
 
 GEO_SRC_FILES := sm64geo.c \
@@ -111,7 +112,7 @@ $(F3D_TARGET): $(F3D_OBJ_FILES)
 	$(LD) $(LDFLAGS) -o $@ $^
 
 $(F3D2OBJ_TARGET): $(F3D2OBJ_OBJ_FILES)
-	$(LD) $(LDFLAGS) -o $@ $^
+	$(LD) $(LDFLAGS) -o $@ $^ -lpng
 
 $(GEO_TARGET): $(GEO_OBJ_FILES)
 	$(LD) $(LDFLAGS) -o $@ $^
