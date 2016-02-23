@@ -168,7 +168,7 @@ static void decode_level(unsigned char *data, level_t levels[], unsigned int l, 
          case 0x11: // call function
          case 0x12: // call function
             ptr_start = read_u32_be(&data[a+0x4]);
-            printf("%08X %08X\n", read_u32_be(&data[a]), ptr_start);
+            printf("%08X\n", ptr_start);
             break;
          case 0x16: // load ASM into RAM
             dst       = read_u32_be(&data[a+0x4]);
