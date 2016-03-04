@@ -270,6 +270,7 @@ int main(int argc, char *argv[])
    unsigned char *data;
    long size;
    unsigned int i;
+   int stop_on_enddl = 0;
 
    // get configuration from arguments
    config = default_config;
@@ -292,6 +293,7 @@ int main(int argc, char *argv[])
    }
    if (config.length == 0) {
       config.length = size - config.offset;
+      stop_on_enddl = 1;
    }
    if (config.offset >= size) {
       ERROR("Error: offset greater than file size (%X > %X)\n",
@@ -308,7 +310,7 @@ int main(int argc, char *argv[])
       fprintf(fout, "%05X: %08X %08X", i, read_u32_be(&data[i]), read_u32_be(&data[i+4]));
       print_f3d(fout, &data[i]);
       fprintf(fout, "\n");
-      if (F3D_ENDDL == data[i]) {
+      if (stop_on_enddl && F3D_ENDDL == data[i]) {
          break;
       }
    }
