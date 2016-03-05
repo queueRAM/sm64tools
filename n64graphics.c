@@ -54,6 +54,64 @@ rgba *raw2rgba(char *raw, int width, int height, int depth)
    return img;
 }
 
+ia *raw2ia(char *raw, int width, int height, int depth)
+{
+   ia *img = NULL;
+   unsigned img_size;
+   int i;
+
+   img_size = width * height * sizeof(*img);
+   img = malloc(img_size);
+   if (!img) {
+      ERROR("Error allocating %u bytes\n", img_size);
+      return NULL;
+   }
+
+   switch (depth) {
+      case 16:
+         for (i = 0; i < width * height; i++) {
+            img[i].intensity = raw[i*2];
+            img[i].alpha     = raw[i*2+1];
+         }
+         break;
+      case 8:
+         for (i = 0; i < width * height; i++) {
+            img[i].intensity = SCALE_4_8((raw[i] & 0xF0) >> 4);
+            img[i].alpha     = SCALE_4_8(raw[i] & 0x0F);
+         }
+         break;
+      case 4:
+         for (i = 0; i < width * height; i++) {
+            unsigned char bits;
+            bits = raw[i/2];
+            if (i % 2) {
+               bits &= 0xF;
+            } else {
+               bits >>= 4;
+            }
+            img[i].intensity = SCALE_3_8((bits >> 1) & 0x07);
+            img[i].alpha     = (bits & 0x01) ? 0xFF : 0x00;
+         }
+         break;
+      case 1:
+         for (i = 0; i < width * height; i++) {
+            unsigned char bits;
+            unsigned char mask;
+            bits = raw[i/8];
+            mask = 1 << (7 - (i % 8)); // MSb->LSb
+            bits = (bits & mask) ? 0xFF : 0x00;
+            img[i].intensity = bits;
+            img[i].alpha     = bits;
+         }
+         break;
+      default:
+         ERROR("Error invalid depth %d\n", depth);
+         break;
+   }
+
+   return img;
+}
+
 rgba *file2rgba(char *filename, int offset, int width, int height, int depth)
 {
    FILE *fp;
@@ -99,7 +157,6 @@ ia *file2ia(char *filename, int offset, int width, int height, int depth)
    char *raw;
    unsigned size;
    unsigned img_size;
-   int i;
 
    fp = fopen(filename, "rb");
    if (!fp) {
@@ -129,47 +186,7 @@ ia *file2ia(char *filename, int offset, int width, int height, int depth)
       goto file2ia_free;
    }
 
-   switch (depth) {
-      case 16:
-         for (i = 0; i < width * height; i++) {
-            img[i].intensity = raw[i*2];
-            img[i].alpha     = raw[i*2+1];
-         }
-         break;
-      case 8:
-         for (i = 0; i < width * height; i++) {
-            img[i].intensity = SCALE_4_8((raw[i] & 0xF0) >> 4);
-            img[i].alpha     = SCALE_4_8(raw[i] & 0x0F);
-         }
-         break;
-      case 4:
-         for (i = 0; i < width * height; i++) {
-            unsigned char bits;
-            bits = raw[i/2];
-            if (i % 2) {
-               bits &= 0xF;
-            } else {
-               bits >>= 4;
-            }
-            img[i].intensity = SCALE_3_8((bits >> 1) & 0x07);
-            img[i].alpha     = (bits & 0x01) ? 0xFF : 0x00;
-         }
-         break;
-      case 1:
-         for (i = 0; i < width * height; i++) {
-            unsigned char bits;
-            unsigned char mask;
-            bits = raw[i/8];
-            mask = 1 << (7 - (i % 8)); // MSb->LSb
-            bits = (bits & mask) ? 0xFF : 0x00;
-            img[i].intensity = bits;
-            img[i].alpha     = bits;
-         }
-         break;
-      default:
-         ERROR("Error invalid depth %d\n", depth);
-         break;
-   }
+   img = raw2ia(raw, width, height, depth);
 
 file2ia_free:
    free(raw);
