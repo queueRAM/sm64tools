@@ -30,7 +30,8 @@ EXTEND_SRC_FILES := sm64extend.c
 F3D_SRC_FILES := f3d.c \
                  utils.c
 
-F3D2OBJ_SRC_FILES := f3d2obj.c \
+F3D2OBJ_SRC_FILES := blast.c \
+                     f3d2obj.c \
                      n64graphics.c \
                      utils.c
 

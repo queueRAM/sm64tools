@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "libblast.h"
 #include "n64graphics.h"
 #include "utils.h"
 
@@ -28,6 +29,7 @@ typedef struct
 {
    unsigned int offsets[0x100];
    unsigned offset_count;
+   char *blast_corps_rom;
    char *out_dir;
    unsigned translate[3];
    float scale;
@@ -38,6 +40,7 @@ static arg_config default_config =
 {
    {0},
    0,
+   NULL,
    NULL,
    {0, 0, 0},
    1.0f,
@@ -87,6 +90,7 @@ static texture textures[4096] = {0};
 static int texture_count = 0;
 static int tile_width = -1;
 static int tile_height = -1;
+static unsigned int texture_addr = 0xFFFFFFFF;
 
 static void get_mode_string(unsigned char *data, char *description)
 {
@@ -142,67 +146,119 @@ static void add_texture(unsigned int address, int width, int height)
    texture_count++;
 }
 
-static void generate_material_file(char *mtl_filename, char *texture_dir)
+static void generate_material_file(arg_config *config, char *mtl_filename, char *texture_dir)
 {
    char texture_path[FILENAME_MAX];
    char texture_filename[32];
    FILE *fmtl;
-   rgba *img;
-   unsigned char *img_raw;
+   rgba *rgba_img;
+   ia   *ia_img;
+   unsigned char *img_raw = NULL;
+   unsigned char *rom = NULL;
+   long rom_size;
    unsigned int segment;
    unsigned int offset;
    int i;
-   fmtl = fopen(mtl_filename, "w");
-#if BLAST_CORPS
-   unsigned char *rom;
-   long rom_size = read_file("bc.u.z64", &rom);
-   if (rom_size < 0) {
-      perror("Error opening input file");
-      exit(EXIT_FAILURE);
+   if (config->blast_corps_rom != NULL) {
+      rom_size = read_file(config->blast_corps_rom, &rom);
+      if (rom_size < 0) {
+         perror("Error opening ROM file");
+         exit(EXIT_FAILURE);
+      }
+      img_raw = malloc(4*256*256);
    }
-#endif // BLAST_CORPS
+   fmtl = fopen(mtl_filename, "w");
    if (fmtl) {
       for (i = 0; i < texture_count; i++) {
          texture *t = &textures[i];
+         rgba_img = NULL;
+         ia_img = NULL;
          sprintf(texture_filename, "%08X.png", t->address);
          sprintf(texture_path, "%s/%s", texture_dir, texture_filename);
-#ifdef BLAST_CORPS
-         unsigned int rom_addr = read_u32_be(&rom[0x4CE0+8*t->address]) + 0x4CE0;
-#endif
          fprintf(fmtl, "newmtl M%08X\n", t->address);
          // TODO: are these good values?
          fprintf(fmtl,
-         "Ka 1.0 1.0 1.0\n" // ambiant color
-         "Kd 1.0 1.0 1.0\n" // diffuse color
-         "Ks 0.4 0.4 0.4\n" // specular color
-         "Ns 0\n"           // specular exponent
-         "d 1\n"            // dissolved
-         "Tr 1\n");         // inverted
-#ifdef BLAST_CORPS
-         fprintf(fmtl, "map_Kd blast_corps.u.split/textures/%06X.0x00000.png\n\n", rom_addr);
-#else
+            "Ka 1.0 1.0 1.0\n" // ambiant color
+            "Kd 1.0 1.0 1.0\n" // diffuse color
+            "Ks 0.4 0.4 0.4\n" // specular color
+            "Ns 0\n"           // specular exponent
+            "d 1\n"            // dissolved
+            "Tr 1\n");         // inverted
          fprintf(fmtl, "map_Kd textures/%s\n\n", texture_filename);
-#endif
-         segment = (t->address >> 24) & 0xFF;
-         offset = t->address & 0xFFFFFF;
-         if (seg_data[segment] == NULL || seg_lengths[segment] < offset) {
-            ERROR("Error reading texture seg address 0x%08X\n", t->address);
-            exit(EXIT_FAILURE);
+         if (config->blast_corps_rom == NULL) {
+            segment = (t->address >> 24) & 0xFF;
+            offset = t->address & 0xFFFFFF;
+            if (seg_data[segment] == NULL || seg_lengths[segment] < offset) {
+               ERROR("Error reading texture seg address 0x%08X\n", t->address);
+               exit(EXIT_FAILURE);
+            }
+            img_raw = &seg_data[segment][offset];
+            INFO("Decoding texture %08X %dx%d\n", t->address, t->width, t->height);
+            rgba_img = raw2rgba((char*)img_raw, t->width, t->height, 16);
+         } else {
+#define TEXTURE_LUT 0x4CE0
+            unsigned int lut_addr = TEXTURE_LUT + 8 * t->address;
+            unsigned int rom_addr = read_u32_be(&rom[lut_addr]) + TEXTURE_LUT;
+            int length = read_u16_be(&rom[lut_addr + 4]);
+            int text_type = read_u16_be(&rom[lut_addr + 6]);
+            int retval = 0;
+            INFO("Decoding texture %06X->%06X (%d x %d) type %d\n",
+                  t->address, rom_addr, t->width, t->height, text_type);
+            switch (text_type) {
+               case 0: retval = decode_block0(&rom[rom_addr], length, img_raw); break;
+               case 1: retval = decode_block1(&rom[rom_addr], length, img_raw); break;
+               case 2: retval = decode_block2(&rom[rom_addr], length, img_raw); break;
+               case 3: retval = decode_block3(&rom[rom_addr], length, img_raw); break;
+               case 6: retval = decode_block6(&rom[rom_addr], length, img_raw); break;
+               default:
+                  ERROR("Blast Corps texture %d not supported for %X->%X\n",
+                        text_type, t->address, rom_addr);
+                  exit(EXIT_FAILURE);
+                  break;
+            }
+            if (retval > 0) {
+               switch (text_type) {
+                  case 0: // IA8
+                     ia_img = raw2ia((char*)img_raw, t->width, t->height, 8);
+                     break;
+                  case 1: // RGBA16
+                     rgba_img = raw2rgba((char*)img_raw, t->width, t->height, 16);
+                     break;
+                  case 2: // RGBA32
+                     rgba_img = raw2rgba((char*)img_raw, t->width, t->height, 32);
+                     break;
+                  case 3: // IA16
+                     ia_img = raw2ia((char*)img_raw, t->width, t->height, 16);
+                     break;
+                  case 6: // IA8
+                     ia_img = raw2ia((char*)img_raw, t->width, t->height, 8);
+                     break;
+                  default:
+                     ERROR("Blast Corps texture %d not supported for %X->%X\n",
+                           text_type, t->address, rom_addr);
+                     //exit(EXIT_FAILURE);
+                     break;
+               }
+            }
          }
-         img_raw = &seg_data[segment][offset];
-         INFO("Decoding texture %08X %dx%d\n", t->address, t->width, t->height);
-         img = raw2rgba((char*)img_raw, t->width, t->height, 16);
-         if (img != NULL) {
-            int ret = rgba2png(img, t->width, t->height, texture_path);
+         if (rgba_img != NULL) {
+            int ret = rgba2png(rgba_img, t->width, t->height, texture_path);
+            if (ret != 0) {
+               ERROR("Error writing to %s: %d\n", texture_filename, ret);
+            }
+         }
+         if (ia_img != NULL) {
+            int ret = ia2png(ia_img, t->width, t->height, texture_path);
             if (ret != 0) {
                ERROR("Error writing to %s: %d\n", texture_filename, ret);
             }
          }
       }
    }
-#ifdef BLAST_CORPS
-   free(rom);
-#endif
+   if (rom != NULL) {
+      free(rom);
+      free(img_raw);
+   }
 }
 
 static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
@@ -339,6 +395,10 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
       case F3D_TEXTURE:
       {
          unsigned int val;
+         // reset texture
+         texture_addr = 0xFFFFFFFF;
+         tile_width = -1;
+         tile_height = -1;
          switch (data[3]) {
             case 0x00:
                val = read_u32_be(&data[4]);
@@ -383,6 +443,9 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
          INFO("%14s %2d %2d\n", "G_SETTILESIZE", width, height);
          tile_width = width;
          tile_height = height;
+         if (texture_addr != 0xFFFFFFFF) {
+            add_texture(texture_addr, tile_width, tile_height);
+         }
          break;
       }
       case G_LOADBLOCK:
@@ -443,7 +506,10 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
          INFO("%14s %02X %06X\n", "G_SETTIMG", bank, seg_offset);
          fprintf(fout, "\n# %s %02X %06X\n", "G_SETTIMG", bank, seg_offset);
          fprintf(fout, "usemtl M%08X\n", seg_address);
-         add_texture(seg_address, tile_width, tile_height);
+         texture_addr = seg_address;
+         if (tile_width != -1) {
+            add_texture(texture_addr, tile_width, tile_height);
+         }
          break;
       default:
          INFO("%14s %s\n", "Unknown", description);
@@ -460,6 +526,7 @@ static void print_usage(void)
          "\n"
          "Optional arguments:\n"
          " -0/-F FILE   load FILE into segment specified by flag (0 through F)\n"
+         " -b ROM       use Blast Corps mode specifying ROM to load textures\n"
          " -d DIR       directory to output (default: SEGMENT_ADDR.model)\n"
          " -i NUM       starting vertex index offset (default: %d)\n"
          " -s SCALE     scale all values by this factor (float)\n"
@@ -500,6 +567,12 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
             seg_files[seg] = argv[i];
          } else {
             switch (argv[i][1]) {
+               case 'b':
+                  if (++i >= argc) {
+                     print_usage();
+                  }
+                  config->blast_corps_rom = argv[i];
+                  break;
                case 'd':
                   if (++i >= argc) {
                      print_usage();
@@ -615,7 +688,7 @@ int main(int argc, char *argv[])
    }
 
    // generate .mtl file
-   generate_material_file(mtl_filename, texture_dir);
+   generate_material_file(&config, mtl_filename, texture_dir);
 
    fclose(fout);
 

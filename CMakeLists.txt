@@ -28,7 +28,7 @@ target_link_libraries(sm64walk sm64)
 
 add_executable(f3d f3d.c utils.c)
 
-add_executable(f3d2obj f3d2obj.c n64graphics.c utils.c)
+add_executable(f3d2obj blast.c f3d2obj.c n64graphics.c utils.c)
 target_link_libraries(f3d2obj png z)
 
 add_executable(sm64geo sm64geo.c utils.c)
