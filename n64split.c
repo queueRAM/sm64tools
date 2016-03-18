@@ -25,6 +25,7 @@ typedef struct _arg_config
    int  large_texture;
    int  large_texture_depth;
    int  gen_proc_table;
+   int  keep_going;
 } arg_config;
 
 typedef enum {
@@ -43,6 +44,7 @@ static const arg_config default_args =
    0,  // large textures
    16, // large textures depth
    0,  // procedure table
+   0,  // keep going
 };
 
 // static files
@@ -1713,12 +1715,13 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
 
 static void print_usage(void)
 {
-   ERROR("Usage: n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] [-V] ROM\n"
+   ERROR("Usage: n64split [-c CONFIG] [-k] [-o OUTPUT_DIR] [-s SCALE] [-p] [-t] [-v] [-V] ROM\n"
          "\n"
          "n64split v" N64SPLIT_VERSION ": N64 ROM splitter, resource ripper, disassembler\n"
          "\n"
          "Optional arguments:\n"
          " -c CONFIG     ROM configuration file (default: determine from checksum)\n"
+         " -k            keep going as much as possible after error\n"
          " -o OUTPUT_DIR output directory (default: {CONFIG.basename}.split)\n"
          " -s SCALE      amount to scale models by (default: %.1f)\n"
          " -p            generate procedure table for analysis\n"
@@ -1758,6 +1761,9 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                   print_usage();
                }
                strcpy(config->config_file, argv[i]);
+               break;
+            case 'k':
+               config->keep_going = 1;
                break;
             case 'o':
                if (++i >= argc) {
@@ -1866,7 +1872,9 @@ int main(int argc, char *argv[])
          break;
       case N64_ROM_INVALID:
          ERROR("This does not appear to be a valid N64 ROM\n");
-         exit(1);
+         if (!args.keep_going) {
+            exit(1);
+         }
          break;
    }
 
