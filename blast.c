@@ -272,10 +272,10 @@ int decode_block6(unsigned char *in, int length, unsigned char *out)
          length -= 2;
          t2 = out - t0;
          while (t1 != 0) {
-            t3 = read_u32_be(t2);
+            t3 = read_u16_be(t2);
             t2 += 2;
             t1 -= 1;
-            write_u32_be(out, t3);
+            write_u16_be(out, t3);
             out += 2;
             len += 2;
          }
