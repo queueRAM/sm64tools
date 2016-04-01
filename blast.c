@@ -400,7 +400,7 @@ static void convert_to_png(char *fname, unsigned short len, unsigned short type)
       case 0:
          // TODO: memcpy, no info
          break;
-      case 1: // RBGA16?
+      case 1:
          // guess at dims
          switch (len) {
             case 16:   width = 4;  height = 2;  break;
@@ -411,10 +411,11 @@ static void convert_to_png(char *fname, unsigned short len, unsigned short type)
             case 8*KB: width = 64; height = 64; break;
             default:   width = 32; height = len/width/2; break;
          }
+         // RGBA16
          rimg = file2rgba(fname, 0, width, height, 16);
          if (rimg) rgba2png(rimg, width, height, pngname);
          break;
-      case 2: // RGBA32?
+      case 2:
          // guess at dims
          switch (len) {
             case 1*KB: width = 16; height = 16; break;
@@ -423,22 +424,23 @@ static void convert_to_png(char *fname, unsigned short len, unsigned short type)
             case 8*KB: width = 64; height = 32; break;
             default: width = 32; height = len/width/4; break;
          }
+         // RGBA32
          rimg = file2rgba(fname, 0, width, height, 32);
          if (rimg) rgba2png(rimg, width, height, pngname);
          break;
-      case 3: // IA16?
+      case 3:
          // guess at dims
          switch (len) {
-            case 1*KB: width = 16; height = 32; break;
-            case 2*KB: width = 32; height = 32; break;
-            case 4*KB: width = 32; height = 64; break;
-            case 8*KB: width = 64; height = 64; break;
-            default: width = 32; height = len/width/2; break;
+            case 1*KB: width = 32; height = 32; break;
+            case 2*KB: width = 32; height = 64; break;
+            case 4*KB: width = 64; height = 64; break;
+            default: width = 32; height = len/width; break;
          }
-         img = file2ia(fname, 0, width, height, 16);
+         // IA8
+         img = file2ia(fname, 0, width, height, 8);
          if (img) ia2png(img, width, height, pngname);
          break;
-      case 4: // IA16?
+      case 4:
          // guess at dims
          switch (len) {
             case 1*KB: width = 32; height = 16; break;
@@ -447,10 +449,11 @@ static void convert_to_png(char *fname, unsigned short len, unsigned short type)
             case 8*KB: width = 64; height = 64; break;
             default: width = 32; height = len/width/2; break;
          }
+         // IA16
          img = file2ia(fname, 0, width, height, 16);
          if (img) ia2png(img, width, height, pngname);
          break;
-      case 5: // IA16?
+      case 5:
          // guess at dims
          switch (len) {
             case 1*KB: width = 16; height = 16; break;
@@ -459,15 +462,16 @@ static void convert_to_png(char *fname, unsigned short len, unsigned short type)
             case 8*KB: width = 64; height = 32; break;
             default: width = 32; height = len/width/2; break;
          }
+         // RGBA32
          rimg = file2rgba(fname, 0, width, height, 32);
          if (rimg) rgba2png(rimg, width, height, pngname);
          break;
-      case 6: // IA8? IA4 always has alpha (lsb) clear
-         // TODO: do i have alpha bit in IA4 decoded wrong in n64graphics?
+      case 6:
          // guess at dims
          depth = 8;
          width = 16;
          height = (len*8/depth)/width;
+         // IA8
          img = file2ia(fname, 0, width, height, depth);
          if (img) ia2png(img, width, height, pngname);
          break;
@@ -514,7 +518,7 @@ int main(int argc, char *argv[])
             case 0:
                // TODO: memcpy, no info
                break;
-            case 1: // RBGA16?
+            case 1:
                // guess at dims
                switch (out_size) {
                   case 16:   width = 4;  height = 2;  break;
@@ -529,7 +533,7 @@ int main(int argc, char *argv[])
                format = "\"rgba\"";
                depth = 16;
                break;
-            case 2: // RGBA32?
+            case 2:
                // guess at dims
                switch (out_size) {
                   case 256:  width = 8;  height = 8;  break;
@@ -543,7 +547,18 @@ int main(int argc, char *argv[])
                format = "\"rgba\"";
                depth = 32;
                break;
-            case 3: // IA16?
+            case 3:
+               // guess at dims
+               switch (out_size) {
+                  case 1*KB: width = 32; height = 32; break;
+                  case 2*KB: width = 32; height = 64; break;
+                  case 4*KB: width = 64; height = 64; break;
+                  default: width = 32; height = out_size/width; break;
+               }
+               format = "\"ia\"";
+               depth = 8;
+               break;
+            case 4:
                // guess at dims
                switch (out_size) {
                   case 1*KB: width = 16; height = 32; break;
@@ -555,32 +570,19 @@ int main(int argc, char *argv[])
                format = "\"ia\"";
                depth = 16;
                break;
-            case 4: // IA16?
-               // guess at dims
-               switch (out_size) {
-                  case 1*KB: width = 16; height = 32; break;
-                  case 2*KB: width = 32; height = 32; break;
-                  case 4*KB: width = 32; height = 64; break;
-                  case 8*KB: width = 64; height = 64; break;
-                  default: width = 32; height = out_size/width/2; break;
-               }
-               format = "\"ia\"";
-               depth = 16;
-               break;
-            case 5: // IA16?
+            case 5:
                // guess at dims
                switch (out_size) {
                   case 1*KB: width = 16; height = 16; break;
                   case 2*KB: width = 32; height = 16; break;
                   case 4*KB: width = 32; height = 32; break;
                   case 8*KB: width = 64; height = 32; break;
-                  default: width = 32; height = out_size/width/2; break;
+                  default: width = 32; height = out_size/width/4; break;
                }
                format = "\"rgba\"";
                depth = 32;
                break;
-            case 6: // IA8? IA4 always has alpha (lsb) clear
-               // TODO: do i have alpha bit in IA4 decoded wrong in n64graphics?
+            case 6:
                // guess at dims
                depth = 8;
                width = 16;
