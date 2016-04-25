@@ -227,8 +227,8 @@ static void generate_material_file(arg_config *config, char *mtl_filename, char 
                   case 2: // RGBA32
                      rgba_img = raw2rgba((char*)img_raw, t->width, t->height, 32);
                      break;
-                  case 3: // IA16
-                     ia_img = raw2ia((char*)img_raw, t->width, t->height, 16);
+                  case 3: // IA8
+                     ia_img = raw2ia((char*)img_raw, t->width, t->height, 8);
                      break;
                   case 6: // IA8
                      ia_img = raw2ia((char*)img_raw, t->width, t->height, 8);
@@ -276,7 +276,7 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
    seg_offset = *dl_addr & 0xFFFFFF;
    if (seg_data[dl_seg] == NULL || seg_lengths[dl_seg] < seg_offset) {
       ERROR("Error reading seg address 0x%08X\n", *dl_addr);
-      exit(EXIT_FAILURE);
+      return 1;
    }
    data = &seg_data[dl_seg][seg_offset];
    // default description is raw bytes
@@ -327,6 +327,8 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
          if (seg_data[bank] == NULL) {
             ERROR("Tried to load %d verts from bank %02X %06X\n", count, bank, seg_offset);
          } else {
+            float uScale = 32.0f * tile_width;
+            float vScale = 32.0f * tile_height;
             load_vertices(seg_data[bank], seg_offset, index, count, config->translate);
             for (i = 0; i < count; i++) {
                fprintf(fout, "v %f %f %f\n",
@@ -335,9 +337,12 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
                      ((float)vertex_buffer[i+index].z) * config->scale);
             }
             for (i = 0; i < count; i++) {
+               fprintf(fout, "# %d %d : %f %f\n",
+                     vertex_buffer[i+index].u, vertex_buffer[i+index].v,
+                     uScale, vScale);
                fprintf(fout, "vt %f %f\n",
-                     ((float)vertex_buffer[i+index].u) / 1024.0f,
-                     ((float)vertex_buffer[i+index].v) / 1024.0f);
+                     ((float)vertex_buffer[i+index].u) / uScale,
+                     ((float)vertex_buffer[i+index].v) / vScale);
             }
             for (i = 0; i < count; i++) {
                fprintf(fout, "vn %f %f %f\n",
