@@ -76,8 +76,9 @@ void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *
 // datalen: length of 'data'
 // proc: the procedure to disassemble
 // config: ROM configuration
+// merge_pseudo: if non-zero, merge pseudoinstructions
 // returns the RAM address of the end of disassembly
-unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config);
+unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config, int merge_pseudo);
 
 // get version string of raw disassembler
 const char *disasm_get_version(void);

@@ -26,6 +26,7 @@ typedef struct _arg_config
    int  large_texture_depth;
    int  gen_proc_table;
    int  keep_going;
+   int  merge_pseudo;
 } arg_config;
 
 typedef enum {
@@ -45,6 +46,7 @@ static const arg_config default_args =
    16, // large textures depth
    0,  // procedure table
    0,  // keep going
+   0,  // merge pseudoinstructions
 };
 
 // static files
@@ -498,7 +500,7 @@ static int disassemble_dummy(FILE *out, rom_config *config, unsigned char *data,
    return 1;
 }
 
-static void disassemble_section(FILE *out, unsigned char *data, long len, split_section *sec, proc_table *procs, rom_config *config)
+static void disassemble_section(FILE *out, unsigned char *data, long len, split_section *sec, proc_table *procs, rom_config *config, int merge_pseudo)
 {
    // disassemble all the procedures
    unsigned int ram_address;
@@ -574,7 +576,7 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
       if (ram_address < prev_end) {
          ERROR("Warning: %08X < %08X\n", ram_address, prev_end);
       }
-      disassemble_proc(out, data, len, &procs->procedures[proc_idx], config);
+      disassemble_proc(out, data, len, &procs->procedures[proc_idx], config, merge_pseudo);
       prev_end = procs->procedures[proc_idx].end;
       if (prev_end >= end_address) {
          break;
@@ -1104,7 +1106,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             break;
          case TYPE_ASM:
             INFO("Section asm: %X-%X\n", sec->start, sec->end);
-            disassemble_section(fasm, data, length, sec, procs, config);
+            disassemble_section(fasm, data, length, sec, procs, config, args->merge_pseudo);
             break;
          case TYPE_LEVEL:
             // relocate level scripts to .mio0 area
@@ -1715,13 +1717,14 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
 
 static void print_usage(void)
 {
-   ERROR("Usage: n64split [-c CONFIG] [-k] [-o OUTPUT_DIR] [-s SCALE] [-p] [-t] [-v] [-V] ROM\n"
+   ERROR("Usage: n64split [-c CONFIG] [-k] [-m] [-o OUTPUT_DIR] [-s SCALE] [-p] [-t] [-v] [-V] ROM\n"
          "\n"
          "n64split v" N64SPLIT_VERSION ": N64 ROM splitter, resource ripper, disassembler\n"
          "\n"
          "Optional arguments:\n"
          " -c CONFIG     ROM configuration file (default: determine from checksum)\n"
          " -k            keep going as much as possible after error\n"
+         " -m            merge related instructions in to pseudoinstructions\n"
          " -o OUTPUT_DIR output directory (default: {CONFIG.basename}.split)\n"
          " -s SCALE      amount to scale models by (default: %.1f)\n"
          " -p            generate procedure table for analysis\n"
@@ -1764,6 +1767,9 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                break;
             case 'k':
                config->keep_going = 1;
+               break;
+            case 'm':
+               config->merge_pseudo = 1;
                break;
             case 'o':
                if (++i >= argc) {

@@ -405,7 +405,7 @@ int fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint
    return 0;
 }
 
-unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config)
+unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config, int merge_pseudo)
 {
    char sec_name[64];
    csh handle;
@@ -472,7 +472,11 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
             if (ll >= 0) {
                fprintf(out, ".L%s_%X: # %X\n", sec_name, processed, ram_address + processed);
             }
-            consumed = pseudoins_detected(out, handle, &insn[i], count-1, config);
+            if (merge_pseudo) {
+               consumed = pseudoins_detected(out, handle, &insn[i], count-1, config);
+            } else {
+               consumed = 0;
+            }
             if (consumed > 0) {
                i += (consumed-1);
                processed += (consumed-1) * 4;
@@ -633,7 +637,7 @@ void mipsdisasm_pass1(unsigned char *data, long datalen, proc_table *procs, rom_
    qsort(procs->procedures, procs->count, sizeof(procs->procedures[0]), proc_cmp);
 }
 
-void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *procs, rom_config *config)
+void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *procs, rom_config *config, int merge)
 {
    // disassemble all the procedures
    unsigned int ram_address;
@@ -648,7 +652,7 @@ void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *
             fprintf(out, "\n# missing section %X-%X (%06X-%06X) [%X]\n",
                   last_end, ram_address, ram_to_rom(config, last_end), ram_to_rom(config, ram_address), ram_address - last_end);
          }
-         disassemble_proc(out, data, datalen, &procs->procedures[proc_idx], config);
+         disassemble_proc(out, data, datalen, &procs->procedures[proc_idx], config, merge);
       } else {
          ERROR("%s:%d: rom_offset >= datalen\n", __FILE__, __LINE__);
       }
@@ -675,6 +679,7 @@ typedef struct
    char *input_file;
    char *output_file;
    char *config_file;
+   int merge_pseudo;
 } arg_config;
 
 static arg_config default_args =
@@ -683,7 +688,8 @@ static arg_config default_args =
    0,
    NULL,
    NULL,
-   DEFAULT_CONFIG
+   DEFAULT_CONFIG,
+   0
 };
 
 static void generate_report(proc_table *procs, rom_config *config)
@@ -713,6 +719,7 @@ static void print_usage(void)
          "\n"
          "Optional arguments:\n"
          " -c CONFIG    ROM configuration file (default: %s)\n"
+         " -m           merge related instructions in to pseudoinstructions\n"
          " -o OUTPUT    output filename (default: stdout)\n"
          " -v           verbose progress output\n"
          "\n"
@@ -742,6 +749,9 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                   print_usage();
                }
                config->config_file = argv[i];
+               break;
+            case 'm':
+               config->merge_pseudo = 1;
                break;
             case 'o':
                if (++i >= argc) {
@@ -849,7 +859,7 @@ int main(int argc, char *argv[])
    fprintf(out, ".set noreorder # don't insert nops after branches\n\n");
 
    // second pass, disassemble all procedures
-   mipsdisasm_pass2(out, data, file_len, &procs, &config);
+   mipsdisasm_pass2(out, data, file_len, &procs, &config, args.merge_pseudo);
 
    generate_report(&procs, &config);
 
