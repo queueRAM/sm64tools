@@ -62,14 +62,6 @@ void mipsdisasm_add_procs(proc_table *procs, rom_config *config, long file_len);
 // config: ROM configuration
 void mipsdisasm_pass1(unsigned char *data, long datalen, proc_table *procs, rom_config *config);
 
-// second pass of disassembler - disassemble all procedures in order of procs
-// out: stream to output data to
-// data: buffer containing raw MIPS assembly
-// datalen: length of 'data'
-// procs: procedure table
-// config: ROM configuration
-void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *procs, rom_config *config);
-
 // disassemble a given procedure
 // out: stream to output data to
 // data: buffer containing raw MIPS assembly
