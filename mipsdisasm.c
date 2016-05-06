@@ -442,7 +442,7 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
    // perform disassembly
    disassembling = 1;
    processed = 0;
-   fprintf(out, "\n%s: # begin %08X (%06X)\n", sec_name, ram_address, rom_offset);
+   fprintf(out, "\n%s:\n", sec_name);
    while (disassembling) {
       int consumed;
       cur_amount = MIN(MAX_BYTES_PER_CALL, length - processed);
@@ -457,20 +457,20 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
             // TODO: workaround for __osEnqueueThread, __osPopThread, __osDispatchThread
             switch (ram_address + processed) {
                case 0x80327B98: fprintf(out, "# end __osExceptionHandler\n\n"
-                                             "proc_80327B98: # begin 80327B98 (0E2B98)\n"); break;
+                                             "proc_80327B98:\n"); break;
                case 0x80327C4C: fprintf(out, "# end proc_80327B98\n\n"); break;
-               case 0x80327C80: fprintf(out, "\n__osEnqueueAndYield: # begin 80327C80 (0E2C80)\n"); break;
+               case 0x80327C80: fprintf(out, "\n__osEnqueueAndYield:\n"); break;
                case 0x80327D10: fprintf(out, "# end __osEnqueueAndYield\n\n"
-                                             "__osEnqueueThread: # begin 80327D10 (0E2D10)\n"); break;
+                                             "__osEnqueueThread:\n"); break;
                case 0x80327D58: fprintf(out, "# end __osEnqueueThread\n\n"
-                                             "__osPopThread: # begin 80327D58 (0E2D58)\n"); break;
+                                             "__osPopThread:\n"); break;
                case 0x80327D68: fprintf(out, "# end __osPopThread\n\n"
-                                             "__osDispatchThread: # begin 80327D68 (0E2D68)\n"); break;
+                                             "__osDispatchThread:\n"); break;
                default: break;
             }
             ll = find_local(&proc->locals, processed);
             if (ll >= 0) {
-               fprintf(out, ".L%s_%X: # %X\n", sec_name, processed, ram_address + processed);
+               fprintf(out, ".L%s_%X:\n", sec_name, processed);
             }
             if (merge_pseudo) {
                consumed = pseudoins_detected(out, handle, &insn[i], count-1, config);
@@ -485,6 +485,7 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
                fprintf(out, ".byte 0x%02X, 0x%02X, 0x%02X, 0x%02X # Invalid: %X",
                      in[0], in[1], in[2], in[3], ram_address + processed);
             } else {
+               fprintf(out, "/* %06X %08X %08X */", rom_offset + processed, ram_address + processed, read_u32_be(&data[rom_offset + processed]));
                fprintf(out, "  %-5s ", insn[i].mnemonic);
                if (cs_insn_group(handle, &insn[i], MIPS_GRP_JUMP)) {
                   cs_mips *mips = &insn[i].detail->mips;
