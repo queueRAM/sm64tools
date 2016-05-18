@@ -18,6 +18,7 @@ typedef enum
 {
    IMG_FORMAT_RGBA,
    IMG_FORMAT_IA,
+   IMG_FORMAT_CI,
    IMG_FORMAT_SKYBOX,
 } img_format;
 
@@ -108,6 +109,35 @@ ia *raw2ia(char *raw, int width, int height, int depth)
          ERROR("Error invalid depth %d\n", depth);
          break;
    }
+
+   return img;
+}
+
+// extract RGBA from CI raw data and palette
+rgba *rawci2rgba(unsigned char *rawci, char *palette, int width, int height, int depth)
+{
+   char *raw;
+   rgba *img = NULL;
+   unsigned raw_size;
+   int i;
+
+   // first convert to raw RGBA
+   raw_size = 2 * width * height;
+   raw = malloc(raw_size);
+   if (!raw) {
+      ERROR("Error allocating %u bytes\n", raw_size);
+      return NULL;
+   }
+
+   for (i = 0; i < width * height; i++) {
+      raw[2*i] = palette[2*rawci[i]];
+      raw[2*i+1] = palette[2*rawci[i]+1];
+   }
+
+   // then convert to RGBA image data
+   img = raw2rgba(raw, width, height, depth);
+
+   free(raw);
 
    return img;
 }
@@ -795,6 +825,12 @@ static void get_image_info(char *filename, int *offset, img_format *format, int 
                } else if (!strcmp("rgba32", strformat)) {
                   *format = IMG_FORMAT_RGBA;
                   *depth = 32;
+               } else if (!strcmp("ci16", strformat)) {
+                  *format = IMG_FORMAT_CI;
+                  *depth = 16;
+               } else if (!strcmp("ci32", strformat)) {
+                  *format = IMG_FORMAT_CI;
+                  *depth = 32;
                } else if (!strcmp("skybox", strformat)) {
                   *format = IMG_FORMAT_SKYBOX;
                   *depth = 16;
@@ -837,6 +873,15 @@ int main(int argc, char *argv[])
             imgi = pngfile2ia(argv[i], &width, &height);
             if (imgi) {
                ia2file(imgi, offset, width, height, depth, binfilename);
+            } else {
+               exit(EXIT_FAILURE);
+            }
+            break;
+         case IMG_FORMAT_CI:
+            imgr = pngfile2rgba(argv[i], &width, &height);
+            if (imgr) {
+               // TODO
+               rgba2file(imgr, offset, width, height, depth, binfilename);
             } else {
                exit(EXIT_FAILURE);
             }
