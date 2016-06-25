@@ -1264,6 +1264,18 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         }
                         break;
                      }
+                     case FORMAT_I:
+                     {
+                        ia *img = file2i(binfilename, offset, w, h, texts[t].depth);
+                        if (img) {
+                           sprintf(outfilename, "%s.0x%05X.i%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                           ia2png(img, w, h, outfilepath);
+                           free(img);
+                           fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
+                        }
+                        break;
+                     }
                      case FORMAT_RGBA:
                      {
                         rgba *img = file2rgba(binfilename, offset, w, h, texts[t].depth);
@@ -1357,7 +1369,19 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      {
                         ia *img = file2ia(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.ia%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilename, "texture_%06X.%05X.ia%d.png", sec->start, offset, texts[t].depth);
+                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                           ia2png(img, w, h, outfilepath);
+                           free(img);
+                           fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
+                        }
+                        break;
+                     }
+                     case FORMAT_I:
+                     {
+                        ia *img = file2i(binfilename, offset, w, h, texts[t].depth);
+                        if (img) {
+                           sprintf(outfilename, "texture_%06X.%05X.i%d.png", sec->start, offset, texts[t].depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);
@@ -1369,7 +1393,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      {
                         rgba *img = file2rgba(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.png", sec->label, offset);
+                           sprintf(outfilename, "texture_%06X.0x%05X.rgba%d.png", sec->start, offset, texts[t].depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            rgba2png(img, w, h, outfilepath);
                            free(img);
@@ -1499,6 +1523,18 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         ia *img = file2ia(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
                            sprintf(outfilename, "%s.0x%05X.ia%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                           ia2png(img, w, h, outfilepath);
+                           free(img);
+                           fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
+                        }
+                        break;
+                     }
+                     case FORMAT_I:
+                     {
+                        ia *img = file2i(binfilename, offset, w, h, texts[t].depth);
+                        if (img) {
+                           sprintf(outfilename, "%s.0x%05X.i%d.png", sec->label, offset, texts[t].depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);

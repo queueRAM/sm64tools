@@ -37,6 +37,7 @@ static const section_entry section_table[] = {
 static const format_entry format_table[] = {
    {"rgba",      FORMAT_RGBA},
    {"ia",        FORMAT_IA},
+   {"i",         FORMAT_I},
    {"skybox",    FORMAT_SKYBOX},
    {"collision", FORMAT_COLLISION},
 };

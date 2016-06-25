@@ -18,6 +18,7 @@ typedef enum
 {
    IMG_FORMAT_RGBA,
    IMG_FORMAT_IA,
+   IMG_FORMAT_I,
    IMG_FORMAT_CI,
    IMG_FORMAT_SKYBOX,
 } img_format;
@@ -103,6 +104,47 @@ ia *raw2ia(char *raw, int width, int height, int depth)
             bits = (bits & mask) ? 0xFF : 0x00;
             img[i].intensity = bits;
             img[i].alpha     = bits;
+         }
+         break;
+      default:
+         ERROR("Error invalid depth %d\n", depth);
+         break;
+   }
+
+   return img;
+}
+
+ia *raw2i(char *raw, int width, int height, int depth)
+{
+   ia *img = NULL;
+   unsigned img_size;
+   int i;
+
+   img_size = width * height * sizeof(*img);
+   img = malloc(img_size);
+   if (!img) {
+      ERROR("Error allocating %u bytes\n", img_size);
+      return NULL;
+   }
+
+   switch (depth) {
+      case 8:
+         for (i = 0; i < width * height; i++) {
+            img[i].intensity = raw[i];
+            img[i].alpha     = 0xFF;
+         }
+         break;
+      case 4:
+         for (i = 0; i < width * height; i++) {
+            unsigned char bits;
+            bits = raw[i/2];
+            if (i % 2) {
+               bits &= 0xF;
+            } else {
+               bits >>= 4;
+            }
+            img[i].intensity = SCALE_4_8(bits);
+            img[i].alpha     = 0xFF;
          }
          break;
       default:
@@ -221,6 +263,52 @@ ia *file2ia(char *filename, int offset, int width, int height, int depth)
 file2ia_free:
    free(raw);
 file2ia_close:
+   fclose(fp);
+
+   return img;
+}
+
+ia *file2i(char *filename, int offset, int width, int height, int depth)
+{
+   FILE *fp;
+   ia *img = NULL;
+   char *raw;
+   unsigned size;
+   unsigned img_size;
+
+   fp = fopen(filename, "rb");
+   if (!fp) {
+      return NULL;
+   }
+
+   if (fseek(fp, offset, SEEK_SET)) {
+      ERROR("Error seeking to 0x%X in file '%s'\n", offset, filename);
+      goto file2i_close;
+   }
+
+   size = width * height * depth / 8;
+   raw = malloc(size);
+   if (!raw) {
+      ERROR("Error allocating %u bytes\n", size);
+      goto file2i_close;
+   }
+   if (fread(raw, 1, size, fp) != size) {
+      ERROR("Error reading 0x%X bytes at 0x%X from '%s'\n", size, offset, filename);
+      goto file2i_free;
+   }
+
+   img_size = width * height * sizeof(*img);
+   img = malloc(img_size);
+   if (!img) {
+      ERROR("Error allocating %u bytes\n", img_size);
+      goto file2i_free;
+   }
+
+   img = raw2i(raw, width, height, depth);
+
+file2i_free:
+   free(raw);
+file2i_close:
    fclose(fp);
 
    return img;
@@ -822,6 +910,12 @@ static void get_image_info(char *filename, int *offset, img_format *format, int 
                } else if (!strcmp("ia16", strformat)) {
                   *format = IMG_FORMAT_IA;
                   *depth = 16;
+               } else if (!strcmp("i4", strformat)) {
+                  *format = IMG_FORMAT_I;
+                  *depth = 4;
+               } else if (!strcmp("i8", strformat)) {
+                  *format = IMG_FORMAT_I;
+                  *depth = 8;
                } else if (!strcmp("rgba32", strformat)) {
                   *format = IMG_FORMAT_RGBA;
                   *depth = 32;

@@ -41,6 +41,7 @@ typedef enum
    FORMAT_INVALID,
    FORMAT_RGBA,
    FORMAT_IA,
+   FORMAT_I,
    FORMAT_SKYBOX,
    FORMAT_COLLISION,
 } texture_format;

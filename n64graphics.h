@@ -21,6 +21,9 @@ rgba *raw2rgba(char *raw, int width, int height, int depth);
 // extract IA image from raw data
 ia *raw2ia(char *raw, int width, int height, int depth);
 
+// extract I image from raw data
+ia *raw2i(char *raw, int width, int height, int depth);
+
 // extract RGBA from CI raw data and palette
 rgba *rawci2rgba(unsigned char *rawci, char *palette, int width, int height, int depth);
 
@@ -29,6 +32,9 @@ rgba *file2rgba(char *filename, int offset, int width, int height, int depth);
 
 // extract IA image from file at offset to RGBA data
 ia *file2ia(char *filename, int offset, int width, int height, int depth);
+
+// extract IA image from file at offset to RGBA data
+ia *file2i(char *filename, int offset, int width, int height, int depth);
 
 // save RGBA data to raw file at offset
 int rgba2file(rgba *img, int offset, int width, int height, int depth, char *filename);
