@@ -141,28 +141,34 @@ static void print_f3d(FILE *fout, unsigned char *data)
          break;
       }
       case G_LOADBLOCK:
-         val = read_u32_be(&data[4]);
-         switch (val) {
-            case 0x077FF100: sprintf(description, "RGBA 32x64 or 64x32"); break;
-            case 0x073FF100: sprintf(description, "RGBA 32x32"); break;
-         }
-         fprintf(fout, "%14s %s", "G_LOADBLOCK", description);
+      {
+         unsigned w0 = read_u32_be(data);
+         unsigned w1 = read_u32_be(&data[4]);
+         unsigned uls = (w0 >> 12) & 0x3FF;
+         unsigned ult = w0 & 0x3FF;
+         unsigned lrs = (w1 >> 12) & 0x3FF;
+         unsigned dxt = w1 & 0x3FF;
+         fprintf(fout, "%14s %03X %03X %03X %u", "G_LOADBLOCK", uls, ult, lrs, dxt);
          break;
+      }
       case G_SETTILE:
       {
-         struct {unsigned char data[7]; char *description;} table[] = 
+         const char * fmt_table[] =
          {
-            {{0x10, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00}, "normal RGBA"},
-            {{0x70, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00}, "grayscale"},
-            {{0x10, 0x10, 0x00, 0x07, 0x01, 0x40, 0x50}, "normal 32x32"},
-            {{0x10, 0x20, 0x00, 0x07, 0x01, 0x40, 0x60}, "normal 64x32"},
-            {{0x70, 0x10, 0x00, 0x07, 0x01, 0x40, 0x50}, "grayscale 32x32"},
+            "RGBA", "YUV", "CI", "IA", "I"
          };
-         unsigned i;
-         for (i = 0; i < DIM(table); i++) {
-            if (!memcmp(table[i].data, &data[1], 7)) {
-               strcpy(description, table[i].description);
-            }
+         unsigned format = (data[1] >> 5) & 0x7; // bits 21-23
+         unsigned size = (data[1] >> 3) & 0x3; // bits 19-20
+         unsigned depth = 0;
+         switch (size) {
+            case 0: depth = 4; break;
+            case 1: depth = 8; break;
+            case 2: depth = 16; break;
+            case 3: depth = 32; break;
+            default: ERROR("Unknown depth: %d\n", size);
+         }
+         if (format < DIM(fmt_table)) {
+            sprintf(description, "%s %d", fmt_table[format], depth);
          }
          fprintf(fout, "%14s %s", "G_SETTILE", description);
          break;

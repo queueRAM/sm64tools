@@ -36,6 +36,15 @@ typedef struct
    int v_idx_offset;
 } arg_config;
 
+typedef enum
+{
+   IMG_FORMAT_RGBA,
+   IMG_FORMAT_YUV,
+   IMG_FORMAT_CI,
+   IMG_FORMAT_IA,
+   IMG_FORMAT_I,
+} img_format;
+
 static arg_config default_config =
 {
    {0},
@@ -85,12 +94,19 @@ typedef struct
    unsigned int address;
    int width;
    int height;
+   img_format format;
+   int depth;
 } texture;
 static texture textures[4096] = {0};
 static int texture_count = 0;
-static int tile_width = -1;
-static int tile_height = -1;
-static unsigned int texture_addr = 0xFFFFFFFF;
+// current texture info
+static texture tile = {
+   0xFFFFFFFF,
+   -1,
+   -1,
+   IMG_FORMAT_RGBA,
+   -1
+};
 
 static void get_mode_string(unsigned char *data, char *description)
 {
@@ -129,20 +145,18 @@ static void load_vertices(unsigned char *data, unsigned int offset, unsigned int
          obj_vertices[obj_vert_count] = vertex_buffer[i+index];
          obj_vert_count++;
       } else {
-         ERROR("%u + %u >= %lu\n", i, index, DIM(vertex_buffer));
+         ERROR("%u + %u >= %Iu\n", i, index, DIM(vertex_buffer));
       }
    }
 }
 
-static void add_texture(unsigned int address, int width, int height)
+static void add_texture(texture const * const tex)
 {
    int i;
    for (i = 0; i < texture_count; i++) {
-      if (textures[i].address == address) return;
+      if (textures[i].address == tex->address) return;
    }
-   textures[texture_count].address = address;
-   textures[texture_count].width  = width;
-   textures[texture_count].height = height;
+   textures[texture_count] = *tex;
    texture_count++;
 }
 
@@ -194,7 +208,17 @@ static void generate_material_file(arg_config *config, char *mtl_filename, char 
             }
             img_raw = &seg_data[segment][offset];
             INFO("Decoding texture %08X %dx%d\n", t->address, t->width, t->height);
-            rgba_img = raw2rgba((char*)img_raw, t->width, t->height, 16);
+            switch (t->format) {
+               case IMG_FORMAT_RGBA:
+                  rgba_img = raw2rgba((char*)img_raw, t->width, t->height, t->depth);
+                  break;
+               case IMG_FORMAT_IA:
+                  ia_img = raw2ia((char*)img_raw, t->width, t->height, t->depth);
+                  break;
+               default:
+                  ERROR("Need format %d depth %d\n", t->format, t->depth);
+                  break;
+            }
          } else {
 #define TEXTURE_LUT 0x4CE0
             unsigned int lut_addr = TEXTURE_LUT + 8 * t->address;
@@ -327,8 +351,8 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
          if (seg_data[bank] == NULL) {
             ERROR("Tried to load %d verts from bank %02X %06X\n", count, bank, seg_offset);
          } else {
-            float uScale = 32.0f * tile_width;
-            float vScale = 32.0f * tile_height;
+            float uScale = 32.0f * tile.width;
+            float vScale = 32.0f * tile.height;
             load_vertices(seg_data[bank], seg_offset, index, count, config->translate);
             for (i = 0; i < count; i++) {
                fprintf(fout, "v %f %f %f\n",
@@ -340,9 +364,10 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
                fprintf(fout, "# %d %d : %f %f\n",
                      vertex_buffer[i+index].u, vertex_buffer[i+index].v,
                      uScale, vScale);
+               // invert vertical direction so all textures look upright
                fprintf(fout, "vt %f %f\n",
                      ((float)vertex_buffer[i+index].u) / uScale,
-                     ((float)vertex_buffer[i+index].v) / vScale);
+                     -((float)vertex_buffer[i+index].v) / vScale);
             }
             for (i = 0; i < count; i++) {
                fprintf(fout, "vn %f %f %f\n",
@@ -401,9 +426,9 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
       {
          unsigned int val;
          // reset texture
-         texture_addr = 0xFFFFFFFF;
-         tile_width = -1;
-         tile_height = -1;
+         tile.address = 0xFFFFFFFF;
+         tile.width = -1;
+         tile.height = -1;
          switch (data[3]) {
             case 0x00:
                val = read_u32_be(&data[4]);
@@ -446,38 +471,42 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
          width  = (((data[5] << 8) | (data[6] & 0xF0)) >> 6) + 1;
          height = (((data[6] & 0x0F) << 8 | data[7]) >> 2) + 1;
          INFO("%14s %2d %2d\n", "G_SETTILESIZE", width, height);
-         tile_width = width;
-         tile_height = height;
-         if (texture_addr != 0xFFFFFFFF) {
-            add_texture(texture_addr, tile_width, tile_height);
+         tile.width = width;
+         tile.height = height;
+         if (tile.address != 0xFFFFFFFF) {
+            add_texture(&tile);
          }
          break;
       }
       case G_LOADBLOCK:
       {
-         unsigned int val = read_u32_be(&data[4]);
-         switch (val) {
-            case 0x077FF100: sprintf(description, "RGBA 32x64 or 64x32"); break;
-            case 0x073FF100: sprintf(description, "RGBA 32x32"); break;
-         }
-         INFO("%14s %s\n", "G_LOADBLOCK", description);
+         unsigned w0 = read_u32_be(data);
+         unsigned w1 = read_u32_be(&data[4]);
+         unsigned uls = (w0 >> 12) & 0x3FF;
+         unsigned ult = w0 & 0x3FF;
+         unsigned lrs = (w1 >> 12) & 0x3FF;
+         unsigned dxt = w1 & 0x3FF;
+         INFO("%14s %03X %03X %03X %u", "G_LOADBLOCK", uls, ult, lrs, dxt);
          break;
       }
       case G_SETTILE:
       {
-         struct {unsigned char data[7]; char *description;} table[] = 
+         const char * fmt_table[] =
          {
-            {{0x10, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00}, "normal RGBA"},
-            {{0x70, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00}, "grayscale"},
-            {{0x10, 0x10, 0x00, 0x07, 0x01, 0x40, 0x50}, "normal 32x32"},
-            {{0x10, 0x20, 0x00, 0x07, 0x01, 0x40, 0x60}, "normal 64x32"},
-            {{0x70, 0x10, 0x00, 0x07, 0x01, 0x40, 0x50}, "grayscale 32x32"},
+            "RGBA", "YUV", "CI", "IA", "I"
          };
-         unsigned i;
-         for (i = 0; i < DIM(table); i++) {
-            if (!memcmp(table[i].data, &data[1], 7)) {
-               strcpy(description, table[i].description);
-            }
+         unsigned format = (data[1] >> 5) & 0x7; // bits 21-23
+         unsigned size = (data[1] >> 3) & 0x3; // bits 19-20
+         tile.format = (img_format) format;
+         switch (size) {
+            case 0: tile.depth = 4; break;
+            case 1: tile.depth = 8; break;
+            case 2: tile.depth = 16; break;
+            case 3: tile.depth = 32; break;
+            default: ERROR("Unknown depth: %d\n", size);
+         }
+         if (format < DIM(fmt_table)) {
+            sprintf(description, "%s %d", fmt_table[format], tile.depth);
          }
          INFO("%14s %s\n", "G_SETTILE", description);
          break;
@@ -511,9 +540,9 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
          INFO("%14s %02X %06X\n", "G_SETTIMG", bank, seg_offset);
          fprintf(fout, "\n# %s %02X %06X\n", "G_SETTIMG", bank, seg_offset);
          fprintf(fout, "usemtl M%08X\n", seg_address);
-         texture_addr = seg_address;
-         if (tile_width != -1) {
-            add_texture(texture_addr, tile_width, tile_height);
+         tile.address = seg_address;
+         if (tile.width != -1) {
+            add_texture(&tile);
          }
          break;
       default:
