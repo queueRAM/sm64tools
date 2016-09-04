@@ -464,9 +464,9 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
          vertex[1] = data[6] / 0x0A;
          vertex[2] = data[7] / 0x0A;
          INFO("%14s %3d %3d %3d\n", "F3D_TRI1", vertex[0], vertex[1], vertex[2]);
-         idx[0] = vertex_buffer[vertex[0]].obj_idx+1;
-         idx[1] = vertex_buffer[vertex[1]].obj_idx+1;
-         idx[2] = vertex_buffer[vertex[2]].obj_idx+1;
+         idx[0] = vertex_buffer[vertex[0]].obj_idx + config->v_idx_offset;
+         idx[1] = vertex_buffer[vertex[1]].obj_idx + config->v_idx_offset;
+         idx[2] = vertex_buffer[vertex[2]].obj_idx + config->v_idx_offset;
          fprintf(fout, "f %d/%d/%d %d/%d/%d %d/%d/%d\n",
                idx[0], idx[0], idx[0],
                idx[1], idx[1], idx[1],
