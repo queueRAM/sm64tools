@@ -85,7 +85,8 @@ static unsigned int dl_stack[0x100];
 static int stack_idx = 0;
 
 // OBJ vertices
-static vertex obj_vertices[1024];
+static vertex *obj_vertices = NULL;
+static int obj_vert_allocated = 0;
 static int obj_vert_count = 0;
 
 // textures needed
@@ -97,7 +98,8 @@ typedef struct
    img_format format;
    int depth;
 } texture;
-static texture textures[4096] = {0};
+static texture *textures = NULL;
+static int texture_allocated = 0;
 static int texture_count = 0;
 // current texture info
 static texture tile = {
@@ -142,6 +144,11 @@ static void load_vertices(unsigned char *data, unsigned int offset, unsigned int
       if (i + index < DIM(vertex_buffer)) {
          read_vertex(&data[offset + i*16], &vertex_buffer[i+index], translate);
          vertex_buffer[i+index].obj_idx = obj_vert_count;
+         if (obj_vert_count + 1 > obj_vert_allocated) {
+            obj_vert_allocated *= 2;
+            INFO("realloc obj_vertices to %d\n", obj_vert_allocated);
+            obj_vertices = realloc(obj_vertices, obj_vert_allocated * sizeof(*obj_vertices));
+         }
          obj_vertices[obj_vert_count] = vertex_buffer[i+index];
          obj_vert_count++;
       } else {
@@ -155,6 +162,11 @@ static void add_texture(texture const * const tex)
    int i;
    for (i = 0; i < texture_count; i++) {
       if (textures[i].address == tex->address) return;
+   }
+   if (texture_count >= texture_allocated) {
+      texture_allocated *= 2;
+      INFO("realloc textures to %d\n", texture_allocated);
+      textures = realloc(textures, texture_allocated * sizeof(*textures));
    }
    textures[texture_count] = *tex;
    texture_count++;
@@ -705,6 +717,12 @@ int main(int argc, char *argv[])
          seg_lengths[s] = size;
       }
    }
+
+   // init data
+   obj_vert_allocated = 1024;
+   obj_vertices = malloc(obj_vert_allocated * sizeof(*obj_vertices));
+   texture_allocated = 256;
+   textures = malloc(texture_allocated * sizeof(*textures));
 
    // generate .obj file
    fprintf(fout, "mtllib material.mtl\n\n");
