@@ -145,7 +145,7 @@ static void load_vertices(unsigned char *data, unsigned int offset, unsigned int
          obj_vertices[obj_vert_count] = vertex_buffer[i+index];
          obj_vert_count++;
       } else {
-         ERROR("%u + %u >= %Iu\n", i, index, DIM(vertex_buffer));
+         ERROR("%u + %u >= %zu\n", i, index, DIM(vertex_buffer));
       }
    }
 }
@@ -328,13 +328,13 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
             g = (float)seg_data[bank][seg_offset+1] / 255.0f;
             b = (float)seg_data[bank][seg_offset+2] / 255.0f;
             if (data[1] == 0x86) {
-               fprintf(fout, "# newmtl M%06X\n", seg_offset);
+               fprintf(fout, "# newmtl M%08X\n", seg_address);
                fprintf(fout, "# Ka %f %f %f\n", r, g, b);
-               material = seg_offset;
+               material = seg_address;
             } else if (data[1] == 0x88) {
                fprintf(fout, "# Kd %f %f %f\n\n", r, g, b);
                fprintf(fout, "# mtllib materials.mtl\n");
-               fprintf(fout, "# usemtl M%06X\n", material);
+               fprintf(fout, "# usemtl M%08X\n", material);
             }
          }
          break;
@@ -347,7 +347,6 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
          bank = data[4];
          seg_offset = seg_address & 0x00FFFFFF;
          INFO("%14s %u %u %08X (%02X %06X)\n", "F3D_VTX", count, index, seg_address, bank, seg_offset);
-         fprintf(fout, "# F3D_VTX %u %u %08X (%02X %06X)\n", count, index, seg_address, bank, seg_offset);
          if (seg_data[bank] == NULL) {
             ERROR("Tried to load %d verts from bank %02X %06X\n", count, bank, seg_offset);
          } else {
@@ -361,9 +360,6 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
                      ((float)vertex_buffer[i+index].z) * config->scale);
             }
             for (i = 0; i < count; i++) {
-               fprintf(fout, "# %d %d : %f %f\n",
-                     vertex_buffer[i+index].u, vertex_buffer[i+index].v,
-                     uScale, vScale);
                // invert vertical direction so all textures look upright
                fprintf(fout, "vt %f %f\n",
                      ((float)vertex_buffer[i+index].u) / uScale,
@@ -538,7 +534,7 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
          bank = data[4];
          seg_offset = seg_address & 0x00FFFFFF;
          INFO("%14s %02X %06X\n", "G_SETTIMG", bank, seg_offset);
-         fprintf(fout, "\n# %s %02X %06X\n", "G_SETTIMG", bank, seg_offset);
+         fprintf(fout, "\ng s%08X_%08X\n", *dl_addr, seg_address);
          fprintf(fout, "usemtl M%08X\n", seg_address);
          tile.address = seg_address;
          if (tile.width != -1) {
@@ -715,7 +711,6 @@ int main(int argc, char *argv[])
    for (s = 0; s < config.offset_count; s++)
    {
       done = 0;
-      fprintf(fout, "g s%08X\n", config.offsets[s]);
       for (seg_addr = config.offsets[s]; !done; seg_addr += 8) {
          done = print_f3d(fout, &seg_addr, &config);
       }
