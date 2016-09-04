@@ -152,7 +152,7 @@ static void load_vertices(unsigned char *data, unsigned int offset, unsigned int
          obj_vertices[obj_vert_count] = vertex_buffer[i+index];
          obj_vert_count++;
       } else {
-         ERROR("%u + %u >= %zu\n", i, index, DIM(vertex_buffer));
+         ERROR("%u + %u >= " SIZE_T_FORMAT "\n", i, index, DIM(vertex_buffer));
       }
    }
 }

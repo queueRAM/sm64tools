@@ -5,6 +5,13 @@
 
 // defines
 
+// printing size_t varies by compiler
+#if defined(_MSC_VER) || defined(__MINGW32__)
+  #define SIZE_T_FORMAT "%Iu"
+#else
+  #define SIZE_T_FORMAT "%zu"
+#endif
+
 #define KB 1024
 #define MB (1024 * KB)
 
