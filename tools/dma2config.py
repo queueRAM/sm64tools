@@ -110,12 +110,19 @@ print("// these were decoded from DMA accesses")
 print("memory =")
 print("(")
 print("   // start     end         ram-to-rom")
+last_dma = None
 for dma in dmas:
    if dma.jals:
       start = 0x80000000 + dma.dest
       end = start + dma.length
       ram2rom = start - dma.source
-      print("   (0x%08X, 0x%08X, 0x%08X),  // %06X-%06X %06X" % (start, end, ram2rom, dma.source, dma.source + dma.length, dma.length))
+      if last_dma is not None:
+         print(", // 0x%06X-0x%06X 0x%06X" % (last_dma.source, last_dma.source + last_dma.length, last_dma.length))
+      sys.stdout.write("   (0x%08X, 0x%08X, 0x%08X)" % (start, end, ram2rom))
+      last_dma = dma
+# last DMA gets no comma
+if last_dma is not None:
+   print("  // 0x%06X-0x%06X 0x%06X" % (last_dma.source, last_dma.source + last_dma.length, last_dma.length))
 
 print(");")
 print("")
@@ -138,11 +145,14 @@ print("//      skybox - grid of 32x32 16-bit RGBA")
 print("ranges =")
 print("(")
 print("   // start,  end,      type,     label")
+first = True
 for dma in dmas_rom:
-   if dma.jals:
-      print("   (0x%06X, 0x%06X, \"asm\")," % (dma.source, dma.source + dma.length))
+   if not first:
+      print(",")
    else:
-      print("   (0x%06X, 0x%06X, \"bin\")," % (dma.source, dma.source + dma.length))
+      first = False
+   sys.stdout.write("   (0x%06X, 0x%06X, \"%s\")" % (dma.source, dma.source + dma.length, "asm" if dma.jals else "bin" ))
+print();
 print(");")
 print("")
 
@@ -151,7 +161,13 @@ print("// All label addresses are RAM addresses")
 print("// Order does not matter")
 print("labels =")
 print("(")
+first = True
 for jal in jals:
-   print("   (0x%08X, \"proc_%08X\")," % (jal, jal))
+   if not first:
+      print(",")
+   else:
+      first = False
+   sys.stdout.write("   (0x%08X, \"proc_%08X\")" % (jal, jal))
+print();
 print(");")
 print("")
