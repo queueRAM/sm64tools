@@ -290,6 +290,23 @@ static int find_some_block(block *blocks, int block_count, unsigned char *buf)
    return block_count + 1;
 }
 
+static void fix_f3d_geo(unsigned char *buf, int len)
+{
+   // set different parameters for G_SETCOMBINE blending parameters
+   static const unsigned char f3d_combine_old[] = {0xFC, 0x12, 0x7F, 0xFF, 0xFF, 0xFF, 0xF8, 0x38};
+   static const unsigned char f3d_combine_new[] = {0xFC, 0x12, 0x18, 0x24, 0xFF, 0x33, 0xFF, 0xFF};
+   // set geo layout drawing layer from 6 to 4
+   static const unsigned char geo_dl_old[] = {0x15, 0x06, 0x00, 0x00, 0x0E};
+   static const unsigned char geo_dl_new[] = {0x15, 0x04, 0x00, 0x00, 0x0E};
+   for (int i = 0; i < len; i++) {
+      if (!memcmp(&buf[i], f3d_combine_old, sizeof(f3d_combine_old))) {
+         memcpy(&buf[i], f3d_combine_new, sizeof(f3d_combine_new));
+      } else if (!memcmp(&buf[i], geo_dl_old, sizeof(geo_dl_old))) {
+         memcpy(&buf[i], geo_dl_new, sizeof(geo_dl_new));
+      }
+   }
+}
+
 // find and compact/compress all MIO0 blocks
 // config: configuration to determine alignment and compression
 // in_buf: buffer containing entire contents of SM64 data in big endian
@@ -359,8 +376,9 @@ static int sm64_compress_mio0(const compress_config *config,
          blk->new = blk->old;
          blk->new_end = blk->old_end;
       } else {
-         // TODO: F3D fixes somewhere in here
          int src_len;
+         // fix F3D commands
+         fix_f3d_geo(&in_buf[blk->old], blk->old_end - blk->old);
          if (config->compress && blk->type == BLOCK_MIO0) {
             // TODO: this decompression step may be unnecesary if it is a fake header
             int raw_len = mio0_decode(&in_buf[blk->old], tmp_raw, NULL);
