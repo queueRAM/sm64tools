@@ -40,6 +40,8 @@ typedef struct
    unsigned int alignment;
    char compress;
    char dump;
+   char fix_f3d;
+   char fix_geo;
 } compress_config;
 
 // default configuration
@@ -49,7 +51,9 @@ static const compress_config default_config =
    NULL, // output filename
    16,   // MIO0 alignment
    0,    // compress all MIO0 blocks
-   0,    // TODO: dump
+   0,    // dump
+   0,    // f3d
+   0,    // geo
 };
 
 static void print_usage(void)
@@ -61,6 +65,8 @@ static void print_usage(void)
          "Optional arguments:\n"
          " -a ALIGNMENT byte boundary to align MIO0 blocks (default: %d)\n"
          " -c           compress all blocks using MIO0\n"
+         " -f           fix F3D combine blending parameters\n"
+         " -g           fix geo layout display list layers\n"
          " -v           verbose progress output\n"
          "\n"
          "File arguments:\n"
@@ -97,6 +103,12 @@ static void parse_arguments(int argc, char *argv[], compress_config *config)
                break;
             case 'd':
                config->dump = 1;
+               break;
+            case 'f':
+               config->fix_f3d = 1;
+               break;
+            case 'g':
+               config->fix_geo = 1;
                break;
             case 'v':
                g_verbosity = 1;
@@ -290,18 +302,25 @@ static int find_some_block(block *blocks, int block_count, unsigned char *buf)
    return block_count + 1;
 }
 
-static void fix_f3d_geo(unsigned char *buf, int len)
+// set different parameters for G_SETCOMBINE blending parameters
+static void fix_f3d(unsigned char *buf, int len)
 {
-   // set different parameters for G_SETCOMBINE blending parameters
    static const unsigned char f3d_combine_old[] = {0xFC, 0x12, 0x7F, 0xFF, 0xFF, 0xFF, 0xF8, 0x38};
    static const unsigned char f3d_combine_new[] = {0xFC, 0x12, 0x18, 0x24, 0xFF, 0x33, 0xFF, 0xFF};
-   // set geo layout drawing layer from 6 to 4
-   static const unsigned char geo_dl_old[] = {0x15, 0x06, 0x00, 0x00, 0x0E};
-   static const unsigned char geo_dl_new[] = {0x15, 0x04, 0x00, 0x00, 0x0E};
    for (int i = 0; i < len; i++) {
       if (!memcmp(&buf[i], f3d_combine_old, sizeof(f3d_combine_old))) {
          memcpy(&buf[i], f3d_combine_new, sizeof(f3d_combine_new));
-      } else if (!memcmp(&buf[i], geo_dl_old, sizeof(geo_dl_old))) {
+      }
+   }
+}
+
+// set geo layout drawing layer from 6 to 4
+static void fix_geo(unsigned char *buf, int len)
+{
+   static const unsigned char geo_dl_old[] = {0x15, 0x06, 0x00, 0x00, 0x0E};
+   static const unsigned char geo_dl_new[] = {0x15, 0x04, 0x00, 0x00, 0x0E};
+   for (int i = 0; i < len; i++) {
+      if (!memcmp(&buf[i], geo_dl_old, sizeof(geo_dl_old))) {
          memcpy(&buf[i], geo_dl_new, sizeof(geo_dl_new));
       }
    }
@@ -343,11 +362,11 @@ static int sm64_compress_mio0(const compress_config *config,
    block_count = walk_scripts(block_table, block_count, in_buf, in_length, ENTRY_SCRIPT, ENTRY_SCRIPT + 0x30);
    // find sequence bank block (usually 0x02F00000 or 0x03E00000)
    block_count = find_sequence_bank(block_table, block_count, in_buf);
-   // find sequence bank block (usually 0x01200000)
+   // some block (usually ROM 0x01200000) is DMAd to 0x80400000
    block_count = find_some_block(block_table, block_count, in_buf);
    printf("count: %d\n", block_count);
 
-   // sort the addresses
+   // sort the blocks
    qsort(block_table, block_count, sizeof(block_table[0]), compare_block);
 
    // debug table
@@ -377,8 +396,15 @@ static int sm64_compress_mio0(const compress_config *config,
          blk->new_end = blk->old_end;
       } else {
          int src_len;
-         // fix F3D commands
-         fix_f3d_geo(&in_buf[blk->old], blk->old_end - blk->old);
+         // implement fixes
+         // TODO: this is liberally applied to all data
+         // TODO: this assumes fake MIO0 headers
+         if (config->fix_f3d) {
+            fix_f3d(&in_buf[blk->old], blk->old_end - blk->old);
+         }
+         if (config->fix_geo) {
+            fix_geo(&in_buf[blk->old], blk->old_end - blk->old);
+         }
          if (config->compress && blk->type == BLOCK_MIO0) {
             // TODO: this decompression step may be unnecesary if it is a fake header
             int raw_len = mio0_decode(&in_buf[blk->old], tmp_raw, NULL);
@@ -519,7 +545,9 @@ static int sm64_compress_mio0(const compress_config *config,
       free(tmp_raw);
       free(tmp_cmp);
    }
-   out_length = cur_offset;
+
+   // align output length to nearest MB
+   out_length = ALIGN(cur_offset, 1*MB);
 
    return out_length;
 }
