@@ -6,7 +6,7 @@
 #include "libsm64.h"
 #include "utils.h"
 
-#define SM64COMPRESS_VERSION "0.1.1a"
+#define SM64COMPRESS_VERSION "0.2a"
 
 #define MAX_REFS 64
 
@@ -14,23 +14,23 @@ typedef struct
 {
    unsigned int level;  // original level script offset where referenced
    unsigned int offset; // offset within level script where referenced
-   unsigned char type;  // command type: 0x1A, 0x18, or 0xFF for ASM
+   unsigned char type;  // command type: 0x1A, 0x18, or 0xFF, 0xFE, 0xFD for ASM
 } block_ref;
 
 typedef struct
 {
-   unsigned int old;         // starting offset in original ROM
-   unsigned int old_end;     // ending offset in original ROM
-   unsigned int new;         // starting offset in new ROM
-   unsigned int new_end;     // ending offset in new ROM
-   block_ref refs[MAX_REFS]; // references to this block
-   int          ref_count;   // number of references
+   unsigned int old;          // starting offset in original ROM
+   unsigned int old_end;      // ending offset in original ROM
+   unsigned int new;          // starting offset in new ROM
+   unsigned int new_end;      // ending offset in new ROM
+   block_ref refs[MAX_REFS];  // references to this block
+   int          ref_count;    // number of references
+   char         compressible; // if block is not currenlty, but potentially compressible
    enum {
       BLOCK_LEVEL,
       BLOCK_MIO0,
       BLOCK_RAW
    } type;
-   char compressible;         // whether or not block is compressible
 } block;
 
 typedef struct
@@ -49,7 +49,7 @@ static const compress_config default_config =
 {
    NULL, // input filename
    NULL, // output filename
-   16,   // MIO0 alignment
+   16,   // block alignment
    0,    // compress all MIO0 blocks
    0,    // dump
    0,    // f3d
@@ -58,20 +58,21 @@ static const compress_config default_config =
 
 static void print_usage(void)
 {
-   ERROR("Usage: sm64compress [-c] [-v] FILE [OUT_FILE]\n"
+   ERROR("Usage: sm64compress [-a ALIGNMENT] [-c] [-d] [-f] [-g] [-v] FILE [OUT_FILE]\n"
          "\n"
-         "sm64compress v" SM64COMPRESS_VERSION ": Super Mario 64 ROM compressor\n"
+         "sm64compress v" SM64COMPRESS_VERSION ": Super Mario 64 ROM compressor and fixer\n"
          "\n"
          "Optional arguments:\n"
-         " -a ALIGNMENT byte boundary to align MIO0 blocks (default: %d)\n"
-         " -c           compress all blocks using MIO0\n"
+         " -a ALIGNMENT byte boundary to align blocks (default: %d)\n"
+         " -c           compress all 0x17 blocks using MIO0 (experimental)\n"
+         " -d           dump blocks to 'dump' directory\n"
          " -f           fix F3D combine blending parameters\n"
          " -g           fix geo layout display list layers\n"
          " -v           verbose progress output\n"
          "\n"
          "File arguments:\n"
          " FILE         input ROM file\n"
-         " OUT_FILE     output shrunk ROM file (default: replaces input extension with .out.z64)\n",
+         " OUT_FILE     output compressed ROM file (default: replaces input extension with .out.z64)\n",
          default_config.alignment);
    exit(1);
 }
@@ -342,7 +343,6 @@ static int sm64_compress_mio0(const compress_config *config,
 #define SEGMENT2_ROM_OFFSET 0x800000
 #define SEGMENT2_ROM_END    0x81BB64
    block block_table[MAX_BLOCKS];
-   unsigned char *src;
    unsigned char *tmp_raw = NULL;
    unsigned char *tmp_cmp = NULL;
    int block_count = 0;
@@ -395,23 +395,38 @@ static int sm64_compress_mio0(const compress_config *config,
          blk->new = blk->old;
          blk->new_end = blk->old_end;
       } else {
+         unsigned char *src;
          int src_len;
+         int block_len = blk->old_end - blk->old;
          // implement fixes
          // TODO: this is liberally applied to all data
          // TODO: this assumes fake MIO0 headers
          if (config->fix_f3d) {
-            fix_f3d(&in_buf[blk->old], blk->old_end - blk->old);
+            fix_f3d(&in_buf[blk->old], block_len);
          }
          if (config->fix_geo) {
-            fix_geo(&in_buf[blk->old], blk->old_end - blk->old);
+            fix_geo(&in_buf[blk->old], block_len);
          }
          if (config->compress && blk->type == BLOCK_MIO0) {
-            // TODO: this decompression step may be unnecesary if it is a fake header
+            // decompress to remove fake header and recompress
             int raw_len = mio0_decode(&in_buf[blk->old], tmp_raw, NULL);
             int cmp_len = mio0_encode(tmp_raw, raw_len, tmp_cmp);
             src = tmp_cmp;
             src_len = cmp_len;
-            INFO("Compressed %08X %06X=%06X => %06X\n", blk->old, blk->old_end - blk->old, raw_len, cmp_len);
+            INFO("Compressed %08X %06X=%06X => %06X\n", blk->old, block_len, raw_len, cmp_len);
+         } else if(config->compress && blk->compressible) {
+            // decompress to remove fake header and recompress
+            int cmp_len = mio0_encode(&in_buf[blk->old], block_len, tmp_cmp);
+            src = tmp_cmp;
+            src_len = cmp_len;
+            INFO("Compressed %08X %06X => %06X\n", blk->old, block_len, cmp_len);
+            for (int r = 0; r < blk->ref_count; r++) {
+               if (blk->refs[r].type == 0x17) {
+                  blk->refs[r].type = 0x18;
+               } else {
+                  ERROR("Block %08X ref %X:%X type = %02X\n", blk->old, blk->refs[r].level, blk->refs[r].offset, blk->refs[r].type);
+               }
+            }
          } else {
             src = &in_buf[blk->old];
             src_len = blk->old_end - blk->old;
@@ -443,7 +458,7 @@ static int sm64_compress_mio0(const compress_config *config,
                   addr_high++;
                }
                write_u16_be(&out_buf[offset + 0x2], addr_high);
-               write_u16_be(&out_buf[offset + 0xe], addr_low);
+               write_u16_be(&out_buf[offset + 0xE], addr_low);
 
                addr_low = blk->new_end & 0xFFFF;
                addr_high = (blk->new_end >> 16) & 0xFFFF;
@@ -451,7 +466,7 @@ static int sm64_compress_mio0(const compress_config *config,
                   addr_high++;
                }
                write_u16_be(&out_buf[offset + 0x6], addr_high);
-               write_u16_be(&out_buf[offset + 0xa], addr_low);
+               write_u16_be(&out_buf[offset + 0xA], addr_low);
                INFO("Updated ASM  @ %08X: %08X %08X %08X %08X\n", offset,
                      read_u32_be(&out_buf[offset + 0]), read_u32_be(&out_buf[offset + 4]),
                      read_u32_be(&out_buf[offset + 8]), read_u32_be(&out_buf[offset + 0xC]));
@@ -480,7 +495,7 @@ static int sm64_compress_mio0(const compress_config *config,
                write_u16_be(&out_buf[0xD4788 + 0x2], addr_low);
                INFO("Updated ASM  @ %08X: %08X %08X\n", 0xD4784,
                      read_u32_be(&out_buf[0xD4784 + 0]), read_u32_be(&out_buf[0xD4784 + 4]));
-            } else if (blk->refs[r].type == 0xFD) { // sequence bank
+            } else if (blk->refs[r].type == 0xFD) { // some other data
                unsigned addr_low = blk->new & 0xFFFF;
                unsigned addr_high = (blk->new >> 16) & 0xFFFF;
                INFO("Updating ASM @ %08X: %08X %08X %08X %08X %08X\n", 0x101BB0,
@@ -510,9 +525,10 @@ static int sm64_compress_mio0(const compress_config *config,
                } else {
                   block *level = &block_table[level_idx];
                   unsigned offset = level->new + blk->refs[r].offset;
-                  INFO("Updating @ %08X:%08X %08X-%08X to %08X-%08X\n", level->old, level->new,
-                        read_u32_be(&out_buf[offset + 4]), read_u32_be(&out_buf[offset + 8]),
-                        blk->new, blk->new_end);
+                  INFO("Updating @ %08X:%08X %02X %08X-%08X to %02X %08X-%08X\n", level->old, level->new,
+                        out_buf[offset], read_u32_be(&out_buf[offset + 4]), read_u32_be(&out_buf[offset + 8]),
+                        blk->refs[r].type, blk->new, blk->new_end);
+                  out_buf[offset] = blk->refs[r].type;
                   write_u32_be(&out_buf[offset + 4], blk->new);
                   write_u32_be(&out_buf[offset + 8], blk->new_end);
                }
@@ -527,17 +543,16 @@ static int sm64_compress_mio0(const compress_config *config,
       out_buf[0xd48b7] = 0x5C;
    }
 
+#define DUMP_DIR "dump"
    if (config->dump) {
-      make_dir("dump");
+      make_dir(DUMP_DIR);
       for (int i = 0; i < block_count; i++) {
+         char fname[FILENAME_MAX];
          block *blk = &block_table[i];
-         if (blk->type == BLOCK_LEVEL) {
-            char fname[512];
-            sprintf(fname, "dump/%07X.%07X.old.bin", blk->old, blk->old);
-            (void)write_file(fname, &in_buf[blk->old], blk->old_end - blk->old);
-            sprintf(fname, "dump/%07X.%07X.new.bin", blk->old, blk->new);
-            (void)write_file(fname, &out_buf[blk->new], blk->new_end - blk->new);
-         }
+         sprintf(fname, "%s/%07X.%07X.old.bin", DUMP_DIR, blk->old, blk->old);
+         (void)write_file(fname, &in_buf[blk->old], blk->old_end - blk->old);
+         sprintf(fname, "%s/%07X.%07X.new.bin", DUMP_DIR, blk->old, blk->new);
+         (void)write_file(fname, &out_buf[blk->new], blk->new_end - blk->new);
       }
    }
 
@@ -587,7 +602,7 @@ int main(int argc, char *argv[])
    // copy first 8MB from input to output
    memcpy(out_buf, in_buf, 8*MB);
 
-   // compact the SM64 MIO0 files and adjust pointers
+   // compact the SM64 blocks and adjust pointers
    out_size = sm64_compress_mio0(&config, in_buf, in_size, out_buf);
 
    // update N64 header CRC
@@ -599,6 +614,8 @@ int main(int argc, char *argv[])
       ERROR("Error writing bytes to output file \"%s\"\n", config.out_filename);
       exit(1);
    }
+
+   INFO("Size: %dMB -> %dMB\n", (int)in_size/(1*MB), (int)out_size/(1*MB));
 
    return 0;
 }
