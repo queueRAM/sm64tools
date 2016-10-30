@@ -16,7 +16,6 @@ static const sm64_config_t default_config =
    32,   // MIO0 padding
    1,    // MIO0 alignment
    0,    // fill old MIO0 blocks
-   0,    // compress: unused in extend
    0,    // dump MIO0 blocks to files
 };
 

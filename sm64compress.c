@@ -2,20 +2,52 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "libmio0.h"
 #include "libsm64.h"
 #include "utils.h"
 
 #define SM64COMPRESS_VERSION "0.1.1a"
 
+#define MAX_REFS 64
+
+typedef struct
+{
+   unsigned int level;  // original level script offset where referenced
+   unsigned int offset; // offset within level script where referenced
+   unsigned char type;  // command type: 0x1A, 0x18, or 0xFF for ASM
+} block_ref;
+
+typedef struct
+{
+   unsigned int old;         // starting offset in original ROM
+   unsigned int old_end;     // ending offset in original ROM
+   unsigned int new;         // starting offset in new ROM
+   unsigned int new_end;     // ending offset in new ROM
+   block_ref refs[MAX_REFS]; // references to this block
+   int          ref_count;   // number of references
+   enum {
+      BLOCK_LEVEL,
+      BLOCK_MIO0,
+      BLOCK_RAW
+   } type;
+   char compressible;         // whether or not block is compressible
+} block;
+
+typedef struct
+{
+   char *in_filename;
+   char *out_filename;
+   unsigned int alignment;
+   char compress;
+   char dump;
+} compress_config;
+
 // default configuration
-static const sm64_config_t default_config = 
+static const compress_config default_config = 
 {
    NULL, // input filename
    NULL, // output filename
-   0,    // output size: unused in compress
-   0,    // MIO0 padding: unused in compress
    16,   // MIO0 alignment
-   0,    // TODO: fill old MIO0 blocks
    0,    // compress all MIO0 blocks
    0,    // TODO: dump
 };
@@ -39,7 +71,7 @@ static void print_usage(void)
 }
 
 // parse command line arguments
-static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
+static void parse_arguments(int argc, char *argv[], compress_config *config)
 {
    int i;
    int file_count = 0;
@@ -79,7 +111,7 @@ static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
                config->in_filename = argv[i];
                break;
             case 1:
-               config->ext_filename = argv[i];
+               config->out_filename = argv[i];
                break;
             default: // too many
                print_usage();
@@ -93,10 +125,392 @@ static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
    }
 }
 
+int compare_block(const void *a , const void *b)
+{
+    const block *blk_a = (const block*)a;
+    const block *blk_b = (const block*)b;
+
+    if(blk_a->old < blk_b->old) {
+       return -1;
+    } else if(blk_a->old > blk_b->old) {
+       return 1;
+    } else {
+       return 0;
+    }
+}
+
+static int find_block(block *blocks, int count, unsigned int offset)
+{
+   for (int i = 0; i < count; i++) {
+      if (blocks[i].old == offset) {
+         return i;
+      }
+   }
+   return -1;
+}
+
+static void add_ref(block *blk, unsigned level_script, unsigned offset, unsigned char type)
+{
+   block_ref *ref = &blk->refs[blk->ref_count];
+   ref->level = level_script;
+   ref->offset = offset;
+   ref->type = type;
+   blk->ref_count++;
+   if (blk->ref_count >= MAX_REFS) {
+      ERROR("ref_count for %X = %d\n", blk->old, blk->ref_count);
+   }
+}
+
+static int walk_scripts(block *blocks, int block_count, unsigned char *buf, unsigned int in_length, unsigned level_script, unsigned script_end)
+{
+   unsigned off = level_script;
+   while (off < script_end) {
+      unsigned cmd = read_u32_be(&buf[off]);
+      switch (buf[off]) {
+         case 0x00: // level script
+         case 0x01: // level script
+            if (buf[off+1] == 0x10) {
+               unsigned block_off = read_u32_be(&buf[off+4]);
+               unsigned block_end = read_u32_be(&buf[off+8]);
+               if ((block_off & 0xFF000000) == (block_end & 0xFF000000) && buf[off+0x3] == buf[off+0xC]) {
+                  INFO("%07X: %08X %08X %08X %08X\n", off, cmd, block_off, block_end, read_u32_be(&buf[off+0xC]));
+                  int idx = find_block(blocks, block_count, block_off);
+                  if (idx < 0) {
+                     idx = block_count;
+                     blocks[idx].old = block_off;
+                     blocks[idx].old_end = block_end;
+                     blocks[idx].type = BLOCK_LEVEL;
+                     block_count++;
+                     // recurse
+                     block_count = walk_scripts(blocks, block_count, buf, in_length, block_off, block_end);
+                  }
+                  add_ref(&blocks[idx], level_script, off - level_script, buf[off]);
+               }
+            }
+            break;
+         case 0x17: // raw data
+         case 0x18: // MIO0
+         case 0x1A: // MIO0
+            if (buf[off+1] == 0x0C) {
+               unsigned block_off = read_u32_be(&buf[off+4]);
+               unsigned block_end = read_u32_be(&buf[off+8]);
+               if ((block_off & 0xFF000000) == (block_end & 0xFF000000)) {
+                  INFO("%07X: %08X %08X %08X\n", off, cmd, block_off, block_end);
+                  int idx = find_block(blocks, block_count, block_off);
+                  if (idx < 0) {
+                     idx = block_count;
+                     blocks[idx].old = block_off;
+                     blocks[idx].old_end = block_end;
+                     switch (buf[off]) {
+                        case 0x17: // raw data
+                           blocks[idx].type = BLOCK_RAW;
+                           blocks[idx].compressible = 1;
+                           break;
+                        case 0x18: // MIO0
+                        case 0x1A: // MIO0
+                           blocks[idx].type = BLOCK_MIO0;
+                           break;
+                     }
+                     block_count++;
+                  }
+                  add_ref(&blocks[idx], level_script, off - level_script, buf[off]);
+               }
+            }
+            break;
+         default:
+            break;
+      }
+      // could increment by buf[off+1] command length, but trying to be smart might miss things
+      off += 0x4;
+   }
+   return block_count;
+}
+
+static int find_sequence_bank(block *blocks, int block_count, unsigned char *buf)
+{
+   unsigned upper, lower;
+   unsigned offset;
+   unsigned end, cur;
+   int count;
+   
+   upper = read_u16_be(&buf[0xD4714 + 2]);
+   lower = read_u16_be(&buf[0xD471C + 2]);
+   if (lower & 0x8000) {
+      upper--;
+   }
+   offset = (upper << 16) + lower;
+
+   // find end
+   end = offset;
+   count = read_u16_be(&buf[offset + 2]);
+   for (int i = 0; i < count; i++) {
+      // offset relative to sequence bank + length
+      cur = offset + read_u32_be(&buf[offset + 8*i]) + read_u32_be(&buf[offset + 8*i + 4]);
+      if (cur > end) {
+         end = cur;
+      }
+   }
+
+   // add sequence bank to table
+   blocks[block_count].old     = offset;
+   blocks[block_count].old_end = end;
+   blocks[block_count].type    = BLOCK_RAW;
+   add_ref(&blocks[block_count], 0, 0xD4714, 0xFE);
+   // TODO: removed these because the code below handles all of them
+   // add_ref(&blocks[block_count], 0, 0xD4768, 0xFE);
+   // add_ref(&blocks[block_count], 0, 0xD4784, 0xFE);
+
+   return block_count + 1;
+}
+
+static int find_some_block(block *blocks, int block_count, unsigned char *buf)
+{
+   unsigned upper, lower;
+   unsigned offset, end;
+   
+   upper = read_u16_be(&buf[0x101BB0 + 2]);
+   lower = read_u16_be(&buf[0x101BB4 + 2]);
+   if (lower & 0x8000) {
+      upper--;
+   }
+   offset = (upper << 16) + lower;
+   upper = read_u16_be(&buf[0x101BB8 + 2]);
+   lower = read_u16_be(&buf[0x101BC0 + 2]);
+   if (lower & 0x8000) {
+      upper--;
+   }
+   end = (upper << 16) + lower;
+
+   // add this block to table
+   blocks[block_count].old     = offset;
+   blocks[block_count].old_end = end;
+   blocks[block_count].type    = BLOCK_RAW;
+   add_ref(&blocks[block_count], 0, 0x101BB0, 0xFD);
+
+   return block_count + 1;
+}
+
+// find and compact/compress all MIO0 blocks
+// config: configuration to determine alignment and compression
+// in_buf: buffer containing entire contents of SM64 data in big endian
+// length: length of in_buf and max size of out_buf
+// out_buf: buffer containing extended SM64
+// returns new size in out_buf, rounded up to nearest 4MB
+static int sm64_compress_mio0(const compress_config *config,
+                              unsigned char *in_buf,
+                              unsigned int in_length,
+                              unsigned char *out_buf)
+{
+#define MAX_BLOCKS 512
+#define ENTRY_SCRIPT 0x108A10 // hard-coded level entry
+#define SEGMENT2_ROM_OFFSET 0x800000
+#define SEGMENT2_ROM_END    0x81BB64
+   block block_table[MAX_BLOCKS];
+   unsigned char *src;
+   unsigned char *tmp_raw = NULL;
+   unsigned char *tmp_cmp = NULL;
+   int block_count = 0;
+   int out_length;
+   int cur_offset;
+
+   memset(block_table, 0, sizeof(block_table));
+
+   // hard code ASM pointer
+   block_table[0].old     = SEGMENT2_ROM_OFFSET;
+   block_table[0].old_end = SEGMENT2_ROM_END;
+   block_table[0].type    = BLOCK_MIO0;
+   add_ref(&block_table[0], 0, 0x3AC0, 0xFF);
+   block_count++;
+
+   // find blocks in level scripts
+   block_count = walk_scripts(block_table, block_count, in_buf, in_length, ENTRY_SCRIPT, ENTRY_SCRIPT + 0x30);
+   // find sequence bank block (usually 0x02F00000 or 0x03E00000)
+   block_count = find_sequence_bank(block_table, block_count, in_buf);
+   // find sequence bank block (usually 0x01200000)
+   block_count = find_some_block(block_table, block_count, in_buf);
+   printf("count: %d\n", block_count);
+
+   // sort the addresses
+   qsort(block_table, block_count, sizeof(block_table[0]), compare_block);
+
+   // debug table
+#if 0
+   for (int i = 0; i < block_count; i++) {
+      block *blk = &block_table[i];
+      INFO("%08X %08X: %02X\n", blk->old, blk->old_end, blk->type);
+      for (int j = 0; j < blk->ref_count; j++) {
+         INFO("  %08X %08X: %02X\n", blk->refs[j].level, blk->refs[j].offset, blk->refs[j].type);
+      }
+   }
+#endif
+
+   // allocate 1MB buffer for MIO0 compression
+   if (config->compress) {
+      tmp_raw = malloc(512*KB);
+      tmp_cmp = malloc(512*KB);
+   }
+
+#define EXT_ROM_OFFSET 0x800000
+   cur_offset = EXT_ROM_OFFSET;
+   for (int i = 0; i < block_count; i++) {
+      block *blk = &block_table[i];
+      // only relocate extended data
+      if (blk->old < EXT_ROM_OFFSET) {
+         blk->new = blk->old;
+         blk->new_end = blk->old_end;
+      } else {
+         // TODO: F3D fixes somewhere in here
+         int src_len;
+         if (config->compress && blk->type == BLOCK_MIO0) {
+            // TODO: this decompression step may be unnecesary if it is a fake header
+            int raw_len = mio0_decode(&in_buf[blk->old], tmp_raw, NULL);
+            int cmp_len = mio0_encode(tmp_raw, raw_len, tmp_cmp);
+            src = tmp_cmp;
+            src_len = cmp_len;
+            INFO("Compressed %08X %06X=%06X => %06X\n", blk->old, blk->old_end - blk->old, raw_len, cmp_len);
+         } else {
+            src = &in_buf[blk->old];
+            src_len = blk->old_end - blk->old;
+         }
+         // copy new data
+         memcpy(&out_buf[cur_offset], src, src_len);
+         // assign new offsets
+         blk->new = cur_offset;
+         cur_offset = ALIGN(cur_offset + src_len, config->alignment);
+         blk->new_end = cur_offset;
+      }
+   }
+
+   // update references
+   for (int i = 0; i < block_count; i++) {
+      block *blk = &block_table[i];
+      // only relocate extended data
+      if (blk->old != blk->new || blk->old_end != blk->new_end) {
+         for (int r = 0; r < blk->ref_count; r++) {
+            if (blk->refs[r].type == 0xFF) {
+               unsigned offset = blk->refs[r].offset;
+               unsigned addr_low = blk->new & 0xFFFF;
+               unsigned addr_high = (blk->new >> 16) & 0xFFFF;
+               INFO("Updating ASM @ %08X: %08X %08X %08X %08X\n", offset,
+                     read_u32_be(&out_buf[offset + 0]), read_u32_be(&out_buf[offset + 4]),
+                     read_u32_be(&out_buf[offset + 8]), read_u32_be(&out_buf[offset + 0xC]));
+               // ADDIU sign extends which causes the summed high to be 1 less if low MSb is set
+               if (addr_low & 0x8000) {
+                  addr_high++;
+               }
+               write_u16_be(&out_buf[offset + 0x2], addr_high);
+               write_u16_be(&out_buf[offset + 0xe], addr_low);
+
+               addr_low = blk->new_end & 0xFFFF;
+               addr_high = (blk->new_end >> 16) & 0xFFFF;
+               if (addr_low & 0x8000) {
+                  addr_high++;
+               }
+               write_u16_be(&out_buf[offset + 0x6], addr_high);
+               write_u16_be(&out_buf[offset + 0xa], addr_low);
+               INFO("Updated ASM  @ %08X: %08X %08X %08X %08X\n", offset,
+                     read_u32_be(&out_buf[offset + 0]), read_u32_be(&out_buf[offset + 4]),
+                     read_u32_be(&out_buf[offset + 8]), read_u32_be(&out_buf[offset + 0xC]));
+            } else if (blk->refs[r].type == 0xFE) { // sequence bank
+               unsigned addr_low = blk->new & 0xFFFF;
+               unsigned addr_high = (blk->new >> 16) & 0xFFFF;
+               // ADDIU sign extends which causes the summed high to be 1 less if low MSb is set
+               if (addr_low & 0x8000) {
+                  addr_high++;
+               }
+               INFO("Updating ASM @ %08X: %08X %08X\n", 0xD4784,
+                     read_u32_be(&out_buf[0xD4784 + 0]), read_u32_be(&out_buf[0xD4784 + 4]));
+               // 0D4714 80319714 3C04007B   lui   $a0, 0x7b
+               // 0D4718 80319718 AC450000   sw    $a1, ($v0)
+               // 0D471C 8031971C 24840860   addiu $a0, $a0, 0x860
+               write_u16_be(&out_buf[0xD4714 + 0x2], addr_high);
+               write_u16_be(&out_buf[0xD471C + 0x2], addr_low);
+               // 0D4768 80319768 3C04007B   lui   $a0, 0x7b
+               // 0D476C 8031976C AC620000   sw    $v0, ($v1)
+               // 0D4770 80319770 24840860   addiu $a0, $a0, 0x860
+               write_u16_be(&out_buf[0xD4768 + 0x2], addr_high);
+               write_u16_be(&out_buf[0xD4770 + 0x2], addr_low);
+               // 0D4784 80319784 3C05007B   lui   $a1, 0x7b
+               // 0D4788 80319788 24A50860   addiu $a1, $a1, 0x860
+               write_u16_be(&out_buf[0xD4784 + 0x2], addr_high);
+               write_u16_be(&out_buf[0xD4788 + 0x2], addr_low);
+               INFO("Updated ASM  @ %08X: %08X %08X\n", 0xD4784,
+                     read_u32_be(&out_buf[0xD4784 + 0]), read_u32_be(&out_buf[0xD4784 + 4]));
+            } else if (blk->refs[r].type == 0xFD) { // sequence bank
+               unsigned addr_low = blk->new & 0xFFFF;
+               unsigned addr_high = (blk->new >> 16) & 0xFFFF;
+               INFO("Updating ASM @ %08X: %08X %08X %08X %08X %08X\n", 0x101BB0,
+                     read_u32_be(&out_buf[0x101BB0 + 0]), read_u32_be(&out_buf[0x101BB0 + 4]),
+                     read_u32_be(&out_buf[0x101BB0 + 8]), read_u32_be(&out_buf[0x101BB0 + 0xC]),
+                     read_u32_be(&out_buf[0x101BB0 + 0x10]));
+               // 101BB0 lui   $a1, 0x120
+               // 101BB4 ori   $a1, $a1, 0x0
+               write_u16_be(&out_buf[0x101BB0 + 0x2], addr_high);
+               write_u16_be(&out_buf[0x101BB4 + 0x2], addr_low);
+
+               addr_low = blk->new_end & 0xFFFF;
+               addr_high = (blk->new_end >> 16) & 0xFFFF;
+               // 101BB8 lui   $a2, 0x130
+               // 101BBC jal   DmaCopy (0x278504)
+               // 101BC0 ori   $a2, $a2, 0x0
+               write_u16_be(&out_buf[0x101BB8 + 0x2], addr_high);
+               write_u16_be(&out_buf[0x101BC0 + 0x2], addr_low);
+               INFO("Updated ASM  @ %08X: %08X %08X %08X %08X %08X\n", 0x101BB0,
+                     read_u32_be(&out_buf[0x101BB0 + 0]), read_u32_be(&out_buf[0x101BB0 + 4]),
+                     read_u32_be(&out_buf[0x101BB0 + 8]), read_u32_be(&out_buf[0x101BB0 + 0xC]),
+                     read_u32_be(&out_buf[0x101BB0 + 0x10]));
+            } else {
+               int level_idx = find_block(block_table, block_count, blk->refs[r].level);
+               if (level_idx < 0) {
+                  ERROR("Error: could not locate ref %08X in block %08X\n", blk->refs[r].level, blk->old);
+               } else {
+                  block *level = &block_table[level_idx];
+                  unsigned offset = level->new + blk->refs[r].offset;
+                  INFO("Updating @ %08X:%08X %08X-%08X to %08X-%08X\n", level->old, level->new,
+                        read_u32_be(&out_buf[offset + 4]), read_u32_be(&out_buf[offset + 8]),
+                        blk->new, blk->new_end);
+                  write_u32_be(&out_buf[offset + 4], blk->new);
+                  write_u32_be(&out_buf[offset + 8], blk->new_end);
+               }
+            }
+         }
+      }
+   }
+
+   // detect audio patch and fix it
+   if (out_buf[0xd48b6] == 0x80 && out_buf[0xd48b7] == 0x3D) {
+      INFO("Moving sound allocation from 0x803D0000 to 0x805C0000\n");
+      out_buf[0xd48b7] = 0x5C;
+   }
+
+   if (config->dump) {
+      make_dir("dump");
+      for (int i = 0; i < block_count; i++) {
+         block *blk = &block_table[i];
+         if (blk->type == BLOCK_LEVEL) {
+            char fname[512];
+            sprintf(fname, "dump/%07X.%07X.old.bin", blk->old, blk->old);
+            (void)write_file(fname, &in_buf[blk->old], blk->old_end - blk->old);
+            sprintf(fname, "dump/%07X.%07X.new.bin", blk->old, blk->new);
+            (void)write_file(fname, &out_buf[blk->new], blk->new_end - blk->new);
+         }
+      }
+   }
+
+   if (tmp_raw != NULL) {
+      free(tmp_raw);
+      free(tmp_cmp);
+   }
+   out_length = cur_offset;
+
+   return out_length;
+}
+
+
 int main(int argc, char *argv[])
 {
-   char ext_filename[FILENAME_MAX];
-   sm64_config_t config;
+   char out_filename[FILENAME_MAX];
+   compress_config config;
    unsigned char *in_buf = NULL;
    unsigned char *out_buf = NULL;
    long in_size;
@@ -106,9 +520,9 @@ int main(int argc, char *argv[])
    // get configuration from arguments
    config = default_config;
    parse_arguments(argc, argv, &config);
-   if (config.ext_filename == NULL) {
-      config.ext_filename = ext_filename;
-      generate_filename(config.in_filename, config.ext_filename, "out.z64");
+   if (config.out_filename == NULL) {
+      config.out_filename = out_filename;
+      generate_filename(config.in_filename, config.out_filename, "out.z64");
    }
 
    // read input file into memory
@@ -122,9 +536,10 @@ int main(int argc, char *argv[])
 
    // allocate output memory
    out_buf = malloc(in_size);
+   memset(out_buf, 0x01, in_size);
 
-   // copy base file from input to output
-   memcpy(out_buf, in_buf, in_size);
+   // copy first 8MB from input to output
+   memcpy(out_buf, in_buf, 8*MB);
 
    // compact the SM64 MIO0 files and adjust pointers
    out_size = sm64_compress_mio0(&config, in_buf, in_size, out_buf);
@@ -133,9 +548,9 @@ int main(int argc, char *argv[])
    sm64_update_checksums(out_buf);
 
    // write to output file
-   bytes_written = write_file(config.ext_filename, out_buf, out_size);
+   bytes_written = write_file(config.out_filename, out_buf, out_size);
    if (bytes_written < out_size) {
-      ERROR("Error writing bytes to output file \"%s\"\n", config.ext_filename);
+      ERROR("Error writing bytes to output file \"%s\"\n", config.out_filename);
       exit(1);
    }
 
