@@ -208,25 +208,24 @@ static void walk_scripts(unsigned char *data, unsigned offset)
       // add main entry level script
       switch (checksum) {
          case 0x4EAA3D0E: // (J)
-            levelscripts[0].start = 0x1076A0;
-            levelscripts[0].end   = 0x1076D0;
+            offset = 0x1076A0;
             break;
          case 0x635A2BFF: // (U)
-            levelscripts[0].start = 0x108A10;
-            levelscripts[0].end   = 0x108A40;
+            offset = 0x108A10;
             break;
          case 0xA03CF036: // (E)
-            levelscripts[0].start = 0xDE160;
-            levelscripts[0].end   = 0xDE190;
+            offset = 0xDE160;
+            break;
+         case 0xD6FBA4A8: // Shindou Edition (J)
+            offset = 0xE42C0;
             break;
          default:
             ERROR("Unknown ROM checksum: 0x%08X\n", checksum);
             exit(1);
       }
-   } else {
-      levelscripts[0].start = offset;
-      levelscripts[0].end   = offset + 0x30;
    }
+   levelscripts[0].start = offset;
+   levelscripts[0].end   = offset + 0x30;
    lcount++;
    while (l < lcount) {
       decode_level(data, levelscripts, l, &lcount);
