@@ -9,12 +9,13 @@
 
 static void print_usage(void)
 {
-   ERROR("Usage: sm64walk [-v] FILE\n"
+   ERROR("Usage: sm64walk [-o OFFSET] [-r REGION] [-v] FILE\n"
          "\n"
          "sm64walk v" SM64WALK_VERSION ": Super Mario 64 script walker\n"
          "\n"
          "Optional arguments:\n"
          " -o OFFSET    start decoding level scripts at OFFSET (default: auto-detect)\n"
+         " -r REGION    region to use. valid: Europe, US, JP, Shindou\n"
          " -v           verbose progress output\n"
          "\n"
          "File arguments:\n"
@@ -23,7 +24,7 @@ static void print_usage(void)
 }
 
 // parse command line arguments
-static void parse_arguments(int argc, char *argv[], unsigned *offset, char *in_filename)
+static void parse_arguments(int argc, char *argv[], unsigned *offset, char *region, char *in_filename)
 {
    int i;
    int file_count = 0;
@@ -38,6 +39,12 @@ static void parse_arguments(int argc, char *argv[], unsigned *offset, char *in_f
                   print_usage();
                }
                *offset = strtoul(argv[i], NULL, 0);
+               break;
+            case 'r':
+               if (++i >= argc) {
+                  print_usage();
+               }
+               *region = argv[i][0];
                break;
             case 'v':
                g_verbosity = 1;
@@ -197,33 +204,40 @@ static void decode_level(unsigned char *data, level_t levels[], unsigned int l, 
    printf("Done %X\n\n", levels[l].start);
 }
 
+char detectRegion(unsigned char *data)
+{
+   unsigned checksum = read_u32_be(&data[0x10]);
+   // add main entry level script
+   switch (checksum) {
+      case 0xA03CF036: return 'E';
+      case 0x4EAA3D0E: return 'J';
+      case 0xD6FBA4A8: return 'S'; // Shindou Edition (J)
+      case 0x635A2BFF: return 'U';
+      default:
+         ERROR("Unknown ROM checksum: 0x%08X\n", checksum);
+         exit(1);
+   }
+}
+
+unsigned getRegionOffset(char region)
+{
+   switch (region) {
+      case 'E': return  0xDE160;
+      case 'J': return 0x1076A0;
+      case 'S': return  0xE42C0;
+      case 'U': return 0x108A10;
+      default:
+         ERROR("Unknown region: '%c'\n", region);
+         exit(1);
+   }
+   return 0;
+}
+
 static void walk_scripts(unsigned char *data, unsigned offset)
 {
    level_t levelscripts[100];
    unsigned lcount = 0;
    unsigned l = 0;
-   unsigned checksum;
-   if (offset == 0x0) {
-      checksum = read_u32_be(&data[0x10]);
-      // add main entry level script
-      switch (checksum) {
-         case 0x4EAA3D0E: // (J)
-            offset = 0x1076A0;
-            break;
-         case 0x635A2BFF: // (U)
-            offset = 0x108A10;
-            break;
-         case 0xA03CF036: // (E)
-            offset = 0xDE160;
-            break;
-         case 0xD6FBA4A8: // Shindou Edition (J)
-            offset = 0xE42C0;
-            break;
-         default:
-            ERROR("Unknown ROM checksum: 0x%08X\n", checksum);
-            exit(1);
-      }
-   }
    levelscripts[0].start = offset;
    levelscripts[0].end   = offset + 0x30;
    lcount++;
@@ -237,13 +251,13 @@ int main(int argc, char *argv[])
 {
    char in_filename[FILENAME_MAX];
    unsigned char *in_buf = NULL;
-   unsigned offset;
+   unsigned offset = 0xFFFFFFFF;
    long in_size;
    int rom_type;
+   char region = 0;
 
    // get configuration from arguments
-   offset = 0;
-   parse_arguments(argc, argv, &offset, in_filename);
+   parse_arguments(argc, argv, &offset, &region, in_filename);
 
    // read input file into memory
    in_size = read_file(in_filename, &in_buf);
@@ -261,6 +275,13 @@ int main(int argc, char *argv[])
       // byte-swapped BADC format, swap to big-endian ABCD format for processing
       INFO("Byte-swapping ROM\n");
       swap_bytes(in_buf, in_size);
+   }
+
+   if (offset == 0xFFFFFFFF) {
+      if (region == 0) {
+         region = detectRegion(in_buf);
+      }
+      offset = getRegionOffset(region);
    }
 
    // walk those scripts
