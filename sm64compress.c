@@ -413,13 +413,13 @@ static int sm64_compress_mio0(const compress_config *config,
             int cmp_len = mio0_encode(tmp_raw, raw_len, tmp_cmp);
             src = tmp_cmp;
             src_len = cmp_len;
-            INFO("Compressed %08X %06X=%06X => %06X\n", blk->old, block_len, raw_len, cmp_len);
+            INFO("Compressed %08X[%06X=%06X] => %08X[%06X]\n", blk->old, block_len, raw_len, cur_offset, cmp_len);
          } else if(config->compress && blk->compressible) {
             // decompress to remove fake header and recompress
             int cmp_len = mio0_encode(&in_buf[blk->old], block_len, tmp_cmp);
             src = tmp_cmp;
             src_len = cmp_len;
-            INFO("Compressed %08X %06X => %06X\n", blk->old, block_len, cmp_len);
+            INFO("Compressed %08X[%06X] => %08X[%06X]\n", blk->old, block_len, cur_offset, cmp_len);
             for (int r = 0; r < blk->ref_count; r++) {
                if (blk->refs[r].type == 0x17) {
                   blk->refs[r].type = 0x18;
@@ -429,7 +429,7 @@ static int sm64_compress_mio0(const compress_config *config,
             }
          } else {
             src = &in_buf[blk->old];
-            src_len = blk->old_end - blk->old;
+            src_len = block_len;
          }
          // copy new data
          memcpy(&out_buf[cur_offset], src, src_len);
@@ -525,10 +525,13 @@ static int sm64_compress_mio0(const compress_config *config,
                } else {
                   block *level = &block_table[level_idx];
                   unsigned offset = level->new + blk->refs[r].offset;
-                  INFO("Updating @ %08X:%08X %02X %08X-%08X to %02X %08X-%08X\n", level->old, level->new,
-                        out_buf[offset], read_u32_be(&out_buf[offset + 4]), read_u32_be(&out_buf[offset + 8]),
-                        blk->refs[r].type, blk->new, blk->new_end);
+                  INFO("Updating @ %08X:%08X %02X 0C %02X %02X %08X-%08X to %02X 0C 00 %02X %08X-%08X\n", level->old, level->new,
+                        out_buf[offset], out_buf[offset + 2], out_buf[offset + 3],
+                        read_u32_be(&out_buf[offset + 4]), read_u32_be(&out_buf[offset + 8]),
+                        blk->refs[r].type, out_buf[offset + 3], blk->new, blk->new_end);
                   out_buf[offset] = blk->refs[r].type;
+                  // some commands have upper byte of segment set to 0x01
+                  out_buf[offset + 2] = 0x00;
                   write_u32_be(&out_buf[offset + 4], blk->new);
                   write_u32_be(&out_buf[offset + 8], blk->new_end);
                }
@@ -537,6 +540,8 @@ static int sm64_compress_mio0(const compress_config *config,
       }
    }
 
+   // TODO: figure out what is going on with custom level scripts 17 and 10 in RAM expansion
+   // TODO: move allocation of memory pool to 0x80400000+ and revert audio code to use it?
    // detect audio patch and fix it
    if (out_buf[0xd48b6] == 0x80 && out_buf[0xd48b7] == 0x3D) {
       INFO("Moving sound allocation from 0x803D0000 to 0x805C0000\n");
