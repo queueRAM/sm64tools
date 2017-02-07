@@ -244,35 +244,26 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
    memset(bit_buf, 0, (length + 7) / 8);
 
    // encode data
+   // special case for first byte
+   uncomp_buf[uncomp_idx] = in[0];
+   uncomp_idx += 1;
+   bytes_proc += 1;
+   PUT_BIT(bit_buf, bit_idx++, 1);
+#ifdef MIO0_STATS
+   stats.uncomp_count++;
+#endif
    while (bytes_proc < length) {
-      // special case for first byte
-      if (bytes_proc < 1) {
-         uncomp_buf[uncomp_idx] = in[0];
-         uncomp_idx += 1;
-         bytes_proc += 1;
-         PUT_BIT(bit_buf, bit_idx++, 1);
-#ifdef MIO0_STATS
-         stats.uncomp_count++;
-#endif
-      } else {
-         int offset;
-         int longest_match;
-         longest_match = find_longest(in, bytes_proc, MIN(length - bytes_proc, 18), &offset);
-         if (longest_match > 2) {
-            // compress
-            comp_buf[comp_idx] = (((longest_match - 3) & 0x0F) << 4) |
-                                 (((offset - 1) >> 8) & 0x0F);
-            comp_buf[comp_idx + 1] = (offset - 1) & 0xFF;
-            comp_idx += 2;
-            PUT_BIT(bit_buf, bit_idx, 0);
-            bytes_proc += longest_match;
-#ifdef MIO0_STATS
-            stats.comp_offsets[offset-1]++;
-            stats.comp_lengths[longest_match-3]++;
-            stats.comp_count++;
-#endif
-         } else {
-            // uncompress
+      int offset;
+      int max_length = MIN(length - bytes_proc, 18);
+      int longest_match = find_longest(in, bytes_proc, max_length, &offset);
+      if (longest_match > 2) {
+         int lookahead_offset;
+         // lookahead to next byte to see if longer match
+         int lookahead_length = MIN(length - bytes_proc - 1, 18);
+         int lookahead_match = find_longest(in, bytes_proc + 1, lookahead_length, &lookahead_offset);
+         // better match found, use uncompressed + lookahead compressed
+         if ((longest_match + 1) < lookahead_match) {
+            // uncompressed byte
             uncomp_buf[uncomp_idx] = in[bytes_proc];
             uncomp_idx++;
             PUT_BIT(bit_buf, bit_idx, 1);
@@ -280,16 +271,40 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
 #ifdef MIO0_STATS
             stats.uncomp_count++;
 #endif
+            longest_match = lookahead_match;
+            offset = lookahead_offset;
+            bit_idx++;
          }
-         bit_idx++;
+         // compressed block
+         comp_buf[comp_idx] = (((longest_match - 3) & 0x0F) << 4) |
+                              (((offset - 1) >> 8) & 0x0F);
+         comp_buf[comp_idx + 1] = (offset - 1) & 0xFF;
+         comp_idx += 2;
+         PUT_BIT(bit_buf, bit_idx, 0);
+         bytes_proc += longest_match;
+#ifdef MIO0_STATS
+         stats.comp_offsets[offset-1]++;
+         stats.comp_lengths[longest_match-3]++;
+         stats.comp_count++;
+#endif
+      } else {
+         // uncompressed byte
+         uncomp_buf[uncomp_idx] = in[bytes_proc];
+         uncomp_idx++;
+         PUT_BIT(bit_buf, bit_idx, 1);
+         bytes_proc++;
+#ifdef MIO0_STATS
+         stats.uncomp_count++;
+#endif
       }
+      bit_idx++;
    }
 
    // compute final sizes and offsets
    // +7 so int division accounts for all bits
    bit_length = ((bit_idx + 7) / 8);
-   // compressed data >= 2 bytes after bits and aligned to 4-byte boundary
-   comp_offset = ALIGN(MIO0_HEADER_LENGTH + bit_length + 2, 4);
+   // compressed data after control bits and aligned to 4-byte boundary
+   comp_offset = ALIGN(MIO0_HEADER_LENGTH + bit_length, 4);
    uncomp_offset = comp_offset + comp_idx;
    bytes_written = uncomp_offset + uncomp_idx;
 
