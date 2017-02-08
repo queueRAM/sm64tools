@@ -11,57 +11,6 @@
 
 #define GET_BIT(buf, bit) ((buf)[(bit) / 8] & (1 << (7 - ((bit) % 8))))
 
-#ifdef MIO0_STATS
-typedef struct
-{
-   int comp_offsets[4096];
-   int comp_lengths[16];
-   int length;
-   int comp_offset;
-   int uncomp_offset;
-   int bit_count;
-   int comp_count;
-   int uncomp_count;
-} mio0_stats_t;
-
-static mio0_stats_t stats;
-
-static void mio0_print_stats(mio0_stats_t *stats)
-{
-   float avg_comp_length;
-   float avg_comp_offset;
-   unsigned int i;
-   int comp_length = 0;
-   int comp_offset = 0;
-
-   for (i = 0; i < DIM(stats->comp_lengths); i++) {
-      comp_length += stats->comp_lengths[i] * (i + 3);
-   }
-   avg_comp_length = (float)comp_length / (float)stats->comp_count;
-
-   for (i = 0; i < DIM(stats->comp_offsets); i++) {
-      comp_offset += stats->comp_offsets[i] * (i + 1);
-   }
-   avg_comp_offset = (float)comp_offset / (float)stats->comp_count;
-
-   printf(",%d,%d,%d,%d,%d,%d\n", stats->length, stats->comp_offset, stats->uncomp_offset,
-         stats->bit_count, stats->comp_count, stats->uncomp_count);
-#if 0
-   printf("Average comp length: %.2f\n", avg_comp_length);
-   printf("Average comp offset: %.2f\n", avg_comp_offset);
-   printf("Lengths:\n");
-   for (i = 0; i < DIM(stats->comp_lengths); i++) {
-      printf("%d,", stats->comp_lengths[i]);
-   }
-   printf("\nOffsets:\n");
-   for (i = 0; i < DIM(stats->comp_offsets); i++) {
-      printf("%d,", stats->comp_offsets[i]);
-   }
-   printf("\n");
-#endif
-}
-#endif // MIO0_STATS
-
 // functions
 
 static void PUT_BIT(unsigned char *buf, int bit, int val)
@@ -132,13 +81,6 @@ int mio0_decode_header(const unsigned char *buf, mio0_header_t *head)
       head->dest_size = read_u32_be(&buf[4]);
       head->comp_offset = read_u32_be(&buf[8]);
       head->uncomp_offset = read_u32_be(&buf[12]);
-      head->big_endian = 1;
-      return 1;
-   } else if (!memcmp(buf, "IM0O", 4)) {
-      head->dest_size = read_u32_le(&buf[4]);
-      head->comp_offset = read_u32_le(&buf[8]);
-      head->uncomp_offset = read_u32_le(&buf[12]);
-      head->big_endian = 0;
       return 1;
    }
    return 0;
@@ -167,17 +109,6 @@ int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end)
    if (!valid) {
       return -2;
    }
-#ifdef MIO0_STATS
-   memset(&stats, 0, sizeof(stats));
-   stats.length = head.dest_size;
-   stats.comp_offset = head.comp_offset;
-   stats.uncomp_offset = head.uncomp_offset;
-#endif
-
-   if (!head.big_endian) {
-      ERROR("Sorry, only big endian supported right now\n");
-      return -1;
-   }
 
    // decode data
    while (bytes_written < head.dest_size) {
@@ -186,9 +117,6 @@ int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end)
          out[bytes_written] = in[head.uncomp_offset + uncomp_idx];
          bytes_written++;
          uncomp_idx++;
-#ifdef MIO0_STATS
-         stats.uncomp_count++;
-#endif
       } else {
          // 0 - read compressed data
          int idx;
@@ -202,11 +130,6 @@ int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end)
             out[bytes_written] = out[bytes_written - idx];
             bytes_written++;
          }
-#ifdef MIO0_STATS
-         stats.comp_offsets[idx-1]++;
-         stats.comp_lengths[length-3]++;
-         stats.comp_count++;
-#endif
       }
       bit_idx++;
    }
@@ -214,11 +137,6 @@ int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end)
    if (end) {
       *end = head.uncomp_offset + uncomp_idx;
    }
-
-#ifdef MIO0_STATS
-   stats.bit_count = bit_idx;
-   mio0_print_stats(&stats);
-#endif
 
    return bytes_written;
 }
@@ -249,9 +167,6 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
    uncomp_idx += 1;
    bytes_proc += 1;
    PUT_BIT(bit_buf, bit_idx++, 1);
-#ifdef MIO0_STATS
-   stats.uncomp_count++;
-#endif
    while (bytes_proc < length) {
       int offset;
       int max_length = MIN(length - bytes_proc, 18);
@@ -268,9 +183,6 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
             uncomp_idx++;
             PUT_BIT(bit_buf, bit_idx, 1);
             bytes_proc++;
-#ifdef MIO0_STATS
-            stats.uncomp_count++;
-#endif
             longest_match = lookahead_match;
             offset = lookahead_offset;
             bit_idx++;
@@ -282,20 +194,12 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
          comp_idx += 2;
          PUT_BIT(bit_buf, bit_idx, 0);
          bytes_proc += longest_match;
-#ifdef MIO0_STATS
-         stats.comp_offsets[offset-1]++;
-         stats.comp_lengths[longest_match-3]++;
-         stats.comp_count++;
-#endif
       } else {
          // uncompressed byte
          uncomp_buf[uncomp_idx] = in[bytes_proc];
          uncomp_idx++;
          PUT_BIT(bit_buf, bit_idx, 1);
          bytes_proc++;
-#ifdef MIO0_STATS
-         stats.uncomp_count++;
-#endif
       }
       bit_idx++;
    }
@@ -322,10 +226,6 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
    free(bit_buf);
    free(comp_buf);
    free(uncomp_buf);
-
-#ifdef MIO0_STATS
-   mio0_print_stats(&stats);
-#endif
 
    return bytes_written;
 }

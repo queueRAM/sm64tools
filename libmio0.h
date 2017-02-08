@@ -12,7 +12,6 @@ typedef struct
    unsigned int dest_size;
    unsigned int comp_offset;
    unsigned int uncomp_offset;
-   int big_endian;
 } mio0_header_t;
 
 // function prototypes
