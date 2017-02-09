@@ -1,7 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <png.h>
+#define STBI_NO_LINEAR
+#define STBI_NO_HDR
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb/stb_image_write.h>
 
 #include "n64graphics.h"
 #include "utils.h"
@@ -502,168 +507,76 @@ sky2file_close:
 
 int rgba2png(rgba *img, int width, int height, char *pngname)
 {
-   png_structp png_ptr = NULL;
-   png_infop   info_ptr = NULL;
-   int i, j;
-   png_byte **row_pointers = NULL;
-   int depth = 8;
-   FILE *fp;
+   int ret = 0;
+   unsigned char *data = malloc(4*width*height);
 
-   fp = fopen(pngname, "wb");
-   if (!fp) {
-      return -1;
-   }
-
-   png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-   if (png_ptr == NULL) {
-      return -1;
-   }
-
-   info_ptr = png_create_info_struct(png_ptr);
-   if (info_ptr == NULL) {
-      png_destroy_write_struct(&png_ptr, &info_ptr);
-      fclose(fp);
-      return -1;
-   }
-
-   // set up error handling
-   if (setjmp(png_jmpbuf(png_ptr))) {
-      png_destroy_write_struct(&png_ptr, &info_ptr);
-      fclose(fp);
-      return -1;
-   }
-
-   // Set image attributes
-   png_set_IHDR(png_ptr,
-         info_ptr,
-         width,
-         height,
-         depth,
-         PNG_COLOR_TYPE_RGB_ALPHA,
-         PNG_INTERLACE_NONE,
-         PNG_COMPRESSION_TYPE_DEFAULT,
-         PNG_FILTER_TYPE_DEFAULT);
-
-   // initialize rows of png
-   row_pointers = png_malloc(png_ptr, height * sizeof(png_byte*));
-   for (j = 0; j < height; j++) {
-      png_byte *row = png_malloc(png_ptr, sizeof(png_byte) * width * 4);
-      row_pointers[j] = row;
-      for (i = 0; i < width; i++) {
-         *row++ = img[j*width+i].red;
-         *row++ = img[j*width+i].green;
-         *row++ = img[j*width+i].blue;
-         *row++ = img[j*width+i].alpha;
+   if (data) {
+      for (int j = 0; j < height; j++) {
+         for (int i = 0; i < width; i++) {
+            int idx = j*width + i;
+            data[4*idx]   = img[idx].red;
+            data[4*idx + 1] = img[idx].green;
+            data[4*idx + 2] = img[idx].blue;
+            data[4*idx + 3] = img[idx].alpha;
+         }
       }
+
+      // write the image data
+      ret = stbi_write_png(pngname, width, height, 4, data, 0);
+
+      free(data);
    }
 
-   // write the image data
-   png_init_io(png_ptr, fp);
-   png_set_rows(png_ptr, info_ptr, row_pointers);
-   png_write_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
-
-   for (j = 0; j < height; j++) {
-      png_free(png_ptr, row_pointers[j]);
-   }
-   png_free(png_ptr, row_pointers);
-
-   png_destroy_write_struct(&png_ptr, &info_ptr);
-   fclose(fp);
-   return 0;
+   return ret;
 }
 
 rgba *pngfile2rgba(char *pngname, int *width, int *height)
 {
-   unsigned char header[8];
-   png_structp png_ptr;
-   png_infop   info_ptr;
-   png_bytep  *row_pointers;
-   png_byte    color_type;
-   FILE *fp;
    rgba *img = NULL;
    int w = 0, h = 0;
-   int i, j;
+   int channels = 0;
 
-   // open file and validate PNG
-   fp = fopen(pngname, "rb");
-   if (!fp) {
-      ERROR("Error opening PNG file '%s'\n", pngname);
-      return NULL;
-   }
+   stbi_uc *data = stbi_load(pngname, &w, &h, &channels, 4);
 
-   fread(header, 1, 8, fp);
-   if (png_sig_cmp(header, 0, 8)) {
-      ERROR("File '%s' is not recognized as a PNG file\n", pngname);
-      goto pngfile2rgba_close;
-   }
+   if (data) {
+      img = malloc(w * h * sizeof(*img));
 
-   png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-
-   if (!png_ptr) {
-      ERROR("png_create_read_struct failed\n");
-      goto pngfile2rgba_close;
-   }
-
-   info_ptr = png_create_info_struct(png_ptr);
-   if (!info_ptr) {
-      ERROR("png_create_info_struct failed\n");
-      goto pngfile2rgba_close;
-   }
-
-   png_init_io(png_ptr, fp);
-   png_set_sig_bytes(png_ptr, 8);
-
-   png_read_info(png_ptr, info_ptr);
-
-   w = png_get_image_width(png_ptr, info_ptr);
-   h = png_get_image_height(png_ptr, info_ptr);
-   color_type = png_get_color_type(png_ptr, info_ptr);
-
-   png_read_update_info(png_ptr, info_ptr);
-
-   row_pointers = (png_bytep*) malloc(sizeof(png_bytep) * h);
-   for (j = 0; j < h; j++) {
-      row_pointers[j] = (png_byte*) malloc(png_get_rowbytes(png_ptr, info_ptr));
-   }
-
-   png_read_image(png_ptr, row_pointers);
-
-   img = malloc(w * h * sizeof(*img));
-
-   switch (color_type) {
-      case PNG_COLOR_TYPE_RGB_ALPHA:
-         for (j = 0; j < h; j++) {
-            for (i = 0; i < w; i++) {
-               img[j*w + i].red   = row_pointers[j][4*i];
-               img[j*w + i].green = row_pointers[j][4*i+1];
-               img[j*w + i].blue  = row_pointers[j][4*i+2];
-               img[j*w + i].alpha = row_pointers[j][4*i+3];
+      switch (channels) {
+         case 3: // red, green, blue
+         case 4: // red, green, blue, alpha
+            for (int j = 0; j < h; j++) {
+               for (int i = 0; i < w; i++) {
+                  int idx = j*w + i;
+                  img[idx].red   = data[channels*idx];
+                  img[idx].green = data[channels*idx + 1];
+                  img[idx].blue  = data[channels*idx + 2];
+                  if (channels == 4) {
+                     img[idx].alpha = data[channels*idx + 3];
+                  } else {
+                     img[idx].alpha = 0xFF;
+                  }
+               }
             }
-         }
-         break;
-      case PNG_COLOR_TYPE_GRAY_ALPHA:
-         for (j = 0; j < h; j++) {
-            for (i = 0; i < w; i++) {
-               img[j*w + i].red   = row_pointers[j][2*i];
-               img[j*w + i].green = row_pointers[j][2*i];
-               img[j*w + i].blue  = row_pointers[j][2*i];
-               img[j*w + i].alpha = row_pointers[j][2*i+1];
+            break;
+         case 2: // grey, alpha
+            for (int j = 0; j < h; j++) {
+               for (int i = 0; i < w; i++) {
+                  int idx = j*w + i;
+                  img[idx].red   = data[2*idx];
+                  img[idx].green = data[2*idx];
+                  img[idx].blue  = data[2*idx];
+                  img[idx].alpha = data[2*idx + 1];
+               }
             }
-         }
-         break;
-      default:
-         ERROR("Don't know how to read PNG color type: %d\n", color_type);
-         exit(1);
-   }
+            break;
+         default:
+            ERROR("Don't know how to read channels: %d\n", channels);
+            exit(1);
+      }
 
-   // cleanup
-   for (j = 0; j < h; j++) {
-      free(row_pointers[j]);
+      // cleanup
+      stbi_image_free(data);
    }
-   free(row_pointers);
-
-pngfile2rgba_close:
-   fclose(fp);
 
    *width = w;
    *height = h;
@@ -672,164 +585,71 @@ pngfile2rgba_close:
 
 int ia2png(ia *img, int width, int height, char *pngname)
 {
-   png_structp png_ptr = NULL;
-   png_infop   info_ptr = NULL;
-   int i, j;
-   png_byte **row_pointers = NULL;
-   int depth = 8;
-   FILE *fp;
+   int ret = 0;
+   unsigned char *data = malloc(2*width*height);
 
-   fp = fopen(pngname, "wb");
-   if (!fp) {
-      return -1;
-   }
-
-   png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-   if (png_ptr == NULL) {
-      return -1;
-   }
-
-   info_ptr = png_create_info_struct(png_ptr);
-   if (info_ptr == NULL) {
-      png_destroy_write_struct(&png_ptr, &info_ptr);
-      fclose(fp);
-      return -1;
-   }
-
-   // set up error handling
-   if (setjmp(png_jmpbuf(png_ptr))) {
-      png_destroy_write_struct(&png_ptr, &info_ptr);
-      fclose(fp);
-      return -1;
-   }
-
-   // Set image attributes
-   png_set_IHDR(png_ptr,
-         info_ptr,
-         width,
-         height,
-         depth,
-         PNG_COLOR_TYPE_GRAY_ALPHA,
-         PNG_INTERLACE_NONE,
-         PNG_COMPRESSION_TYPE_DEFAULT,
-         PNG_FILTER_TYPE_DEFAULT);
-
-   // initialize rows of png
-   row_pointers = png_malloc(png_ptr, height * sizeof(png_byte*));
-   for (j = 0; j < height; j++) {
-      png_byte *row = png_malloc(png_ptr, sizeof(png_byte) * width * 4);
-      row_pointers[j] = row;
-      for (i = 0; i < width; i++) {
-         *row++ = img[j*width+i].intensity;
-         *row++ = img[j*width+i].alpha;
+   if (data) {
+      for (int j = 0; j < height; j++) {
+         for (int i = 0; i < width; i++) {
+            int idx = j*width + i;
+            data[2*idx]   = img[idx].intensity;
+            data[2*idx + 1] = img[idx].alpha;
+         }
       }
+
+      // write the image data
+      ret = stbi_write_png(pngname, width, height, 2, data, 0);
+
+      free(data);
    }
 
-   // write the image data
-   png_init_io(png_ptr, fp);
-   png_set_rows(png_ptr, info_ptr, row_pointers);
-   png_write_png(png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
-
-   for (j = 0; j < height; j++) {
-      png_free(png_ptr, row_pointers[j]);
-   }
-   png_free(png_ptr, row_pointers);
-
-   png_destroy_write_struct(&png_ptr, &info_ptr);
-   fclose(fp);
-   return 0;
+   return ret;
 }
 
 ia *pngfile2ia(char *pngname, int *width, int *height)
 {
-   unsigned char header[8];
-   png_structp png_ptr;
-   png_infop   info_ptr;
-   png_bytep  *row_pointers;
-   png_byte    color_type;
-   FILE *fp;
    ia *img = NULL;
    int w = 0, h = 0;
-   int i, j;
+   int channels = 0;
 
-   // open file and validate PNG
-   fp = fopen(pngname, "rb");
-   if (!fp) {
-      ERROR("Error opening PNG file '%s'\n", pngname);
-      return NULL;
-   }
+   stbi_uc *data = stbi_load(pngname, &w, &h, &channels, 2);
 
-   fread(header, 1, 8, fp);
-   if (png_sig_cmp(header, 0, 8)) {
-      ERROR("File '%s' is not recognized as a PNG file\n", pngname);
-      goto pngfile2ia_close;
-   }
-
-   png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-
-   if (!png_ptr) {
-      ERROR("png_create_read_struct failed\n");
-      goto pngfile2ia_close;
-   }
-
-   info_ptr = png_create_info_struct(png_ptr);
-   if (!info_ptr) {
-      ERROR("png_create_info_struct failed\n");
-      goto pngfile2ia_close;
-   }
-
-   png_init_io(png_ptr, fp);
-   png_set_sig_bytes(png_ptr, 8);
-
-   png_read_info(png_ptr, info_ptr);
-
-   w = png_get_image_width(png_ptr, info_ptr);
-   h = png_get_image_height(png_ptr, info_ptr);
-   color_type = png_get_color_type(png_ptr, info_ptr);
-
-   png_read_update_info(png_ptr, info_ptr);
-
-   row_pointers = (png_bytep*) malloc(sizeof(png_bytep) * h);
-   for (j = 0; j < h; j++) {
-      row_pointers[j] = (png_byte*) malloc(png_get_rowbytes(png_ptr, info_ptr));
-   }
-
-   png_read_image(png_ptr, row_pointers);
-
-   img = malloc(w * h * sizeof(*img));
-
-   switch (color_type) {
-      case PNG_COLOR_TYPE_RGB_ALPHA:
-         ERROR("Warning: averaging RGBA PNG to create gray IA\n");
-         for (j = 0; j < h; j++) {
-            for (i = 0; i < w; i++) {
-               int sum = row_pointers[j][4*i] + row_pointers[j][4*i+1] + row_pointers[j][4*i+2];
-               img[j*w + i].intensity = sum / 3;
-               img[j*w + i].alpha = row_pointers[j][4*i+3];
+   if (data) {
+      img = malloc(w * h * sizeof(*img));
+      switch (channels) {
+         case 3: // red, green, blue
+         case 4: // red, green, blue, alpha
+            ERROR("Warning: averaging RGB PNG to create IA\n");
+            for (int j = 0; j < h; j++) {
+               for (int i = 0; i < w; i++) {
+                  int idx = j*w + i;
+                  int sum = data[channels*idx] + data[channels*idx + 1] + data[channels*idx + 2];
+                  img[idx].intensity = sum / 3;
+                  if (channels == 4) {
+                     img[idx].alpha = data[channels*idx + 3];
+                  } else {
+                     img[idx].alpha = 0xFF;
+                  }
+               }
             }
-         }
-         break;
-      case PNG_COLOR_TYPE_GRAY_ALPHA:
-         for (j = 0; j < h; j++) {
-            for (i = 0; i < w; i++) {
-               img[j*w + i].intensity = row_pointers[j][2*i];
-               img[j*w + i].alpha     = row_pointers[j][2*i+1];
+            break;
+         case 2: // grey, alpha
+            for (int j = 0; j < h; j++) {
+               for (int i = 0; i < w; i++) {
+                  int idx = j*w + i;
+                  img[idx].intensity = data[2*idx];
+                  img[idx].alpha     = data[2*idx + 1];
+               }
             }
-         }
-         break;
-      default:
-         ERROR("Don't know how to read PNG color type: %d\n", color_type);
-         exit(1);
-   }
+            break;
+         default:
+            ERROR("Don't know how to read channels: %d\n", channels);
+            exit(1);
+      }
 
-   // cleanup
-   for (j = 0; j < h; j++) {
-      free(row_pointers[j]);
+      // cleanup
+      stbi_image_free(data);
    }
-   free(row_pointers);
-
-pngfile2ia_close:
-   fclose(fp);
 
    *width = w;
    *height = h;
@@ -838,7 +658,7 @@ pngfile2ia_close:
 
 const char *graphics_get_version(void)
 {
-   return PNG_LIBPNG_VER_STRING;
+   return "2.14";
 }
 
 #ifdef N64GRAPHICS_STANDALONE

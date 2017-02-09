@@ -1369,7 +1369,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      {
                         ia *img = file2ia(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
-                           sprintf(outfilename, "%s.%05X.ia%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilename, "%s.0x%05X.ia%d.png", sec->label, offset, texts[t].depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);
@@ -1381,7 +1381,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      {
                         ia *img = file2i(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
-                           sprintf(outfilename, "%s.%05X.i%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilename, "%s.0x%05X.i%d.png", sec->label, offset, texts[t].depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);
@@ -1778,7 +1778,7 @@ static void print_version(void)
 {
    ERROR("n64split v" N64SPLIT_VERSION ", using:\n"
          "  capstone %s\n"
-         "  libpng %s\n"
+         "  stb_image %s\n"
          "  libconfig %s\n",
          disasm_get_version(), graphics_get_version(), config_get_version());
 }

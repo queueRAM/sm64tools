@@ -60,7 +60,7 @@ CC        = $(CROSS)gcc
 LD        = $(CC)
 AR        = $(CROSS)ar
 
-INCLUDES  = 
+INCLUDES  = -I./ext
 DEFS      = 
 # Release flags
 CFLAGS    = -Wall -Wextra -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(DEFS) -MMD
@@ -69,7 +69,7 @@ LDFLAGS   = -s -Wl,--gc-sections
 #CFLAGS    = -Wall -Wextra -O0 -g $(INCLUDES) $(DEFS) -MMD
 #LDFLAGS   =
 LIBS      = 
-SPLIT_LIBS = -lcapstone -lpng -lconfig -lz
+SPLIT_LIBS = -lcapstone -lconfig -lz
 
 LIB_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(LIB_SRC_FILES:.c=.o))
 CKSUM_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(CKSUM_SRC_FILES:.c=.o))
