@@ -13,7 +13,7 @@
 
 // upscale 5-bit integer to 8-bit
 #define SCALE_5_8(VAL_) (((VAL_) * 0xFF) / 0x1F)
-#define SCALE_8_5(VAL_) (((VAL_) * 0x1F) / 0xFF)
+#define SCALE_8_5(VAL_) ((((VAL_) + 4) * 0x1F) / 0xFF)
 #define SCALE_4_8(VAL_) ((VAL_) * 0x11)
 #define SCALE_8_4(VAL_) ((VAL_) / 0x11)
 #define SCALE_3_8(VAL_) ((VAL_) * 0x24)
@@ -482,7 +482,13 @@ int sky2file(rgba *img, int offset, int width, int height, char *filename)
          for (j = 0; j < 32; j++) {
             for (i = 0; i < 32; i++) {
                char r, g, b, a;
-               int idx = width * ((31*ty + j) % height) + ((31*tx + i) % width);
+               int idx_x = (31*tx + i) % width;
+               int idx_y = 31*ty + j;
+               // last row is duplicate of previous row
+               if ((ty == n - 1) && (j == 31)) {
+                  idx_y = 31*ty + j - 1;
+               }
+               int idx = width * idx_y + idx_x;
                int out_idx = 32*j + i;
                r = SCALE_8_5(img[idx].red);
                g = SCALE_8_5(img[idx].green);
