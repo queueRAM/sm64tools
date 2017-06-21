@@ -7,11 +7,13 @@
 #include "utils.h"
 
 // TODO: make these configurable
-#define IN_START_ADDR  0x00100000
+#define IN_START_ADDR  0x000D0000
 #define OUT_START_ADDR 0x00800000
 
-// extract opcode from instruction MSB
-#define OPCODE(VAL_) ((VAL_) & 0xFC)
+// MIPS instruction decoding
+#define OPCODE(IBUF_) ((IBUF_)[0] & 0xFC)
+#define RS(IBUF_) ( (((IBUF_)[0] & 0x3) < 3) | (((IBUF_)[1] & 0xE0) > 5) )
+#define RT(IBUF_)  ((IBUF_)[1] & 0x1F)
 
 typedef struct
 {
@@ -82,6 +84,18 @@ static void find_pointers(unsigned char *buf, unsigned int length, ptr_t table[]
    }
 }
 
+static unsigned int la2int(unsigned char *buf, unsigned int lui, unsigned int addiu)
+{
+   unsigned short addr_low, addr_high;
+   addr_high = read_u16_be(&buf[lui + 0x2]);
+   addr_low = read_u16_be(&buf[addiu + 0x2]);
+   // ADDIU sign extends which causes the encoded high val to be +1 if low MSb is set
+   if (addr_low & 0x8000) {
+      addr_high--;
+   }
+   return (addr_high << 16) | addr_low;
+}
+
 // find references to the MIO0 blocks in ASM and store type
 // buf: buffer containing SM64 data
 // length: length of buf
@@ -90,42 +104,37 @@ static void find_pointers(unsigned char *buf, unsigned int length, ptr_t table[]
 static void find_asm_pointers(unsigned char *buf, ptr_t table[], int count)
 {
    // find the ASM references
-   // looking for some code that looks like this:
-   // LUI     a1,start_upper    ; start ptr MSword
-   // LUI     a2,end_upper      ; end ptr MSword
-   // ADDIU   a2,a2,end_lower   ; end ptr LSword
-   // ADDIU   a1,a1,start_lower ; start ptr LSword
-   // JAL     somewhere
+   // looking for some code that follows one of the below patterns:
+   // lui    a1, start_upper        lui    a1, start_upper
+   // lui    a2, end_upper          lui    a2, end_upper
+   // addiu  a2, a2, end_lower      addiu  a2, a2, end_lower
+   // addiu  a1, a1, start_lower    jal    function
+   // jal    function               addiu  a1, a1, start_lower
    unsigned int addr;
    unsigned int ptr;
    unsigned int end;
    int idx;
-   unsigned short addr_low, addr_high;
    for (addr = 0; addr < IN_START_ADDR; addr += 4) {
-      if (OPCODE(buf[addr])   == 0x3C && OPCODE(buf[addr+4])  == 0x3C &&
-          OPCODE(buf[addr+8]) == 0x24 && OPCODE(buf[addr+12]) == 0x24) {
-         // reconstruct address
-         addr_high = read_u16_be(&buf[addr + 0x2]);
-         addr_low = read_u16_be(&buf[addr + 0xe]);
-         // ADDIU sign extends which causes the encoded high val to be +1 if low MSb is set
-         if (addr_low & 0x8000) {
-            addr_high--;
+      if (OPCODE(&buf[addr])   == 0x3C && OPCODE(&buf[addr+4])  == 0x3C && OPCODE(&buf[addr+8]) == 0x24) {
+         unsigned int a1_addiu = 0;
+         if (OPCODE(&buf[addr+0xc]) == 0x24) {
+            a1_addiu = 0xc;
+         } else if (OPCODE(&buf[addr+0x10]) == 0x24) {
+            a1_addiu = 0x10;
          }
-         ptr = (addr_high << 16) | addr_low;
-         // reconstruct end address
-         addr_high = read_u16_be(&buf[addr + 0x6]);
-         addr_low = read_u16_be(&buf[addr + 0xa]);
-         // ADDIU sign extends which causes the encoded high val to be +1 if low MSb is set
-         if (addr_low & 0x8000) {
-            addr_high--;
-         }
-         end = (addr_high << 16) | addr_low;
-         idx = find_ptr(ptr, table, count);
-         if (idx >= 0) {
-            INFO("Found ASM reference to %X at %X\n", ptr, addr);
-            table[idx].command = 0xFF;
-            table[idx].addr = addr;
-            table[idx].new_end = end;
+         if (a1_addiu) {
+            if ( (RT(&buf[addr]) == RT(&buf[addr+a1_addiu]))
+              && (RT(&buf[addr+4]) == RT(&buf[addr+8])) ) {
+               ptr = la2int(buf, addr, addr + a1_addiu);
+               end = la2int(buf, addr + 4, addr + 0x8);
+               idx = find_ptr(ptr, table, count);
+               if (idx >= 0) {
+                  INFO("Found ASM reference to %X at %X\n", ptr, addr);
+                  table[idx].command = 0xFF;
+                  table[idx].addr = addr;
+                  table[idx].new_end = end;
+               }
+            }
          }
       }
    }
