@@ -22,6 +22,7 @@ typedef struct
    unsigned int new;      // starting MIO0 address in extended ROM
    unsigned int new_end;  // ending MIO0 address in extended ROM
    unsigned int addr;     // ASM address for referenced pointer
+   unsigned int a1_addiu; // ASM offset for ADDIU for A1
    unsigned char command; // command type: 0x1A or 0x18 (or 0xFF for ASM)
 } ptr_t;
 
@@ -133,6 +134,7 @@ static void find_asm_pointers(unsigned char *buf, ptr_t table[], int count)
                   table[idx].command = 0xFF;
                   table[idx].addr = addr;
                   table[idx].new_end = end;
+                  table[idx].a1_addiu = a1_addiu;
                }
             }
          }
@@ -181,7 +183,7 @@ static void sm64_adjust_asm(unsigned char *buf, ptr_t table[], int count)
       if (table[i].command == 0xFF) {
          addr = table[i].addr;
          INFO("Old ASM reference at %X = ", addr);
-         INFO_HEX(&buf[addr], 16);
+         INFO_HEX(&buf[addr], 0x14);
          INFO("\n");
          addr_low = table[i].new & 0xFFFF;
          addr_high = (table[i].new >> 16) & 0xFFFF;
@@ -190,7 +192,7 @@ static void sm64_adjust_asm(unsigned char *buf, ptr_t table[], int count)
             addr_high++;
          }
          write_u16_be(&buf[addr + 0x2], addr_high);
-         write_u16_be(&buf[addr + 0xe], addr_low);
+         write_u16_be(&buf[addr + table[i].a1_addiu+2], addr_low);
 
          addr_low = table[i].new_end & 0xFFFF;
          addr_high = (table[i].new_end >> 16) & 0xFFFF;
@@ -200,7 +202,7 @@ static void sm64_adjust_asm(unsigned char *buf, ptr_t table[], int count)
          write_u16_be(&buf[addr + 0x6], addr_high);
          write_u16_be(&buf[addr + 0xa], addr_low);
          INFO("NEW ASM reference at %X = ", addr);
-         INFO_HEX(&buf[addr], 16);
+         INFO_HEX(&buf[addr], 0x14);
          INFO(" [%06X - %06X]\n", table[i].new, table[i].new_end);
       }
    }
