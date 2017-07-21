@@ -13,6 +13,15 @@ typedef enum
    ROM_SM64_BE_EXT, // SM64 big-endian, extended
 } rom_type;
 
+typedef enum
+{
+   VERSION_UNKNOWN,
+   VERSION_SM64_U,
+   VERSION_SM64_E,
+   VERSION_SM64_J,
+   VERSION_SM64_SHINDOU,
+} rom_version;
+
 typedef struct
 {
    char *in_filename;
@@ -26,9 +35,14 @@ typedef struct
 
 // determine ROM type based on data
 // buf: buffer containing raw SM64 ROM file data
-// length: length of in
+// length: length of 'buf'
 // returns SM64 ROM type or invalid
 rom_type sm64_rom_type(unsigned char *buf, unsigned int length);
+
+// determine SM64 ROM type based on cksum data
+// buf: buffer containing raw SM64 ROM file data
+// returns SM64 ROM version or unknown
+rom_version sm64_rom_version(unsigned char *buf);
 
 // find and decompress all MIO0 blocks
 // config: configuration to determine alignment, padding and size

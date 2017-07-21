@@ -112,6 +112,7 @@ int main(int argc, char *argv[])
    long in_size;
    long bytes_written;
    rom_type rtype;
+   rom_version rversion;
 
    // get configuration from arguments
    config = default_config;
@@ -168,6 +169,12 @@ int main(int argc, char *argv[])
          ERROR("This ROM is already extended!\n");
          exit(EXIT_FAILURE);
          break;
+   }
+
+   rversion = sm64_rom_version(in_buf);
+   if (rversion == VERSION_UNKNOWN) {
+      ERROR("Unknown SM64 ROM version\n");
+      exit(EXIT_FAILURE);
    }
 
    // allocate output memory
