@@ -8,7 +8,7 @@
 #define SM64EXTEND_VERSION "0.3"
 
 // default configuration
-static const sm64_config_t default_config = 
+static const sm64_config default_config =
 {
    NULL, // input filename
    NULL, // extended filename
@@ -21,14 +21,15 @@ static const sm64_config_t default_config =
 
 static void print_usage(void)
 {
-   ERROR("Usage: sm64extend [-s SIZE] [-p PADDING] [-a ALIGNMENT] [-d] [-f] [-v] FILE [OUT_FILE]\n"
+   ERROR("Usage: sm64extend [-a ALIGNMENT] [-p PADDING] [-s SIZE] [-d] [-f] [-v] FILE [OUT_FILE]\n"
          "\n"
          "sm64extend v" SM64EXTEND_VERSION ": Super Mario 64 ROM extender\n"
+         "Supports (E), (J), (U), and Shindou ROMs in .n64, .v64, or .z64 formats\n"
          "\n"
          "Optional arguments:\n"
-         " -s SIZE      size of the extended ROM in MB (default: %d)\n"
-         " -p PADDING   padding to insert between MIO0 blocks in KB (default: %d)\n"
          " -a ALIGNMENT byte boundary to align MIO0 blocks (default: %d)\n"
+         " -p PADDING   padding to insert between MIO0 blocks in KB (default: %d)\n"
+         " -s SIZE      size of the extended ROM in MB (default: %d)\n"
          " -d           dump MIO0 blocks to files in 'mio0files' directory\n"
          " -f           fill old MIO0 blocks with 0x01\n"
          " -v           verbose progress output\n"
@@ -41,7 +42,7 @@ static void print_usage(void)
 }
 
 // parse command line arguments
-static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
+static void parse_arguments(int argc, char *argv[], sm64_config *config)
 {
    int i;
    int file_count = 0;
@@ -105,12 +106,12 @@ static void parse_arguments(int argc, char *argv[], sm64_config_t *config)
 int main(int argc, char *argv[])
 {
    char ext_filename[FILENAME_MAX];
-   sm64_config_t config;
+   sm64_config config;
    unsigned char *in_buf = NULL;
    unsigned char *out_buf = NULL;
    long in_size;
    long bytes_written;
-   int rom_type;
+   rom_type rtype;
 
    // get configuration from arguments
    config = default_config;
@@ -121,8 +122,8 @@ int main(int argc, char *argv[])
    }
 
    // validate arguments
-   if (config.ext_size < 12 || config.ext_size > 64) {
-      ERROR("Error: Extended size must be between 12 and 64 MB\n");
+   if (config.ext_size < 16 || config.ext_size > 64) {
+      ERROR("Error: Extended size must be between 16 and 64 MB\n");
       exit(EXIT_FAILURE);
    }
    if (!is_power2(config.alignment)) {
@@ -147,17 +148,26 @@ int main(int argc, char *argv[])
    }
 
    // confirm valid SM64
-   rom_type = sm64_rom_type(in_buf, in_size);
-   if (rom_type < 1) {
-      ERROR("This does not appear to be a valid SM64 ROM\n");
-      exit(EXIT_FAILURE);
-   } else if (rom_type == 0) {
-      ERROR("This ROM is already extended!\n");
-      exit(EXIT_FAILURE);
-   } else if (rom_type == 1) {
-      // byte-swapped BADC format, swap to big-endian ABCD format for processing
-      INFO("Byte-swapping ROM\n");
-      swap_bytes(in_buf, in_size);
+   rtype = sm64_rom_type(in_buf, in_size);
+   switch (rtype) {
+      case ROM_INVALID:
+         ERROR("This does not appear to be a valid SM64 ROM\n");
+         exit(EXIT_FAILURE);
+         break;
+      case ROM_SM64_BS:
+         INFO("Converting ROM from byte-swapped to big-endian\n");
+         swap_bytes(in_buf, in_size);
+         break;
+      case ROM_SM64_BE:
+         break;
+      case ROM_SM64_LE:
+         INFO("Converting ROM from little to big-endian\n");
+         reverse_endian(in_buf, in_size);
+         break;
+      case ROM_SM64_BE_EXT:
+         ERROR("This ROM is already extended!\n");
+         exit(EXIT_FAILURE);
+         break;
    }
 
    // allocate output memory

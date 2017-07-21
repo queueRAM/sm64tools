@@ -280,24 +280,28 @@ static void sm64_calc_checksums(unsigned char *buf, unsigned int cksum[]) {
    cksum[1] = s0;
 }
 
-int sm64_rom_type(unsigned char *buf, unsigned int length)
+rom_type sm64_rom_type(unsigned char *buf, unsigned int length)
 {
    const unsigned char bs[] = {0x37, 0x80, 0x40, 0x12};
    const unsigned char be[] = {0x80, 0x37, 0x12, 0x40};
+   const unsigned char le[] = {0x40, 0x12, 0x37, 0x80};
    if (!memcmp(buf, bs, sizeof(bs)) && length == (8*MB)) {
-      return 1; // byte-swapped
+      return ROM_SM64_BS;
+   }
+   if (!memcmp(buf, bs, sizeof(le)) && length == (8*MB)) {
+      return ROM_SM64_LE;
    }
    if (!memcmp(buf, be, sizeof(be))) {
       if (length == 8*MB) {
-         return 2; // big-endian
+         return ROM_SM64_BE;
       } else if (length > 8*MB) {
-         return 0; // already extended
+         return ROM_SM64_BE_EXT;
       }
    }
-   return -1; // invalid
+   return ROM_INVALID;
 }
 
-void sm64_decompress_mio0(const sm64_config_t *config,
+void sm64_decompress_mio0(const sm64_config *config,
                           unsigned char *in_buf,
                           unsigned int in_length,
                           unsigned char *out_buf)
@@ -377,6 +381,8 @@ void sm64_decompress_mio0(const sm64_config_t *config,
          }
       }
    }
+
+   INFO("Ending offset: %X\n", out_addr);
 
    // adjust pointers and ASM pointers to new values
    sm64_adjust_pointers(out_buf, in_length, ptr_table, ptr_count);

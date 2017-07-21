@@ -90,6 +90,9 @@ void print_hex(const unsigned char *buf, int length);
 // perform byteswapping to convert from v64 to z64 ordering
 void swap_bytes(unsigned char *data, long length);
 
+// reverse endian to convert from n64 to z64 ordering
+void reverse_endian(unsigned char *data, long length);
+
 // get size of file without opening it;
 // returns file size or negative on error
 long filesize(const char *file_name);

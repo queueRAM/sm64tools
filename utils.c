@@ -72,6 +72,20 @@ void swap_bytes(unsigned char *data, long length)
    }
 }
 
+void reverse_endian(unsigned char *data, long length)
+{
+   long i;
+   unsigned char tmp;
+   for (i = 0; i < length; i += 4) {
+      tmp = data[i];
+      data[i] = data[i+3];
+      data[i+3] = tmp;
+      tmp = data[i+1];
+      data[i+1] = data[i+2];
+      data[i+2] = tmp;
+   }
+}
+
 long filesize(const char *filename)
 {
    struct stat st;
