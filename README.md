@@ -25,8 +25,8 @@ Output files are stored in the 'gen' directory.
               
 ## sm64extend
 Super Mario 64 ROM Extender
- - accepts Z64 (BE) or V64 (byte-swapped) ROMs as input
- - works with both US and Japanese ROMs (other tools may not)
+ - accepts Z64 (BE), V64 (byte-swapped), or N64 (little-endian) ROMs as input
+ - works with US, European, Japanese, and Shindou ROMs
  - decompresses all MIO0 blocks from ROM to extended area
  - configurable extended ROM size (default 64 MB)
  - configurable padding between MIO0 blocks (default 32 KB)
@@ -40,12 +40,12 @@ Super Mario 64 ROM Extender
 
 ### Usage
 ```console
-sm64extend [-s SIZE] [-p PADDING] [-a ALIGNMENT] [-d] [-f] [-v] FILE [OUT_FILE]
+sm64extend [-a ALIGNMENT] [-p PADDING] [-s SIZE] [-d] [-f] [-v] FILE [OUT_FILE]
 ```
 Options:
- - <code>-s SIZE</code> Size of the extended ROM in MB (default: 64).
- - <code>-p PADDING</code> Padding to insert between MIO0 blocks in KB (default = 32).
  - <code>-a ALIGNMENT</code> Byte boundary to align MIO0 blocks (default = 1).
+ - <code>-p PADDING</code> Padding to insert between MIO0 blocks in KB (default = 32).
+ - <code>-s SIZE</code> Size of the extended ROM in MB (default: 64).
  - <code>-d</code> Dump MIO0 blocks to files in mio0 directory.
  - <code>-f</code> Fill old MIO0 blocks with 0x01.
  - <code>-v</code> verbose output.

@@ -5,7 +5,7 @@
 #include "libsm64.h"
 #include "utils.h"
 
-#define SM64EXTEND_VERSION "0.3"
+#define SM64EXTEND_VERSION "0.3.1"
 
 // default configuration
 static const sm64_config default_config =
@@ -37,7 +37,7 @@ static void print_usage(void)
          "File arguments:\n"
          " FILE        input ROM file\n"
          " OUT_FILE    output ROM file (default: replaces FILE extension with .ext.z64)\n",
-         default_config.ext_size, default_config.padding, default_config.alignment);
+         default_config.alignment, default_config.padding, default_config.ext_size);
    exit(EXIT_FAILURE);
 }
 
