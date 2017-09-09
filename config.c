@@ -347,8 +347,8 @@ void print_config(const rom_config *config)
    // memory
    printf("memory:\n");
    printf("%-12s %-12s %-12s\n", "start", "end", "offset");
-   for (i = 0; i < config->ram_count; i+=3) {
-      printf("0x%08X   0x%08X   0x%08X\n", r[i], r[i+1], r[i+2]);
+   for (i = 0; i < config->ram_count; i++) {
+      printf("0x%08X   0x%08X   0x%08X\n", r[3*i], r[3*i+1], r[3*i+2]);
    }
    printf("\n");
 
@@ -485,3 +485,25 @@ const char *config_get_version(void)
    sprintf(version, "%d.%d.%d", LIBCONFIG_VER_MAJOR, LIBCONFIG_VER_MINOR, LIBCONFIG_VER_REVISION);
    return version;
 }
+
+#ifdef CONFIG_TEST
+int main(int argc, char *argv[])
+{
+   rom_config config;
+   int status;
+
+   if (argc < 2) {
+      printf("Usage: config <file.config>\n");
+      return 1;
+   }
+
+   status = parse_config_file(argv[1], &config);
+   if (status == 0) {
+      print_config(&config);
+   } else {
+      ERROR("Error parsing %s: %d\n", argv[1], status);
+   }
+
+   return 0;
+}
+#endif
