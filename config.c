@@ -334,11 +334,18 @@ int parse_config_file(const char *filename, rom_config *config)
 
 void print_config(const rom_config *config)
 {
-   int i;
+   int i, j;
    unsigned int *r = config->ram_table;
    split_section *s = config->sections;
    label *l = config->labels;
+
+   printf("name: %s\n", config->name);
+   printf("basename: %s\n", config->basename);
+   printf("checksum1: %08X\n", config->checksum1);
+   printf("checksum2: %08X\n\n", config->checksum2);
+
    // memory
+   printf("memory:\n");
    printf("%-12s %-12s %-12s\n", "start", "end", "offset");
    for (i = 0; i < config->ram_count; i+=3) {
       printf("0x%08X   0x%08X   0x%08X\n", r[i], r[i+1], r[i+2]);
@@ -346,18 +353,50 @@ void print_config(const rom_config *config)
    printf("\n");
 
    // ranges
+   printf("ranges:\n");
    for (i = 0; i < config->section_count; i++) {
-      printf("0x%08X 0x%08X %d %s", s[i].start, s[i].end, s[i].type, s[i].label);
+      printf("0x%08X 0x%08X %d %s %d\n", s[i].start, s[i].end, s[i].type, s[i].label, s[i].extra_len);
       if (s[i].extra_len > 0) {
-         printf(" %d", s[i].extra_len);
+         switch (s[i].type) {
+            case TYPE_BLAST:
+            case TYPE_MIO0:
+            case TYPE_GZIP:
+            {
+               texture *tex = s[i].extra;
+               for (j = 0; j < s[i].extra_len; j++) {
+                  printf("  0x%06X %d", tex[j].offset, tex[j].format);
+                  if (tex[j].format != FORMAT_COLLISION) {
+                     printf(" %2d %3d %3d", tex[j].depth, tex[j].width, tex[j].height);
+                  }
+                  printf("\n");
+               }
+               break;
+            }
+            case TYPE_BEHAVIOR:
+            {
+               behavior *beh = s[i].extra;
+               for (j = 0; j < s[i].extra_len; j++) {
+                  printf("  0x%06X %s\n", beh[j].offset, beh[j].name);
+               }
+               break;
+            }
+            default:
+               break;
+         }
       }
-      printf("\n");
    }
    printf("\n");
 
    // labels
+   printf("labels:\n");
    for (i = 0; i < config->label_count; i++) {
-      printf("0x%08X %s\n", l[i].ram_addr, l[i].name);
+      char end_str[16];
+      if (l[i].end_addr) {
+         sprintf(end_str, "%08X", l[i].end_addr);
+      } else {
+         sprintf(end_str, "        ");
+      }
+      printf("0x%08X-%s %s\n", l[i].ram_addr, end_str, l[i].name);
    }
 }
 
