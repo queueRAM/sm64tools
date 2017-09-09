@@ -1859,7 +1859,7 @@ static int detect_config_file(unsigned int c1, unsigned int c2, rom_config *conf
    int ret_val = 0;
    int i;
 
-   dir_list_ext(CONFIGS_DIR, ".config", &list);
+   dir_list_ext(CONFIGS_DIR, ".yaml", &list);
 
    for (i = 0; i < list.count; i++) {
       config_ret = parse_config_file(list.files[i], config);

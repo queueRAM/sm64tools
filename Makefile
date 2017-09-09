@@ -21,9 +21,9 @@ CKSUM_SRC_FILES := n64cksum.c
 
 COMPRESS_SRC_FILES := sm64compress.c
 
-DISASM_SRC_FILES := config.c \
-                    mipsdisasm.c \
-                    utils.c
+DISASM_SRC_FILES := mipsdisasm.c \
+                    utils.c \
+                    yamlconfig.c
 
 EXTEND_SRC_FILES := sm64extend.c
 
@@ -41,13 +41,13 @@ GEO_SRC_FILES := sm64geo.c \
 GRAPHICS_SRC_FILES := n64graphics.c \
                       utils.c
 
-SPLIT_SRC_FILES := config.c \
-                   blast.c \
+SPLIT_SRC_FILES := blast.c \
                    libmio0.c \
                    mipsdisasm.c \
                    n64graphics.c \
                    n64split.c \
-                   utils.c
+                   utils.c \
+                   yamlconfig.c
 
 OBJ_DIR     = ./obj
 
@@ -69,7 +69,7 @@ LDFLAGS   = -s -Wl,--gc-sections
 #CFLAGS    = -Wall -Wextra -O0 -g $(INCLUDES) $(DEFS) -MMD
 #LDFLAGS   =
 LIBS      = 
-SPLIT_LIBS = -lcapstone -lconfig -lz
+SPLIT_LIBS = -lcapstone -lyaml -lz
 
 LIB_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(LIB_SRC_FILES:.c=.o))
 CKSUM_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(CKSUM_SRC_FILES:.c=.o))
@@ -113,19 +113,19 @@ $(F3D_TARGET): $(F3D_OBJ_FILES)
 	$(LD) $(LDFLAGS) -o $@ $^
 
 $(F3D2OBJ_TARGET): $(F3D2OBJ_OBJ_FILES)
-	$(LD) $(LDFLAGS) -o $@ $^ -lpng
+	$(LD) $(LDFLAGS) -o $@ $^
 
 $(GEO_TARGET): $(GEO_OBJ_FILES)
 	$(LD) $(LDFLAGS) -o $@ $^
 
 $(GRAPHICS_TARGET): $(GRAPHICS_SRC_FILES)
-	$(CC) $(CFLAGS) -DN64GRAPHICS_STANDALONE $^ $(LDFLAGS) -o $@ -lpng -lz
+	$(CC) $(CFLAGS) -DN64GRAPHICS_STANDALONE $^ $(LDFLAGS) -o $@
 
 $(MIO0_TARGET): libmio0.c libmio0.h
 	$(CC) $(CFLAGS) -DMIO0_STANDALONE $(LDFLAGS) -o $@ $<
 
 $(DISASM_TARGET): $(DISASM_SRC_FILES)
-	$(CC) $(CFLAGS) -DMIPSDISASM_STANDALONE $^ $(LDFLAGS) -o $@ -lcapstone -lconfig
+	$(CC) $(CFLAGS) -DMIPSDISASM_STANDALONE $^ $(LDFLAGS) -o $@ -lcapstone -lyaml
 
 $(SPLIT_TARGET): $(SPLIT_OBJ_FILES)
 	$(LD) $(LDFLAGS) -o $@ $^ $(SPLIT_LIBS)
