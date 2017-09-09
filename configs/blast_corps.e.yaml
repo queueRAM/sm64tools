@@ -1,0 +1,74 @@
+# ROM splitter configuration file
+name: "Blast Corps (E)"
+
+# checksums from ROM header offsets 0x10 and 0x14
+# used for auto configuration detection
+checksum1: 0x7C64E6DB
+checksum2: 0x55B924DB
+
+# base filename used for outputs (please, no spaces)
+basename: "blast_corps.e"
+
+# memory map from KSEG0 RAM addresses to ROM offsets
+# these were decoded from DMA accesses
+memory:
+   # start     end         ram-to-rom
+   - [0x8021ED00, 0x8031ECFF, 0x8021DD00] # 001000-100FFF 100000
+
+# ranges to split the ROM into
+# types:
+#   asm      - MIPS assembly block.  Symbol names are in 'labels' list below
+#   behavior - behavior script
+#   bin      - raw binary, usually data
+#   blast    - Blast Corps compressed blocks
+#   gzip     - gzip compressed blocks
+#   header   - ROM header block
+#   instrset - instrument set
+#   level    - level commands
+#   m64      - M64 music sequence bank
+#   mio0     - MIO0 compressed data block.  may have texture breakdown
+#   ptr      - RAM address or ROM offset pointer
+#
+#   textures types:
+#      rgba   - 32/16 bit RGBA (5-5-5-1/8-8-8-8)
+#      ia     - 16/8/4/1-bit greyscale
+#      skybox - grid of 32x32 16-bit RGBA
+ranges:
+   # start,  end,      type,     label
+   - [0x000000, 0x000040, "header", "header"]
+   - [0x000040, 0x001000, "bin",    "boot"]
+   - [0x001000, 0x004A3C, "asm"]
+   # hd_code_text is copied to 0x80000400 and then inflated to 0x802447C0 by proc_80220998
+   - [0x788120, 0x7D845C, "gzip",   "hd_code_text.raw"]
+   - [0x7D845C, 0x7E4940, "gzip",   "hd_code_data.raw"]:
+      # TODO: many of these are just guesses
+      - [0x10E30, "rgba", 32,  16, 16]
+      - [0x11230, "rgba", 32,  16, 16]
+      - [0x12180, "rgba", 32,  32, 30]
+      - [0x142E0, "rgba", 16,  32, 32]
+      - [0x16B68,   "ia", 16,  32, 32]
+   - [0x7E4940, 0x7F75A4, "gzip",   "hd_front_end_text.raw"]
+   - [0x7F75A4, 0x7FB7C0, "gzip",   "hd_front_end_data.raw"]
+
+# Labels for functions or data memory addresses
+# All label addresses are RAM addresses
+# Order does not matter
+labels:
+   - [0x8021ED00, "EntryPoint"]
+   - [0x80220730, "Main", 0x802208F8]
+   - [0x80220BA0, "bzero"]
+   - [0x80220C40, "osInitialize"]
+   - [0x80220E70, "DmaCopy"]
+   - [0x80220F50, "GetDmaStatus"]
+   - [0x80220F70, "__osGetSR"]
+   - [0x80220F80, "__osSetFpcCsr"]
+   - [0x80220F90, "__osSiRawReadIo"]
+   - [0x80220FE0, "__osSiRawWriteIo"]
+   - [0x802218A0, "osWriteBackDCache"]
+   - [0x80221920, "osInvalCache"]
+   - [0x80221A00, "osEPiRawReadIo"]
+   - [0x80221AC8, "__ull_div"]
+   - [0x80221BC8, "__ll_mul"]
+   - [0x80221DE0, "__osSiDeviceBusy"]
+   - [0x802447C0, "MainJump", 0x802457C0]
+
