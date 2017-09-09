@@ -1779,7 +1779,7 @@ static void print_version(void)
    ERROR("n64split v" N64SPLIT_VERSION ", using:\n"
          "  capstone %s\n"
          "  stb_image %s\n"
-         "  libconfig %s\n",
+         "  libyaml %s\n",
          disasm_get_version(), graphics_get_version(), config_get_version());
 }
 

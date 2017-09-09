@@ -84,7 +84,7 @@ n64split makes use of the following libraries. See the licenses directory for
 more information:
  - libpng: PNG decoding and encoding
  - capstone: raw MIPS disassembler
- - libconfig: config file reading
+ - libyaml: ROM config file reading
 
 Changelog:
 v0.4a: More data: music, collision, more configs
