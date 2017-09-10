@@ -150,7 +150,7 @@ void load_texture(texture *tex, yaml_document_t *doc, yaml_node_t *node)
             case 1:
                tex->format = str2format(val);
                if (tex->format == FORMAT_INVALID) {
-                  ERROR("Error: %ld - invalid texture format '%s'\n", node->start_mark.line, val);
+                  ERROR("Error: " SIZE_T_FORMAT " - invalid texture format '%s'\n", node->start_mark.line, val);
                   return;
                }
                break;
@@ -172,7 +172,7 @@ void load_behavior(behavior *beh, yaml_document_t *doc, yaml_node_t *node)
    size_t count = node->data.sequence.items.top - node->data.sequence.items.start;
    i_node =  node->data.sequence.items.start;
    if (count != 2) {
-      ERROR("Error: %ld - expected 2 fields for behavior, got %ld\n", node->start_mark.line, count);
+      ERROR("Error: " SIZE_T_FORMAT " - expected 2 fields for behavior, got " SIZE_T_FORMAT "\n", node->start_mark.line, count);
       return;
    }
    for (size_t i = 0; i < count; i++) {
@@ -233,7 +233,7 @@ void load_section_data(split_section *section, yaml_document_t *doc, yaml_node_t
          break;
       }
       default:
-         ERROR("Warning: %ld - extra fields for section\n", node->start_mark.line);
+         ERROR("Warning: " SIZE_T_FORMAT " - extra fields for section\n", node->start_mark.line);
          break;
    }
 }
@@ -270,14 +270,14 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
          case TYPE_LEVEL:
          case TYPE_M64:
             if (count > 4) {
-               ERROR("Error: %ld - expected 3-4 fields for section\n", node->start_mark.line);
+               ERROR("Error: " SIZE_T_FORMAT " - expected 3-4 fields for section\n", node->start_mark.line);
                return;
             }
             break;
          case TYPE_INSTRUMENT_SET:
          case TYPE_PTR:
             if (count > 5) {
-               ERROR("Error: %ld - expected 3-5 fields for section\n", node->start_mark.line);
+               ERROR("Error: " SIZE_T_FORMAT " - expected 3-5 fields for section\n", node->start_mark.line);
                return;
             }
             break;
@@ -286,12 +286,12 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
          case TYPE_MIO0:
          case TYPE_GZIP:
             if (count < 4 || count > 5) {
-               ERROR("Error: %ld - expected 4-5 fields for section\n", node->start_mark.line);
+               ERROR("Error: " SIZE_T_FORMAT " - expected 4-5 fields for section\n", node->start_mark.line);
                return;
             }
             break;
          default:
-            ERROR("Error: %ld - invalid section type '%s'\n", node->start_mark.line, val);
+            ERROR("Error: " SIZE_T_FORMAT " - invalid section type '%s'\n", node->start_mark.line, val);
             return;
       }
       if (count > 3) {
@@ -323,7 +323,7 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
                   section->extra_len = strtoul(val, NULL, 0);
                   break;
                default:
-                  ERROR("Warning: %ld - extra fields for section\n", node->start_mark.line);
+                  ERROR("Warning: " SIZE_T_FORMAT " - extra fields for section\n", node->start_mark.line);
                   break;
             }
          } else {
@@ -331,7 +331,7 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
          }
       }
    } else {
-      ERROR("Error: section sequence needs 3-5 scalars (got %ld)\n", count);
+      ERROR("Error: section sequence needs 3-5 scalars (got " SIZE_T_FORMAT ")\n", count);
    }
 }
 
@@ -470,7 +470,7 @@ void parse_yaml_root(yaml_document_t *doc, yaml_node_t *node, rom_config *c)
          }
          break;
       default:
-         ERROR("Error: %ld only mapping node supported at root level\n", node->start_mark.line);
+         ERROR("Error: " SIZE_T_FORMAT " only mapping node supported at root level\n", node->start_mark.line);
          break;
    }
 }
@@ -498,7 +498,7 @@ int parse_config_file(const char *filename, rom_config *c)
    yaml_parser_set_input_file(&parser, file);
 
    if (!yaml_parser_load(&parser, &doc)) {
-      ERROR("Error: problem parsing YAML %s:%ld %s (%d)\n", filename, parser.problem_offset, parser.problem, (int)parser.error);
+      ERROR("Error: problem parsing YAML %s:" SIZE_T_FORMAT " %s (%d)\n", filename, parser.problem_offset, parser.problem, (int)parser.error);
    }
 
    root = yaml_document_get_root_node(&doc);
