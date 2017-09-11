@@ -8379,6 +8379,7 @@ ranges:
       - [0x12180, "rgba", 32,  32, 30]
       - [0x142E0, "rgba", 16,  32, 32]
       - [0x16B68,   "ia", 16,  32, 32]
+   # hd_front_end_text is copied inflated to 0x801E7000 by proc_8028B3E0
    - [0x7E3BF0, 0x7F64A0, "gzip",   "hd_front_end_text.raw"]
    - [0x7F64A0, 0x7F9CDF, "gzip",   "hd_front_end_data.raw"]:
       # TODO: many of these are just guesses

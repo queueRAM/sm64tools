@@ -1395,7 +1395,7 @@ ranges:
       - [0x04040, "rgba", 16, 80, 20]
       - [0x04CC0, "rgba", 16, 80, 20]
       - [0x05940, "rgba", 16, 80, 20]
-   # TODO: what is here?
+   # TODO: 0x2739a0 - 0x2a6120 DMAd to malloc'd code in 801A7074
    - [0x2A6120, 0x2A65B0, "level", "main_menu_level"]
    - [0x2A65B0, 0x2ABCA0, "mio0", "main_menu_segment7"]:
       - [0x00018, "rgba", 16, 32, 32]

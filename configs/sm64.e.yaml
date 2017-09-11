@@ -237,6 +237,9 @@ ranges:
       - [0x0B178, "rgba", 16, 32, 32]
       - [0x0B978,   "ia", 16, 32, 32]
       - [0x0C178, "rgba", 16, 32, 32]
+   - [0x0E49F0, 0x0E9F50, "mio0", "dialog_en"]
+   - [0x0E9F50, 0x0EF960, "mio0", "dialog_fr"]
+   - [0x0EF960, 0x0F5330, "mio0", "dialog_de"]
    - [0x0F5330, 0x108590, "mio0", "mario"]:
       - [0x00090, "rgba", 16, 64, 32]
       - [0x01090, "rgba", 16, 32, 32]
