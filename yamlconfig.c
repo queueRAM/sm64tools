@@ -117,7 +117,7 @@ int load_memory_sequence(rom_config *c, yaml_document_t *doc, yaml_node_t *node)
    int ret_val = -1;
    if (node->type == YAML_SEQUENCE_NODE) {
       size_t count = node->data.sequence.items.top - node->data.sequence.items.start;
-      c->ram_table = malloc(3 * count * sizeof(*c->ram_table));
+      c->ram_table = calloc(3 * count, sizeof(*c->ram_table));
       c->ram_count = 0;
       yaml_node_item_t *i_node = node->data.sequence.items.start;
       for (size_t i = 0; i < count; i++) {
@@ -201,7 +201,7 @@ void load_section_data(split_section *section, yaml_document_t *doc, yaml_node_t
       case TYPE_GZIP:
       {
          // parse texture
-         texture *tex = malloc(count * sizeof(*tex));
+         texture *tex = calloc(count, sizeof(*tex));
          for (size_t i = 0; i < count; i++) {
             next_node = yaml_document_get_node(doc, i_node[i]);
             if (next_node->type == YAML_SEQUENCE_NODE) {
@@ -218,7 +218,7 @@ void load_section_data(split_section *section, yaml_document_t *doc, yaml_node_t
       case TYPE_BEHAVIOR:
       {
          // parse behavior
-         behavior *beh = malloc(count * sizeof(*beh));
+         behavior *beh = calloc(count, sizeof(*beh));
          for (size_t i = 0; i < count; i++) {
             next_node = yaml_document_get_node(doc, i_node[i]);
             if (next_node->type == YAML_SEQUENCE_NODE) {
@@ -343,7 +343,7 @@ int load_sections_sequence(rom_config *c, yaml_document_t *doc, yaml_node_t *nod
    int ret_val = -1;
    if (node->type == YAML_SEQUENCE_NODE) {
       size_t count = node->data.sequence.items.top - node->data.sequence.items.start;
-      c->sections = malloc(count * sizeof(*c->sections));
+      c->sections = calloc(count, sizeof(*c->sections));
       c->section_count = 0;
       yaml_node_item_t *i_node = node->data.sequence.items.start;
       for (size_t i = 0; i < count; i++) {
@@ -410,7 +410,7 @@ int load_labels_sequence(rom_config *c, yaml_document_t *doc, yaml_node_t *node)
    int ret_val = -1;
    if (node->type == YAML_SEQUENCE_NODE) {
       size_t count = node->data.sequence.items.top - node->data.sequence.items.start;
-      c->labels = malloc(count * sizeof(*c->labels));
+      c->labels = calloc(count, sizeof(*c->labels));
       c->label_count = 0;
       yaml_node_item_t *i_node = node->data.sequence.items.start;
       for (size_t i = 0; i < count; i++) {
@@ -448,7 +448,7 @@ void parse_yaml_root(yaml_document_t *doc, yaml_node_t *node, rom_config *c)
                   INFO("config.name: %s\n", c->name);
                } else if (!strcmp(key, "basename")) {
                   get_scalar_value(c->basename, val_node);
-                  INFO("config.basename: %s\n", c->name);
+                  INFO("config.basename: %s\n", c->basename);
                } else if (!strcmp(key, "checksum1")) {
                   unsigned int val;
                   get_scalar_uint(&val, val_node);
@@ -475,7 +475,7 @@ void parse_yaml_root(yaml_document_t *doc, yaml_node_t *node, rom_config *c)
    }
 }
 
-int parse_config_file(const char *filename, rom_config *c)
+int config_parse_file(const char *filename, rom_config *c)
 {
    yaml_parser_t parser;
    yaml_document_t doc;
@@ -514,7 +514,44 @@ int parse_config_file(const char *filename, rom_config *c)
    return 0;
 }
 
-void print_config(const rom_config *config)
+void config_free(rom_config *config)
+{
+   if (config) {
+      if (config->ram_table) {
+         free(config->ram_table);
+         config->ram_table = NULL;
+         config->ram_count = 0;
+      }
+      if (config->sections) {
+         for (int i = 0; i < config->section_count; i++) {
+            switch (config->sections[i].type) {
+               case TYPE_BEHAVIOR:
+               case TYPE_BLAST:
+               case TYPE_GZIP:
+               case TYPE_MIO0:
+                  if (config->sections[i].extra_len) {
+                     free(config->sections[i].extra);
+                     config->sections[i].extra = NULL;
+                     config->sections[i].extra_len = 0;
+                  }
+                  break;
+               default:
+                  break;
+            }
+         }
+         free(config->sections);
+         config->sections = NULL;
+         config->section_count = 0;
+      }
+      if (config->labels) {
+         free(config->labels);
+         config->labels = NULL;
+         config->label_count = 0;
+      }
+   }
+}
+
+void config_print(const rom_config *config)
 {
    int i, j;
    unsigned int *r = config->ram_table;
@@ -582,7 +619,7 @@ void print_config(const rom_config *config)
    }
 }
 
-int validate_config(const rom_config *config, unsigned int max_len)
+int config_validate(const rom_config *config, unsigned int max_len)
 {
    // error on overlapped and out-of-order sections
    int i, j, beh_i;
@@ -677,15 +714,18 @@ int main(int argc, char *argv[])
    int status;
 
    if (argc < 2) {
-      printf("Usage: yamlconfig <file.yaml>\n");
+      printf("Usage: yamlconfig <file.yaml> ...\n");
       return 1;
    }
 
-   status = parse_config_file(argv[1], &config);
-   if (status == 0) {
-      print_config(&config);
-   } else {
-      ERROR("Error parsing %s: %d\n", argv[1], status);
+   for (int i = 1; i < argc; i++) {
+      status = config_parse_file(argv[i], &config);
+      if (status == 0) {
+         config_print(&config);
+         config_free(&config);
+      } else {
+         ERROR("Error parsing %s: %d\n", argv[i], status);
+      }
    }
 
    return 0;

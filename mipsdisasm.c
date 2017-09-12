@@ -819,7 +819,7 @@ int main(int argc, char *argv[])
 
    // parse config file
    INFO("Parsing config file '%s'\n", args.config_file);
-   if (parse_config_file(args.config_file, &config)) {
+   if (config_parse_file(args.config_file, &config)) {
       ERROR("Error parsing config file '%s'\n", args.config_file);
       return EXIT_FAILURE;
    }
@@ -863,6 +863,8 @@ int main(int argc, char *argv[])
    mipsdisasm_pass2(out, data, file_len, &procs, &config, args.merge_pseudo);
 
    generate_report(&procs, &config);
+
+   config_free(&config);
 
    free(data);
 

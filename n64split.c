@@ -1862,12 +1862,14 @@ static int detect_config_file(unsigned int c1, unsigned int c2, rom_config *conf
    dir_list_ext(CONFIGS_DIR, ".yaml", &list);
 
    for (i = 0; i < list.count; i++) {
-      config_ret = parse_config_file(list.files[i], config);
+      config_ret = config_parse_file(list.files[i], config);
       INFO("Checking config file '%s' (%X, %X)\n", list.files[i], config->checksum1, config->checksum2);
       if (config_ret == 0 && c1 == config->checksum1 && c2 == config->checksum2) {
          ERROR("Using config file: %s\n", list.files[i]);
          ret_val = 1;
          break;
+      } else {
+         config_free(config);
       }
    }
 
@@ -1928,13 +1930,13 @@ int main(int argc, char *argv[])
          return 1;
       }
    } else {
-      ret_val = parse_config_file(args.config_file, &config);
+      ret_val = config_parse_file(args.config_file, &config);
       if (ret_val != 0) {
          return 1;
       }
    }
 
-   if (validate_config(&config, len)) {
+   if (config_validate(&config, len)) {
       return 3;
    }
 

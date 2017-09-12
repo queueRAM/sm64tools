@@ -79,9 +79,10 @@ typedef struct _rom_config
    int label_count;
 } rom_config;
 
-int parse_config_file(const char *filename, rom_config *config);
-void print_config(const rom_config *config);
-int validate_config(const rom_config *config, unsigned int max_len);
+int config_parse_file(const char *filename, rom_config *config);
+void config_print(const rom_config *config);
+int config_validate(const rom_config *config, unsigned int max_len);
+void config_free(rom_config *config);
 
 // get version of underlying config library
 const char *config_get_version(void);
