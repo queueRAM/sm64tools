@@ -33,17 +33,6 @@ typedef struct _label
    char name[128];
 } label;
 
-typedef struct _split_section
-{
-   char label[128];
-   unsigned int start;
-   unsigned int end;
-   section_type type;
-   int subtype;
-   void *extra;
-   int extra_len;
-} split_section;
-
 typedef struct _texture
 {
    unsigned int offset;
@@ -53,11 +42,21 @@ typedef struct _texture
    section_type format;
 } texture;
 
-typedef struct _behavior
+typedef struct _split_section
 {
-   unsigned int offset;
-   char name[128];
-} behavior;
+   char label[128];
+   unsigned int start;
+   unsigned int end;
+   section_type type;
+
+   int subtype;
+
+   // texture specific data
+   texture tex;
+
+   struct _split_section *children;
+   int child_count;
+} split_section;
 
 typedef struct _rom_config
 {

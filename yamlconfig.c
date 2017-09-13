@@ -145,7 +145,7 @@ void load_texture(texture *tex, yaml_document_t *doc, yaml_node_t *node)
    }
 }
 
-void load_behavior(behavior *beh, yaml_document_t *doc, yaml_node_t *node)
+void load_behavior(split_section *beh, yaml_document_t *doc, yaml_node_t *node)
 {
    char val[64];
    yaml_node_item_t *i_node;
@@ -161,8 +161,8 @@ void load_behavior(behavior *beh, yaml_document_t *doc, yaml_node_t *node)
       if (next_node && next_node->type == YAML_SCALAR_NODE) {
          get_scalar_value(val, next_node);
          switch (i) {
-            case 0: beh->offset = strtoul(val, NULL, 0); break;
-            case 1: strcpy(beh->name, val); break;
+            case 0: beh->start = strtoul(val, NULL, 0); break;
+            case 1: strcpy(beh->label, val); break;
          }
       } else {
          ERROR("Error: non-scalar value in behavior sequence\n");
@@ -182,35 +182,35 @@ void load_section_data(split_section *section, yaml_document_t *doc, yaml_node_t
       case TYPE_GZIP:
       {
          // parse texture
-         texture *tex = calloc(count, sizeof(*tex));
+         split_section *tex = calloc(count, sizeof(*tex));
          for (size_t i = 0; i < count; i++) {
             next_node = yaml_document_get_node(doc, i_node[i]);
             if (next_node->type == YAML_SEQUENCE_NODE) {
-               load_texture(&tex[i], doc, next_node);
+               load_texture(&tex[i].tex, doc, next_node);
             } else {
                ERROR("Error: non-sequence texture node\n");
                return;
             }
          }
-         section->extra = tex;
-         section->extra_len = count;
+         section->children = tex;
+         section->child_count = count;
          break;
       }
       case TYPE_SM64_BEHAVIOR:
       {
          // parse behavior
-         behavior *beh = calloc(count, sizeof(*beh));
+         split_section *beh = calloc(count, sizeof(*beh));
          for (size_t i = 0; i < count; i++) {
             next_node = yaml_document_get_node(doc, i_node[i]);
             if (next_node->type == YAML_SEQUENCE_NODE) {
                load_behavior(&beh[i], doc, next_node);
             } else {
-               ERROR("Error: non-sequence texture node\n");
+               ERROR("Error: non-sequence behavior node\n");
                return;
             }
          }
-         section->extra = beh;
-         section->extra_len = count;
+         section->children = beh;
+         section->child_count = count;
          break;
       }
       default:
@@ -240,8 +240,8 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
             ERROR("Error: non-scalar value in section sequence\n");
          }
       }
-      section->extra = NULL;
-      section->extra_len = 0;
+      section->children = NULL;
+      section->child_count = 0;
       // validate section parameter counts
       switch (section->type) {
          case TYPE_ASM:
@@ -301,7 +301,7 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
             switch (section->type) {
                case TYPE_PTR:
                case TYPE_INSTRUMENT_SET:
-                  section->extra_len = strtoul(val, NULL, 0);
+                  section->child_count = strtoul(val, NULL, 0);
                   break;
                default:
                   ERROR("Warning: " SIZE_T_FORMAT " - extra fields for section\n", node->start_mark.line);
@@ -510,10 +510,10 @@ void config_free(rom_config *config)
                case TYPE_GZIP:
                case TYPE_MIO0:
                case TYPE_SM64_BEHAVIOR:
-                  if (config->sections[i].extra_len) {
-                     free(config->sections[i].extra);
-                     config->sections[i].extra = NULL;
-                     config->sections[i].extra_len = 0;
+                  if (config->sections[i].child_count) {
+                     free(config->sections[i].children);
+                     config->sections[i].children = NULL;
+                     config->sections[i].child_count = 0;
                   }
                   break;
                default:
@@ -555,18 +555,19 @@ void config_print(const rom_config *config)
    // ranges
    printf("ranges:\n");
    for (i = 0; i < config->section_count; i++) {
-      printf("0x%08X 0x%08X %d %s %d\n", s[i].start, s[i].end, s[i].type, s[i].label, s[i].extra_len);
-      if (s[i].extra_len > 0) {
+      printf("0x%08X 0x%08X %d %s %d\n", s[i].start, s[i].end, s[i].type, s[i].label, s[i].child_count);
+      if (s[i].child_count > 0) {
          switch (s[i].type) {
             case TYPE_BLAST:
             case TYPE_MIO0:
             case TYPE_GZIP:
             {
-               texture *tex = s[i].extra;
-               for (j = 0; j < s[i].extra_len; j++) {
-                  printf("  0x%06X %d", tex[j].offset, tex[j].format);
+               split_section *textures = s[i].children;
+               for (j = 0; j < s[i].child_count; j++) {
+                  texture *tex = &textures[j].tex;
+                  printf("  0x%06X %d", tex->offset, tex->format);
                   if (tex[j].format != TYPE_SM64_COLLISION) {
-                     printf(" %2d %3d %3d", tex[j].depth, tex[j].width, tex[j].height);
+                     printf(" %2d %3d %3d", tex->depth, tex->width, tex->height);
                   }
                   printf("\n");
                }
@@ -574,9 +575,9 @@ void config_print(const rom_config *config)
             }
             case TYPE_SM64_BEHAVIOR:
             {
-               behavior *beh = s[i].extra;
-               for (j = 0; j < s[i].extra_len; j++) {
-                  printf("  0x%06X %s\n", beh[j].offset, beh[j].name);
+               split_section *beh = s[i].children;
+               for (j = 0; j < s[i].child_count; j++) {
+                  printf("  0x%06X %s\n", beh[j].start, beh[j].label);
                }
                break;
             }
@@ -659,18 +660,18 @@ int config_validate(const rom_config *config, unsigned int max_len)
       }
    }
    if (beh_i >= 0) {
-      behavior *beh = config->sections[beh_i].extra;
-      int extra_count = config->sections[beh_i].extra_len;
-      for (i = 0; i < extra_count; i++) {
-         for (j = i+1; j < extra_count; j++) {
-            if (beh[i].offset == beh[j].offset) {
-               ERROR("Error: duplicate behavior offset %04X \"%s\" \"%s\"\n", beh[i].offset,
-                     beh[i].name, beh[j].name);
+      split_section *beh = config->sections[beh_i].children;
+      int count = config->sections[beh_i].child_count;
+      for (i = 0; i < count; i++) {
+         for (j = i+1; j < count; j++) {
+            if (beh[i].start == beh[j].start) {
+               ERROR("Error: duplicate behavior offset %04X \"%s\" \"%s\"\n", beh[i].start,
+                     beh[i].label, beh[j].label);
                ret_val = -6;
             }
-            if (0 == strcmp(beh[i].name, beh[j].name)) {
-               ERROR("Error: duplicate behavior name \"%s\" %04X %04X\n", beh[i].name,
-                     beh[i].offset, beh[j].offset);
+            if (0 == strcmp(beh[i].label, beh[j].label)) {
+               ERROR("Error: duplicate behavior name \"%s\" %04X %04X\n", beh[i].label,
+                     beh[i].start, beh[j].start);
                ret_val = -6;
             }
          }

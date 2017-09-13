@@ -365,11 +365,11 @@ int fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint
          }
       }
       if (sec_beh) {
-         behavior *beh = sec_beh->extra;
+         split_section *beh = sec_beh->children;
          unsigned int offset = addr & 0xFFFFFF;
-         for (i = 0; i < sec_beh->extra_len; i++) {
-            if (offset == beh[i].offset) {
-               sprintf(label, "%s", beh[i].name);
+         for (i = 0; i < sec_beh->child_count; i++) {
+            if (offset == beh[i].start) {
+               sprintf(label, "%s", beh[i].label);
                return 1;
             }
          }

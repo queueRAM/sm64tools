@@ -134,19 +134,19 @@ static void write_behavior(FILE *out, unsigned char *data, rom_config *config, i
    unsigned int val;
    int beh_i;
    split_section *sec;
-   behavior *beh;
+   split_section *beh;
    sec = &config->sections[s];
-   beh = sec->extra;
+   beh = sec->children;
    a = sec->start;
    beh_i = 0;
    while (a < sec->end) {
-      if (beh_i < sec->extra_len) {
+      if (beh_i < sec->child_count) {
          unsigned int offset = a - sec->start;
-         if (offset == beh[beh_i].offset) {
-            fprintf(out, "%s: # %04X\n", beh[beh_i].name, beh[beh_i].offset);
+         if (offset == beh[beh_i].start) {
+            fprintf(out, "%s: # %04X\n", beh[beh_i].label, beh[beh_i].start);
             beh_i++;
-         } else if (offset > beh[beh_i].offset) {
-            ERROR("Warning: skipped behavior %04X \"%s\"\n", beh[beh_i].offset, beh[beh_i].name);
+         } else if (offset > beh[beh_i].start) {
+            ERROR("Warning: skipped behavior %04X \"%s\"\n", beh[beh_i].start, beh[beh_i].label);
             beh_i++;
          }
       }
@@ -417,14 +417,14 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
             dst = read_u32_be(&data[a+i]);
             if (beh_i >= 0) {
                unsigned int offset = dst & 0xFFFFFF;
-               behavior *beh = config->sections[beh_i].extra;
-               for (i = 0; i < config->sections[beh_i].extra_len; i++) {
-                  if (offset == beh[i].offset) {
-                     fprintf(out, ", %s", beh[i].name);
+               split_section *beh = config->sections[beh_i].children;
+               for (i = 0; i < config->sections[beh_i].child_count; i++) {
+                  if (offset == beh[i].start) {
+                     fprintf(out, ", %s", beh[i].label);
                      break;
                   }
                }
-               if (i >= config->sections[beh_i].extra_len) {
+               if (i >= config->sections[beh_i].child_count) {
                   ERROR("Error: cannot find behavior %04X needed at offset %X\n", offset, a);
                }
             } else {
@@ -658,7 +658,7 @@ static void parse_instrument_set(FILE *out, unsigned char *data, split_section *
    unsigned count;
    unsigned i, cur;
 
-   count = sec->extra_len;
+   count = sec->child_count;
    // each sequence has its own instrument set defined by offsets table
    instrument_set = malloc(count * sizeof(*instrument_set));
    for (i = 0; i < count; i++) {
@@ -1092,8 +1092,8 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                ptr = read_u32_be(&data[a]);
                fill_addr_label(config, ptr, start_label, -1);
                fprintf(fasm, ".word %s", start_label);
-               if (sec->extra_len > 0) {
-                  for (i = 1; i < sec->extra_len; i++) {
+               if (sec->child_count > 0) {
+                  for (i = 1; i < sec->child_count; i++) {
                      a += 4;
                      ptr = read_u32_be(&data[a]);
                      fill_addr_label(config, ptr, start_label, -1);
@@ -1241,22 +1241,21 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             blast_decode_file(mio0filename, sec->subtype, binfilename, lut);
 
             // extract texture data
-            if (sec->extra) {
-               texture *texts = sec->extra;
-               int t;
+            if (sec->children) {
                unsigned int offset = 0;
                fprintf(fmake, "$(MIO0_DIR)/%06X.raw:", sec->start);
                INFO("Extracting textures from %s\n", sec->label);
-               for (t = 0; t < sec->extra_len; t++) {
-                  w = texts[t].width;
-                  h = texts[t].height;
-                  offset = texts[t].offset;
-                  switch (texts[t].format) {
+               for (int t = 0; t < sec->child_count; t++) {
+                  texture *tex = &sec->children[t].tex;
+                  w = tex->width;
+                  h = tex->height;
+                  offset = tex->offset;
+                  switch (tex->format) {
                      case TYPE_TEX_IA:
                      {
-                        ia *img = file2ia(binfilename, offset, w, h, texts[t].depth);
+                        ia *img = file2ia(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%06X.0x%05X.ia%d.png", sec->start, offset, texts[t].depth);
+                           sprintf(outfilename, "%06X.0x%05X.ia%d.png", sec->start, offset, tex->depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);
@@ -1266,9 +1265,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      }
                      case TYPE_TEX_I:
                      {
-                        ia *img = file2i(binfilename, offset, w, h, texts[t].depth);
+                        ia *img = file2i(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.i%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilename, "%s.0x%05X.i%d.png", sec->label, offset, tex->depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);
@@ -1278,9 +1277,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      }
                      case TYPE_TEX_RGBA:
                      {
-                        rgba *img = file2rgba(binfilename, offset, w, h, texts[t].depth);
+                        rgba *img = file2rgba(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.rgba%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilename, "%s.0x%05X.rgba%d.png", sec->label, offset, tex->depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            rgba2png(img, w, h, outfilepath);
                            free(img);
@@ -1289,7 +1288,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         break;
                      }
                      default:
-                        ERROR("Don't know what to do with format %d\n", texts[t].format);
+                        ERROR("Don't know what to do with format %d\n", tex->format);
                         exit(1);
                   }
                }
@@ -1350,9 +1349,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             mio0_decode_file(mio0filename, 0, binfilename);
 
             // extract texture data
-            if (sec->extra) {
-               texture *texts = sec->extra;
-               int t;
+            if (sec->children) {
                unsigned int offset = 0;
                if (sec->label == NULL || sec->label[0] == '\0') {
                   fprintf(fmake, "$(MIO0_DIR)/%06X.bin:", sec->start);
@@ -1360,16 +1357,17 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                   fprintf(fmake, "$(MIO0_DIR)/%s.bin: ", sec->label);
                }
                INFO("Extracting textures from %s\n", sec->label);
-               for (t = 0; t < sec->extra_len; t++) {
-                  w = texts[t].width;
-                  h = texts[t].height;
-                  offset = texts[t].offset;
-                  switch (texts[t].format) {
+               for (int t = 0; t < sec->child_count; t++) {
+                  texture *tex = &sec->children[t].tex;
+                  w = tex->width;
+                  h = tex->height;
+                  offset = tex->offset;
+                  switch (tex->format) {
                      case TYPE_TEX_IA:
                      {
-                        ia *img = file2ia(binfilename, offset, w, h, texts[t].depth);
+                        ia *img = file2ia(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.ia%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilename, "%s.0x%05X.ia%d.png", sec->label, offset, tex->depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);
@@ -1379,9 +1377,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      }
                      case TYPE_TEX_I:
                      {
-                        ia *img = file2i(binfilename, offset, w, h, texts[t].depth);
+                        ia *img = file2i(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.i%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilename, "%s.0x%05X.i%d.png", sec->label, offset, tex->depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);
@@ -1391,9 +1389,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      }
                      case TYPE_TEX_RGBA:
                      {
-                        rgba *img = file2rgba(binfilename, offset, w, h, texts[t].depth);
+                        rgba *img = file2rgba(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.rgba%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilename, "%s.0x%05X.rgba%d.png", sec->label, offset, tex->depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            rgba2png(img, w, h, outfilepath);
                            free(img);
@@ -1415,7 +1413,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         h -= n;
                         for (ty = 0; ty < n; ty++) {
                            for (tx = 0; tx < m; tx++) {
-                              rgba *tile = file2rgba(binfilename, sky_offset, 32, 32, texts[t].depth);
+                              rgba *tile = file2rgba(binfilename, sky_offset, 32, 32, tex->depth);
                               int cx, cy;
                               for (cy = 0; cy < 31; cy++) {
                                  for (cx = 0; cx < 31; cx++) {
@@ -1444,7 +1442,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         break;
                      }
                      default:
-                        ERROR("Don't know what to do with format %d\n", texts[t].format);
+                        ERROR("Don't know what to do with format %d\n", tex->format);
                         exit(1);
                   }
                }
@@ -1503,8 +1501,8 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             gzip_decode_file(mio0filename, 0, binfilename);
 
             // extract texture data
-            if (sec->extra) {
-               texture *texts = sec->extra;
+            if (sec->children) {
+               split_section *textures = sec->children;
                int t;
                unsigned int offset = 0;
                if (sec->label == NULL || sec->label[0] == '\0') {
@@ -1513,16 +1511,17 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                   fprintf(fmake, "$(MIO0_DIR)/%s: ", sec->label);
                }
                INFO("Extracting textures from %s\n", sec->label);
-               for (t = 0; t < sec->extra_len; t++) {
-                  w = texts[t].width;
-                  h = texts[t].height;
-                  offset = texts[t].offset;
-                  switch (texts[t].format) {
+               for (t = 0; t < sec->child_count; t++) {
+                  texture *tex = &textures[t].tex;
+                  w = tex->width;
+                  h = tex->height;
+                  offset = tex->offset;
+                  switch (tex->format) {
                      case TYPE_TEX_IA:
                      {
-                        ia *img = file2ia(binfilename, offset, w, h, texts[t].depth);
+                        ia *img = file2ia(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.ia%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilename, "%s.0x%05X.ia%d.png", sec->label, offset, tex->depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);
@@ -1532,9 +1531,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      }
                      case TYPE_TEX_I:
                      {
-                        ia *img = file2i(binfilename, offset, w, h, texts[t].depth);
+                        ia *img = file2i(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.i%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilename, "%s.0x%05X.i%d.png", sec->label, offset, tex->depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);
@@ -1544,9 +1543,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      }
                      case TYPE_TEX_RGBA:
                      {
-                        rgba *img = file2rgba(binfilename, offset, w, h, texts[t].depth);
+                        rgba *img = file2rgba(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.rgba%d.png", sec->label, offset, texts[t].depth);
+                           sprintf(outfilename, "%s.0x%05X.rgba%d.png", sec->label, offset, tex->depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            rgba2png(img, w, h, outfilepath);
                            free(img);
@@ -1568,7 +1567,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         h -= n;
                         for (ty = 0; ty < n; ty++) {
                            for (tx = 0; tx < m; tx++) {
-                              rgba *tile = file2rgba(binfilename, sky_offset, 32, 32, texts[t].depth);
+                              rgba *tile = file2rgba(binfilename, sky_offset, 32, 32, tex->depth);
                               int cx, cy;
                               for (cy = 0; cy < 31; cy++) {
                                  for (cx = 0; cx < 31; cx++) {
@@ -1597,7 +1596,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         break;
                      }
                      default:
-                        ERROR("Don't know what to do with format %d\n", texts[t].format);
+                        ERROR("Don't know what to do with format %d\n", tex->format);
                         exit(1);
                   }
                }
