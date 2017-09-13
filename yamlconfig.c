@@ -13,33 +13,27 @@ typedef struct
    const section_type section;
 } section_entry;
 
-typedef struct
-{
-   const char *name;
-   const texture_format format;
-} format_entry;
-
 static const section_entry section_table[] = {
-   {"asm",      TYPE_ASM},
-   {"behavior", TYPE_BEHAVIOR},
-   {"bin",      TYPE_BIN},
-   {"blast",    TYPE_BLAST},
-   {"geo",      TYPE_GEO},
-   {"gzip",     TYPE_GZIP},
-   {"header",   TYPE_HEADER},
-   {"instrset", TYPE_INSTRUMENT_SET},
-   {"level",    TYPE_LEVEL},
-   {"m64",      TYPE_M64},
-   {"mio0",     TYPE_MIO0},
-   {"ptr",      TYPE_PTR},
-};
-
-static const format_entry format_table[] = {
-   {"rgba",      FORMAT_RGBA},
-   {"ia",        FORMAT_IA},
-   {"i",         FORMAT_I},
-   {"skybox",    FORMAT_SKYBOX},
-   {"collision", FORMAT_COLLISION},
+   {"asm",        TYPE_ASM},
+   {"bin",        TYPE_BIN},
+   {"blast",      TYPE_BLAST},
+   {"gzip",       TYPE_GZIP},
+   {"header",     TYPE_HEADER},
+   {"instrset",   TYPE_INSTRUMENT_SET},
+   {"m64",        TYPE_M64},
+   {"mio0",       TYPE_MIO0},
+   {"ptr",        TYPE_PTR},
+   // Texture formats
+   {"tex.ci",     TYPE_TEX_CI},
+   {"tex.i",      TYPE_TEX_I},
+   {"tex.ia",     TYPE_TEX_IA},
+   {"tex.rgba",   TYPE_TEX_RGBA},
+   {"tex.skybox", TYPE_TEX_SKYBOX},
+   // SM64 specific sections
+   {"sm64.behavior",  TYPE_SM64_BEHAVIOR},
+   {"sm64.collision", TYPE_SM64_COLLISION},
+   {"sm64.geo",       TYPE_SM64_GEO},
+   {"sm64.level",     TYPE_SM64_LEVEL},
 };
 
 static section_type str2section(const char *type_name)
@@ -53,19 +47,6 @@ static section_type str2section(const char *type_name)
       }
    }
    return TYPE_INVALID;
-}
-
-static texture_format str2format(const char *format_name)
-{
-   unsigned i;
-   if (format_name != NULL) {
-      for (i = 0; i < DIM(format_table); i++) {
-         if (0 == strcmp(format_table[i].name, format_name)) {
-            return format_table[i].format;
-         }
-      }
-   }
-   return FORMAT_INVALID;
 }
 
 int get_scalar_value(char *scalar, yaml_node_t *node)
@@ -148,8 +129,8 @@ void load_texture(texture *tex, yaml_document_t *doc, yaml_node_t *node)
          switch (i) {
             case 0: tex->offset = strtoul(val, NULL, 0); break;
             case 1:
-               tex->format = str2format(val);
-               if (tex->format == FORMAT_INVALID) {
+               tex->format = str2section(val);
+               if (tex->format == TYPE_INVALID) {
                   ERROR("Error: " SIZE_T_FORMAT " - invalid texture format '%s'\n", node->start_mark.line, val);
                   return;
                }
@@ -215,7 +196,7 @@ void load_section_data(split_section *section, yaml_document_t *doc, yaml_node_t
          section->extra_len = count;
          break;
       }
-      case TYPE_BEHAVIOR:
+      case TYPE_SM64_BEHAVIOR:
       {
          // parse behavior
          behavior *beh = calloc(count, sizeof(*beh));
@@ -266,9 +247,9 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
          case TYPE_ASM:
          case TYPE_BIN:
          case TYPE_HEADER:
-         case TYPE_GEO:
-         case TYPE_LEVEL:
          case TYPE_M64:
+         case TYPE_SM64_GEO:
+         case TYPE_SM64_LEVEL:
             if (count > 4) {
                ERROR("Error: " SIZE_T_FORMAT " - expected 3-4 fields for section\n", node->start_mark.line);
                return;
@@ -281,10 +262,10 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
                return;
             }
             break;
-         case TYPE_BEHAVIOR:
          case TYPE_BLAST:
          case TYPE_MIO0:
          case TYPE_GZIP:
+         case TYPE_SM64_BEHAVIOR:
             if (count < 4 || count > 5) {
                ERROR("Error: " SIZE_T_FORMAT " - expected 4-5 fields for section\n", node->start_mark.line);
                return;
@@ -525,10 +506,10 @@ void config_free(rom_config *config)
       if (config->sections) {
          for (int i = 0; i < config->section_count; i++) {
             switch (config->sections[i].type) {
-               case TYPE_BEHAVIOR:
                case TYPE_BLAST:
                case TYPE_GZIP:
                case TYPE_MIO0:
+               case TYPE_SM64_BEHAVIOR:
                   if (config->sections[i].extra_len) {
                      free(config->sections[i].extra);
                      config->sections[i].extra = NULL;
@@ -584,14 +565,14 @@ void config_print(const rom_config *config)
                texture *tex = s[i].extra;
                for (j = 0; j < s[i].extra_len; j++) {
                   printf("  0x%06X %d", tex[j].offset, tex[j].format);
-                  if (tex[j].format != FORMAT_COLLISION) {
+                  if (tex[j].format != TYPE_SM64_COLLISION) {
                      printf(" %2d %3d %3d", tex[j].depth, tex[j].width, tex[j].height);
                   }
                   printf("\n");
                }
                break;
             }
-            case TYPE_BEHAVIOR:
+            case TYPE_SM64_BEHAVIOR:
             {
                behavior *beh = s[i].extra;
                for (j = 0; j < s[i].extra_len; j++) {
@@ -672,7 +653,7 @@ int config_validate(const rom_config *config, unsigned int max_len)
    beh_i = -1;
    for (i = 0; i < config->section_count; i++) {
       split_section *isec = &config->sections[i];
-      if (isec->type == TYPE_BEHAVIOR) {
+      if (isec->type == TYPE_SM64_BEHAVIOR) {
          beh_i = i;
          break;
       }

@@ -5,17 +5,25 @@ typedef enum
 {
    TYPE_INVALID,
    TYPE_ASM,
-   TYPE_BEHAVIOR,
    TYPE_BIN,
    TYPE_BLAST,
-   TYPE_GEO,
    TYPE_GZIP,
    TYPE_HEADER,
    TYPE_INSTRUMENT_SET,
-   TYPE_LEVEL,
    TYPE_M64,
    TYPE_MIO0,
    TYPE_PTR,
+   // Textures
+   TYPE_TEX_CI,
+   TYPE_TEX_I,
+   TYPE_TEX_IA,
+   TYPE_TEX_RGBA,
+   TYPE_TEX_SKYBOX,
+   // SM64 specific types
+   TYPE_SM64_GEO,
+   TYPE_SM64_BEHAVIOR,
+   TYPE_SM64_COLLISION,
+   TYPE_SM64_LEVEL,
 } section_type;
 
 typedef struct _label
@@ -36,23 +44,13 @@ typedef struct _split_section
    int extra_len;
 } split_section;
 
-typedef enum
-{
-   FORMAT_INVALID,
-   FORMAT_RGBA,
-   FORMAT_IA,
-   FORMAT_I,
-   FORMAT_SKYBOX,
-   FORMAT_COLLISION,
-} texture_format;
-
 typedef struct _texture
 {
    unsigned int offset;
    unsigned short width;
    unsigned short height;
    unsigned short depth;
-   texture_format format;
+   section_type format;
 } texture;
 
 typedef struct _behavior

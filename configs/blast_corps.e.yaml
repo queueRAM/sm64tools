@@ -42,11 +42,11 @@ ranges:
    - [0x788120, 0x7D845C, "gzip",   "hd_code_text.raw"]
    - [0x7D845C, 0x7E4940, "gzip",   "hd_code_data.raw"]:
       # TODO: many of these are just guesses
-      - [0x10E30, "rgba", 32,  16, 16]
-      - [0x11230, "rgba", 32,  16, 16]
-      - [0x12180, "rgba", 32,  32, 30]
-      - [0x142E0, "rgba", 16,  32, 32]
-      - [0x16B68,   "ia", 16,  32, 32]
+      - [0x10E30, "tex.rgba", 32,  16, 16]
+      - [0x11230, "tex.rgba", 32,  16, 16]
+      - [0x12180, "tex.rgba", 32,  32, 30]
+      - [0x142E0, "tex.rgba", 16,  32, 32]
+      - [0x16B68, "tex.ia",   16,  32, 32]
    - [0x7E4940, 0x7F75A4, "gzip",   "hd_front_end_text.raw"]
    - [0x7F75A4, 0x7FB7C0, "gzip",   "hd_front_end_data.raw"]
 

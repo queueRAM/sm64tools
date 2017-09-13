@@ -359,7 +359,7 @@ int fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint
    if (addr >= 0x13000000 && addr < 0x14000000) {
       split_section *sec_beh = NULL;
       for (i = 0; i < config->section_count; i++) {
-         if (config->sections[i].type == TYPE_BEHAVIOR) {
+         if (config->sections[i].type == TYPE_SM64_BEHAVIOR) {
             sec_beh = &config->sections[i];
             break;
          }

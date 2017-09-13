@@ -351,7 +351,7 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
    beh_i = -1;
    // see if there is a behavior section
    for (i = 0; i < config->section_count; i++) {
-      if (config->sections[i].type == TYPE_BEHAVIOR) {
+      if (config->sections[i].type == TYPE_SM64_BEHAVIOR) {
          beh_i = i;
          break;
       }
@@ -1074,9 +1074,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             fprintf(fasm, "%s_end:\n", start_label);
             break;
          case TYPE_BLAST:
-         case TYPE_GEO:
          case TYPE_MIO0:
          case TYPE_GZIP:
+         case TYPE_SM64_GEO:
             // fill previous geometry and MIO0 blocks
             fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
             break;
@@ -1108,12 +1108,12 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             INFO("Section asm: %X-%X\n", sec->start, sec->end);
             disassemble_section(fasm, data, length, sec, procs, config, args->merge_pseudo);
             break;
-         case TYPE_LEVEL:
+         case TYPE_SM64_LEVEL:
             // relocate level scripts to .mio0 area
             // TODO: these shouldn't need to be relocated if load offset can be computed
             fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
             break;
-         case TYPE_BEHAVIOR:
+         case TYPE_SM64_BEHAVIOR:
             // behaviors are done below
             fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
             break;
@@ -1143,16 +1143,16 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
          case TYPE_BLAST:
             count += i + 20 + 4; // no label for Blast
             break;
-         case TYPE_GEO:
-            count += i + strlen(sec->label) + 4;
-            break;
          case TYPE_MIO0:
             count += i + strlen(sec->label) + 4;
             break;
          case TYPE_GZIP:
             count += i + strlen(sec->label) + 4;
             break;
-         case TYPE_LEVEL:
+         case TYPE_SM64_GEO:
+            count += i + strlen(sec->label) + 4;
+            break;
+         case TYPE_SM64_LEVEL:
             level_alloc += j + strlen(sec->label) + 4;
             break;
          default:
@@ -1179,7 +1179,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    for (s = 0; s < config->section_count; s++) {
       split_section *sec = &sections[s];
       switch (sec->type) {
-         case TYPE_GEO:
+         case TYPE_SM64_GEO:
          {
             char geofilename[FILENAME_MAX];
             FILE *fgeo;
@@ -1252,7 +1252,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                   h = texts[t].height;
                   offset = texts[t].offset;
                   switch (texts[t].format) {
-                     case FORMAT_IA:
+                     case TYPE_TEX_IA:
                      {
                         ia *img = file2ia(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
@@ -1264,7 +1264,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         }
                         break;
                      }
-                     case FORMAT_I:
+                     case TYPE_TEX_I:
                      {
                         ia *img = file2i(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
@@ -1276,7 +1276,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         }
                         break;
                      }
-                     case FORMAT_RGBA:
+                     case TYPE_TEX_RGBA:
                      {
                         rgba *img = file2rgba(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
@@ -1365,7 +1365,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                   h = texts[t].height;
                   offset = texts[t].offset;
                   switch (texts[t].format) {
-                     case FORMAT_IA:
+                     case TYPE_TEX_IA:
                      {
                         ia *img = file2ia(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
@@ -1377,7 +1377,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         }
                         break;
                      }
-                     case FORMAT_I:
+                     case TYPE_TEX_I:
                      {
                         ia *img = file2i(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
@@ -1389,7 +1389,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         }
                         break;
                      }
-                     case FORMAT_RGBA:
+                     case TYPE_TEX_RGBA:
                      {
                         rgba *img = file2rgba(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
@@ -1401,7 +1401,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         }
                         break;
                      }
-                     case FORMAT_SKYBOX:
+                     case TYPE_TEX_SKYBOX:
                      {
                         // read in grid of MxN 32x32 tiles and save them as M*31xN*31 image
                         rgba *img;
@@ -1435,7 +1435,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
                         break;
                      }
-                     case FORMAT_COLLISION:
+                     case TYPE_SM64_COLLISION:
                      {
                         sprintf(outfilename, "%s.0x%05X.collision.obj", sec->label, offset);
                         sprintf(outfilepath, "%s/%s", model_dir, outfilename);
@@ -1518,7 +1518,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                   h = texts[t].height;
                   offset = texts[t].offset;
                   switch (texts[t].format) {
-                     case FORMAT_IA:
+                     case TYPE_TEX_IA:
                      {
                         ia *img = file2ia(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
@@ -1530,7 +1530,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         }
                         break;
                      }
-                     case FORMAT_I:
+                     case TYPE_TEX_I:
                      {
                         ia *img = file2i(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
@@ -1542,7 +1542,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         }
                         break;
                      }
-                     case FORMAT_RGBA:
+                     case TYPE_TEX_RGBA:
                      {
                         rgba *img = file2rgba(binfilename, offset, w, h, texts[t].depth);
                         if (img) {
@@ -1554,7 +1554,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         }
                         break;
                      }
-                     case FORMAT_SKYBOX:
+                     case TYPE_TEX_SKYBOX:
                      {
                         // read in grid of MxN 32x32 tiles and save them as M*31xN*31 image
                         rgba *img;
@@ -1588,7 +1588,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                         fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
                         break;
                      }
-                     case FORMAT_COLLISION:
+                     case TYPE_SM64_COLLISION:
                      {
                         sprintf(outfilename, "%s.0x%05X.collision.obj", sec->label, offset);
                         sprintf(outfilepath, "%s/%s", model_dir, outfilename);
@@ -1624,7 +1624,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             touch_file(mio0filename);
             break;
          }
-         case TYPE_LEVEL:
+         case TYPE_SM64_LEVEL:
          {
             FILE *flevel;
             char levelfilename[FILENAME_MAX];
@@ -1664,7 +1664,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             strcat(makeheader_level, maketmp);
             break;
          }
-         case TYPE_BEHAVIOR:
+         case TYPE_SM64_BEHAVIOR:
          {
             FILE *f_beh;
             char beh_filename[FILENAME_MAX];
