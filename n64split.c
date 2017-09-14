@@ -10,6 +10,7 @@
 #include "libmio0.h"
 #include "mipsdisasm.h"
 #include "n64graphics.h"
+#include "strutils.h"
 #include "utils.h"
 
 #define N64SPLIT_VERSION "0.4a"
@@ -584,7 +585,7 @@ static void disassemble_section(FILE *out, unsigned char *data, long len, split_
    }
 }
 
-static void parse_music_sequences(FILE *out, unsigned char *data, split_section *sec, arg_config *args, char *makeheader)
+static void parse_music_sequences(FILE *out, unsigned char *data, split_section *sec, arg_config *args, strbuf *makeheader)
 {
 #define MUSIC_SUBDIR    "music"
    typedef struct {
@@ -601,7 +602,6 @@ static void parse_music_sequences(FILE *out, unsigned char *data, split_section 
    char m64_file[FILENAME_MAX];
    char m64_file_rel[FILENAME_MAX];
    char seq_name[128];
-   char maketmp[FILENAME_MAX];
    sequence_bank seq_bank = {0};
    unsigned i;
 
@@ -640,8 +640,7 @@ static void parse_music_sequences(FILE *out, unsigned char *data, split_section 
       fprintf(out, "\n.incbin \"%s\"\n", m64_file_rel);
 
       // append to Makefile
-      sprintf(maketmp, " \\\n$(MUSIC_DIR)/%s.m64", seq_name);
-      strcat(makeheader, maketmp);
+      strbuf_sprintf(makeheader, " \\\n$(MUSIC_DIR)/%s.m64", seq_name);
 
       fprintf(out, "%s_end:\n", seq_name);
    }
@@ -934,21 +933,18 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    char outfilename[FILENAME_MAX];
    char outfilepath[FILENAME_MAX];
    char mio0filename[FILENAME_MAX];
-   char maketmp[FILENAME_MAX];
    char start_label[256];
-   char *makeheader_mio0;
-   char *makeheader_level;
-   char *makeheader_music;
+   strbuf makeheader_mio0;
+   strbuf makeheader_level;
+   strbuf makeheader_music;
    FILE *fasm;
    FILE *fmake;
    int s;
-   int i, j;
+   int i;
    unsigned int a;
    unsigned int w, h;
    unsigned int prev_end = 0;
    unsigned int ptr;
-   int count;
-   int level_alloc;
    split_section *sections = config->sections;
 
    // create directories
@@ -981,8 +977,8 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    // generate globals include file
    generate_globals(args, config);
 
-   makeheader_music = malloc(100 * strlen(" \\\n$(MUSIC_DIR)/seq_100.m64"));
-   sprintf(makeheader_music, "MUSIC_FILES =");
+   strbuf_alloc(&makeheader_music, 256);
+   strbuf_sprintf(&makeheader_music, "MUSIC_FILES =");
 
    for (s = 0; s < config->section_count; s++) {
       split_section *sec = &sections[s];
@@ -1118,7 +1114,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             fprintf(fasm, ".space 0x%05x, 0x01 # %s\n", sec->end - sec->start, sec->label);
             break;
          case TYPE_M64:
-            parse_music_sequences(fasm, data, sec, args, makeheader_music);
+            parse_music_sequences(fasm, data, sec, args, &makeheader_music);
             break;
          case TYPE_INSTRUMENT_SET:
             parse_instrument_set(fasm, data, sec);
@@ -1131,40 +1127,11 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
       prev_end = sec->end;
    }
 
-   // put MIO0 in separate data section and generate Makefile
-   // allocate some space for the .bin makefile targets
-   count = 1024; // header space
-   level_alloc = 1024;
-   i = strlen(" \\\n$(MIO0_DIR)/");
-   j = strlen(" \\\n$(LEVEL_DIR)/");
-   for (s = 0; s < config->section_count; s++) {
-      split_section *sec = &sections[s];
-      switch (sec->type) {
-         case TYPE_BLAST:
-            count += i + 20 + 4; // no label for Blast
-            break;
-         case TYPE_MIO0:
-            count += i + strlen(sec->label) + 4;
-            break;
-         case TYPE_GZIP:
-            count += i + strlen(sec->label) + 4;
-            break;
-         case TYPE_SM64_GEO:
-            count += i + strlen(sec->label) + 4;
-            break;
-         case TYPE_SM64_LEVEL:
-            level_alloc += j + strlen(sec->label) + 4;
-            break;
-         default:
-            break;
-      }
-   }
+   strbuf_alloc(&makeheader_mio0, 1024);
+   strbuf_sprintf(&makeheader_mio0, "MIO0_FILES =");
 
-   makeheader_mio0 = malloc(count);
-   sprintf(makeheader_mio0, "MIO0_FILES =");
-
-   makeheader_level = malloc(level_alloc);
-   sprintf(makeheader_level, "LEVEL_FILES =");
+   strbuf_alloc(&makeheader_level, 1024);
+   strbuf_sprintf(&makeheader_level, "LEVEL_FILES =");
 
    fmake = fopen(makefile_name, "w");
    fprintf(fmake, "TARGET = %s\n", config->basename);
@@ -1208,8 +1175,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             fprintf(fasm, ".include \"%s\"\n", outfilename);
             fprintf(fasm, "%s_end:\n", start_label);
             // append to Makefile
-            sprintf(maketmp, " \\\n$(GEO_DIR)/%s", geofilename);
-            strcat(makeheader_level, maketmp);
+            strbuf_sprintf(&makeheader_level, " \\\n$(GEO_DIR)/%s", geofilename);
             break;
          }
          case TYPE_BLAST:
@@ -1227,8 +1193,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             fprintf(fasm, ".incbin \"%s/%s\"\n", MIO0_SUBDIR, outfilename);
             fprintf(fasm, "%s_end:\n", start_label);
             // append to Makefile
-            sprintf(maketmp, " \\\n$(MIO0_DIR)/%s", outfilename);
-            strcat(makeheader_mio0, maketmp);
+            strbuf_sprintf(&makeheader_mio0, " \\\n$(MIO0_DIR)/%s", outfilename);
             sprintf(binfilename, "%s/%06X.bin", mio0_dir, sec->start);
 
             // extract texture data
@@ -1337,8 +1302,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             fprintf(fasm, ".incbin \"%s/%s\"\n", MIO0_SUBDIR, outfilename);
             fprintf(fasm, "%s_end:\n", start_label);
             // append to Makefile
-            sprintf(maketmp, " \\\n$(MIO0_DIR)/%s", outfilename);
-            strcat(makeheader_mio0, maketmp);
+            strbuf_sprintf(&makeheader_mio0, " \\\n$(MIO0_DIR)/%s", outfilename);
             if (sec->label == NULL || sec->label[0] == '\0') {
                sprintf(binfilename, "%s/%06X.bin", mio0_dir, sec->start);
             } else {
@@ -1489,8 +1453,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             fprintf(fasm, ".incbin \"%s/%s\"\n", MIO0_SUBDIR, outfilename);
             fprintf(fasm, "%s_end:\n", start_label);
             // append to Makefile
-            sprintf(maketmp, " \\\n$(MIO0_DIR)/%s", outfilename);
-            strcat(makeheader_mio0, maketmp);
+            strbuf_sprintf(&makeheader_mio0, " \\\n$(MIO0_DIR)/%s", outfilename);
             if (sec->label == NULL || sec->label[0] == '\0') {
                sprintf(binfilename, "%s/%06X.raw", mio0_dir, sec->start);
             } else {
@@ -1659,8 +1622,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             }
             fprintf(fasm, "\n.include \"%s\"\n", outfilename);
             // append to Makefile
-            sprintf(maketmp, " \\\n$(LEVEL_DIR)/%s", levelfilename);
-            strcat(makeheader_level, maketmp);
+            strbuf_sprintf(&makeheader_level, " \\\n$(LEVEL_DIR)/%s", levelfilename);
             break;
          }
          case TYPE_SM64_BEHAVIOR:
@@ -1693,17 +1655,16 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             fprintf(fasm, "\n\n.section .mio0\n");
 
             // append to Makefile
-            sprintf(maketmp, " \\\n%s/%s", BEHAVIOR_SUBDIR, beh_filename);
-            strcat(makeheader_level, maketmp);
+            strbuf_sprintf(&makeheader_level, " \\\n%s/%s", BEHAVIOR_SUBDIR, beh_filename);
             break;
          }
          default:
             break;
       }
    }
-   fprintf(fmake, "\n\n%s", makeheader_mio0);
-   fprintf(fmake, "\n\n%s", makeheader_level);
-   fprintf(fmake, "\n\n%s", makeheader_music);
+   fprintf(fmake, "\n\n%s", makeheader_mio0.buf);
+   fprintf(fmake, "\n\n%s", makeheader_level.buf);
+   fprintf(fmake, "\n\n%s", makeheader_music.buf);
 
    // dump the proc table
    if (args->gen_proc_table)
@@ -1729,9 +1690,9 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    }
 
    // cleanup
-   free(makeheader_mio0);
-   free(makeheader_level);
-   free(makeheader_music);
+   strbuf_free(&makeheader_mio0);
+   strbuf_free(&makeheader_level);
+   strbuf_free(&makeheader_music);
    fclose(fmake);
    fclose(fasm);
 

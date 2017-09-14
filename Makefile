@@ -46,6 +46,7 @@ SPLIT_SRC_FILES := blast.c \
                    mipsdisasm.c \
                    n64graphics.c \
                    n64split.c \
+                   strutils.c \
                    utils.c \
                    yamlconfig.c
 
