@@ -12,6 +12,7 @@ endif ()
 set(CMAKE_C_FLAGS "${GCC_EXTRA_CFLAGS}")
 set(CMAKE_EXE_LINKER_FLAGS "${GCC_EXTRA_LDFLAGS}")
 
+include_directories(${CMAKE_SOURCE_DIR}/ext)
 include_directories("${PROJECT_SOURCE_DIR}/external/include")
 link_directories("${PROJECT_SOURCE_DIR}/external/lib")
 
@@ -36,9 +37,9 @@ add_executable(sm64geo sm64geo.c utils.c)
 add_executable(mio0 libmio0.c)
 set_target_properties(mio0 PROPERTIES COMPILE_DEFINITIONS "MIO0_STANDALONE")
 
-add_executable(mipsdisasm config.c mipsdisasm.c utils.c)
+add_executable(mipsdisasm mipsdisasm.c utils.c yamlconfig.c)
 set_target_properties(mipsdisasm PROPERTIES COMPILE_DEFINITIONS "MIPSDISASM_STANDALONE")
-target_link_libraries(mipsdisasm capstone config)
+target_link_libraries(mipsdisasm capstone yaml)
 
 add_executable(n64cksum n64cksum.c)
 target_link_libraries(n64cksum sm64)
@@ -47,6 +48,6 @@ add_executable(n64graphics n64graphics.c utils.c)
 set_target_properties(n64graphics PROPERTIES COMPILE_DEFINITIONS "N64GRAPHICS_STANDALONE")
 target_link_libraries(n64graphics png z)
 
-add_executable(n64split blast.c config.c mipsdisasm.c n64split.c n64graphics.c)
-target_link_libraries(n64split sm64 capstone config png z)
+add_executable(n64split blast.c mipsdisasm.c n64split.c n64graphics.c strutils.c yamlconfig.c)
+target_link_libraries(n64split sm64 capstone yaml z)
 
