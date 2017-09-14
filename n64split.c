@@ -1510,10 +1510,11 @@ static void print_usage(void)
 static void print_version(void)
 {
    ERROR("n64split v" N64SPLIT_VERSION ", using:\n"
-         "  capstone %s\n"
-         "  stb_image %s\n"
-         "  libyaml %s\n",
-         disasm_get_version(), graphics_get_version(), config_get_version());
+         "  %s\n"
+         "  %s\n"
+         "  %s\n"
+         "  %s\n",
+         disasm_get_version(), n64graphics_get_read_version(), n64graphics_get_write_version(), config_get_version());
 }
 
 // parse command line arguments

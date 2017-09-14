@@ -663,9 +663,14 @@ ia *pngfile2ia(char *pngname, int *width, int *height)
    return img;
 }
 
-const char *graphics_get_version(void)
+const char *n64graphics_get_read_version(void)
 {
-   return "2.14";
+   return "stb_image 2.17";
+}
+
+const char *n64graphics_get_write_version(void)
+{
+   return "stb_image_write 1.07";
 }
 
 #ifdef N64GRAPHICS_STANDALONE

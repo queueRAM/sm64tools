@@ -664,11 +664,11 @@ void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *
 
 const char *disasm_get_version(void)
 {
-   static char version[16];
+   static char version[32];
    int major, minor;
    (void)cs_version(&major, &minor);
    // TODO: manually keeping track of capstone revision number
-   sprintf(version, "%d.%d.4", major, minor);
+   sprintf(version, "capstone %d.%d.4", major, minor);
    return version;
 }
 

@@ -692,7 +692,7 @@ const char *config_get_version(void)
    static char version[16];
    int major, minor, patch;
    yaml_get_version(&major, &minor, &patch);
-   sprintf(version, "%d.%d.%d", major, minor, patch);
+   sprintf(version, "libyaml %d.%d.%d", major, minor, patch);
    return version;
 }
 
