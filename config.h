@@ -36,6 +36,7 @@ typedef struct _label
 typedef struct _texture
 {
    unsigned int offset;
+   unsigned int palette; // only for CI textures
    unsigned short width;
    unsigned short height;
    unsigned short depth;

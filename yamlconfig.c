@@ -138,6 +138,13 @@ void load_texture(texture *tex, yaml_document_t *doc, yaml_node_t *node)
             case 2: tex->depth = strtoul(val, NULL, 0); break;
             case 3: tex->width = strtoul(val, NULL, 0); break;
             case 4: tex->height = strtoul(val, NULL, 0); break;
+            case 5:
+               if (tex->format != TYPE_TEX_CI) {
+                  ERROR("Error: expected 5 fields for non-CI texture\n");
+               } else {
+                  tex->palette = strtoul(val, NULL, 0); break;
+               }
+               break;
          }
       } else {
          ERROR("Error: non-scalar value in texture sequence\n");
