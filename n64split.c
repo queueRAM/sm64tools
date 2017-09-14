@@ -1179,148 +1179,73 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             break;
          }
          case TYPE_BLAST:
-         {
-            char binfilename[FILENAME_MAX];
-            unsigned char *lut;
-            INFO("Section Blast: %d %s %X-%X\n", sec->subtype, sec->label, sec->start, sec->end);
-            sprintf(outfilename, "%06X", sec->start);
-            sprintf(mio0filename, "%s/%s.bc%d", mio0_dir, outfilename, sec->subtype);
-            write_file(mio0filename, &data[sec->start], sec->end - sec->start);
-            sprintf(start_label, "L%06X", sec->start);
-            fprintf(fasm, "\n.align 4, 0x01\n");
-            fprintf(fasm, ".global %s\n", start_label);
-            fprintf(fasm, "%s:\n", start_label);
-            fprintf(fasm, ".incbin \"%s/%s\"\n", MIO0_SUBDIR, outfilename);
-            fprintf(fasm, "%s_end:\n", start_label);
-            // append to Makefile
-            strbuf_sprintf(&makeheader_mio0, " \\\n$(MIO0_DIR)/%s", outfilename);
-            sprintf(binfilename, "%s/%06X.bin", mio0_dir, sec->start);
-
-            // extract texture data
-            // TODO: make this configurable?
-            switch (sec->subtype) {
-               case 4: lut = &data[0x047480]; break;
-               case 5: lut = &data[0x0998E0]; break; // TODO: fix this
-               default: lut = data; break;
-            }
-            blast_decode_file(mio0filename, sec->subtype, binfilename, lut);
-
-            // extract texture data
-            if (sec->children) {
-               unsigned int offset = 0;
-               fprintf(fmake, "$(MIO0_DIR)/%06X.raw:", sec->start);
-               INFO("Extracting textures from %s\n", sec->label);
-               for (int t = 0; t < sec->child_count; t++) {
-                  texture *tex = &sec->children[t].tex;
-                  w = tex->width;
-                  h = tex->height;
-                  offset = tex->offset;
-                  switch (tex->format) {
-                     case TYPE_TEX_IA:
-                     {
-                        ia *img = file2ia(binfilename, offset, w, h, tex->depth);
-                        if (img) {
-                           sprintf(outfilename, "%06X.0x%05X.ia%d.png", sec->start, offset, tex->depth);
-                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
-                           ia2png(img, w, h, outfilepath);
-                           free(img);
-                           fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
-                        }
-                        break;
-                     }
-                     case TYPE_TEX_I:
-                     {
-                        ia *img = file2i(binfilename, offset, w, h, tex->depth);
-                        if (img) {
-                           sprintf(outfilename, "%s.0x%05X.i%d.png", sec->label, offset, tex->depth);
-                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
-                           ia2png(img, w, h, outfilepath);
-                           free(img);
-                           fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
-                        }
-                        break;
-                     }
-                     case TYPE_TEX_RGBA:
-                     {
-                        rgba *img = file2rgba(binfilename, offset, w, h, tex->depth);
-                        if (img) {
-                           sprintf(outfilename, "%s.0x%05X.rgba%d.png", sec->label, offset, tex->depth);
-                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
-                           rgba2png(img, w, h, outfilepath);
-                           free(img);
-                           fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
-                        }
-                        break;
-                     }
-                     default:
-                        ERROR("Don't know what to do with format %d\n", tex->format);
-                        exit(1);
-                  }
-               }
-               fprintf(fmake, "\n\t$(N64GRAPHICS) $@ $^\n\n");
-            }
-
-            // extract texture data
-            if (args->large_texture) {
-               INFO("Generating large texture for %s\n", sec->label);
-               w = 32;
-               h = filesize(binfilename) / (w * (args->large_texture_depth / 8));
-               rgba *img = file2rgba(binfilename, 0, w, h, args->large_texture_depth);
-               if (img) {
-                  sprintf(outfilename, "%s.ALL.png", sec->label);
-                  sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
-                  rgba2png(img, w, h, outfilepath);
-                  free(img);
-                  fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
-                  img = NULL;
-               }
-            }
-            // touch bin, then mio0 files so 'make' doesn't rebuild them right away
-            touch_file(binfilename);
-            touch_file(mio0filename);
-            break;
-         }
+         case TYPE_GZIP:
          case TYPE_MIO0:
          {
             char binfilename[FILENAME_MAX];
-            INFO("Section MIO0: %s %X-%X\n", sec->label, sec->start, sec->end);
-            if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(outfilename, "%06X.mio0", sec->start);
-            } else {
-               sprintf(outfilename, "%s.mio0", sec->label);
+            char extension[8] = {0};
+            unsigned char *lut;
+            switch (sec->type) {
+               case TYPE_BLAST:
+                  INFO("Section Blast: %d %s %X-%X\n", sec->subtype, sec->label, sec->start, sec->end);
+                  sprintf(extension, "bc%d", sec->subtype);
+                  break;
+               case TYPE_MIO0:
+                  INFO("Section MIO0: %s %X-%X\n", sec->label, sec->start, sec->end);
+                  strcpy(extension, "mio0");
+                  break;
+               case TYPE_GZIP:
+                  INFO("Section GZIP: %s %X-%X\n", sec->label, sec->start, sec->end);
+                  strcpy(extension, "gz");
+                  break;
+               default:
+                  break;
             }
-            sprintf(mio0filename, "%s/%s", mio0_dir, outfilename);
-            write_file(mio0filename, &data[sec->start], sec->end - sec->start);
             if (sec->label == NULL || sec->label[0] == '\0') {
                sprintf(start_label, "L%06X", sec->start);
             } else {
                strcpy(start_label, sec->label);
             }
+            sprintf(outfilename, "%s.%s", start_label, extension);
+            sprintf(binfilename, "%s/%s.bin", mio0_dir, start_label);
+            sprintf(mio0filename, "%s/%s", mio0_dir, outfilename);
+            write_file(mio0filename, &data[sec->start], sec->end - sec->start);
+
             fprintf(fasm, "\n.align 4, 0x01\n");
             fprintf(fasm, ".global %s\n", start_label);
             fprintf(fasm, "%s:\n", start_label);
             fprintf(fasm, ".incbin \"%s/%s\"\n", MIO0_SUBDIR, outfilename);
             fprintf(fasm, "%s_end:\n", start_label);
+
             // append to Makefile
             strbuf_sprintf(&makeheader_mio0, " \\\n$(MIO0_DIR)/%s", outfilename);
-            if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(binfilename, "%s/%06X.bin", mio0_dir, sec->start);
-            } else {
-               sprintf(binfilename, "%s/%s.bin", mio0_dir, sec->label);
-            }
 
-            // extract MIO0 data
-            mio0_decode_file(mio0filename, 0, binfilename);
+            // extract texture data
+            switch (sec->type) {
+               case TYPE_BLAST:
+                  // TODO: make this configurable?
+                  switch (sec->subtype) {
+                     case 4: lut = &data[0x047480]; break;
+                     case 5: lut = &data[0x0998E0]; break; // TODO: fix this
+                     default: lut = data; break;
+                  }
+                  blast_decode_file(mio0filename, sec->subtype, binfilename, lut);
+                  break;
+               case TYPE_MIO0:
+                  mio0_decode_file(mio0filename, 0, binfilename);
+                  break;
+               case TYPE_GZIP:
+                  gzip_decode_file(mio0filename, 0, binfilename);
+                  break;
+               default:
+                  break;
+            }
 
             // extract texture data
             if (sec->children) {
                unsigned int offset = 0;
-               if (sec->label == NULL || sec->label[0] == '\0') {
-                  fprintf(fmake, "$(MIO0_DIR)/%06X.bin:", sec->start);
-               } else {
-                  fprintf(fmake, "$(MIO0_DIR)/%s.bin: ", sec->label);
-               }
-               INFO("Extracting textures from %s\n", sec->label);
+               fprintf(fmake, "$(MIO0_DIR)/%s.bin:", start_label);
+               INFO("Extracting textures from %s\n", start_label);
                for (int t = 0; t < sec->child_count; t++) {
                   texture *tex = &sec->children[t].tex;
                   w = tex->width;
@@ -1331,7 +1256,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      {
                         ia *img = file2ia(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.ia%d.png", sec->label, offset, tex->depth);
+                           sprintf(outfilename, "%s.0x%05X.ia%d.png", start_label, offset, tex->depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);
@@ -1343,7 +1268,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      {
                         ia *img = file2i(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.i%d.png", sec->label, offset, tex->depth);
+                           sprintf(outfilename, "%s.0x%05X.i%d.png", start_label, offset, tex->depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);
@@ -1355,7 +1280,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      {
                         rgba *img = file2rgba(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.rgba%d.png", sec->label, offset, tex->depth);
+                           sprintf(outfilename, "%s.0x%05X.rgba%d.png", start_label, offset, tex->depth);
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            rgba2png(img, w, h, outfilepath);
                            free(img);
@@ -1390,7 +1315,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                               sky_offset += 32*32*2;
                            }
                         }
-                        sprintf(outfilename, "%s.0x%05X.skybox.png", sec->label, offset);
+                        sprintf(outfilename, "%s.0x%05X.skybox.png", start_label, offset);
                         sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                         rgba2png(img, w, h, outfilepath);
                         free(img);
@@ -1399,163 +1324,10 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                      }
                      case TYPE_SM64_COLLISION:
                      {
-                        sprintf(outfilename, "%s.0x%05X.collision.obj", sec->label, offset);
+                        sprintf(outfilename, "%s.0x%05X.collision.obj", start_label, offset);
                         sprintf(outfilepath, "%s/%s", model_dir, outfilename);
                         INFO("Generating collision model %s\n", outfilename);
-                        collision2obj(binfilename, offset, outfilepath, sec->label, args->scale);
-                        break;
-                     }
-                     default:
-                        ERROR("Don't know what to do with format %d\n", tex->format);
-                        exit(1);
-                  }
-               }
-               fprintf(fmake, "\n\t$(N64GRAPHICS) $@ $^\n\n");
-            }
-            if (args->large_texture) {
-               INFO("Generating large texture for %s\n", sec->label);
-               w = 32;
-               h = filesize(binfilename) / (w * (args->large_texture_depth / 8));
-               rgba *img = file2rgba(binfilename, 0, w, h, args->large_texture_depth);
-               if (img) {
-                  sprintf(outfilename, "%s.ALL.png", sec->label);
-                  sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
-                  rgba2png(img, w, h, outfilepath);
-                  free(img);
-                  fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
-                  img = NULL;
-               }
-            }
-            // touch bin, then mio0 files so 'make' doesn't rebuild them right away
-            touch_file(binfilename);
-            touch_file(mio0filename);
-            break;
-         }
-         case TYPE_GZIP:
-         {
-            char binfilename[FILENAME_MAX];
-            INFO("Section GZIP: %s %X-%X\n", sec->label, sec->start, sec->end);
-            if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(outfilename, "%06X.gz", sec->start);
-            } else {
-               sprintf(outfilename, "%s.gz", sec->label);
-            }
-            sprintf(mio0filename, "%s/%s", mio0_dir, outfilename);
-            write_file(mio0filename, &data[sec->start], sec->end - sec->start);
-            if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(start_label, "L%06X", sec->start);
-            } else {
-               strcpy(start_label, sec->label);
-            }
-            fprintf(fasm, "\n.align 4, 0x01\n");
-            fprintf(fasm, ".global %s\n", start_label);
-            fprintf(fasm, "%s:\n", start_label);
-            fprintf(fasm, ".incbin \"%s/%s\"\n", MIO0_SUBDIR, outfilename);
-            fprintf(fasm, "%s_end:\n", start_label);
-            // append to Makefile
-            strbuf_sprintf(&makeheader_mio0, " \\\n$(MIO0_DIR)/%s", outfilename);
-            if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(binfilename, "%s/%06X.raw", mio0_dir, sec->start);
-            } else {
-               sprintf(binfilename, "%s/%s", mio0_dir, sec->label);
-            }
-
-            // extract gzip data
-            gzip_decode_file(mio0filename, 0, binfilename);
-
-            // extract texture data
-            if (sec->children) {
-               split_section *textures = sec->children;
-               int t;
-               unsigned int offset = 0;
-               if (sec->label == NULL || sec->label[0] == '\0') {
-                  fprintf(fmake, "$(MIO0_DIR)/%06X.raw:", sec->start);
-               } else {
-                  fprintf(fmake, "$(MIO0_DIR)/%s: ", sec->label);
-               }
-               INFO("Extracting textures from %s\n", sec->label);
-               for (t = 0; t < sec->child_count; t++) {
-                  texture *tex = &textures[t].tex;
-                  w = tex->width;
-                  h = tex->height;
-                  offset = tex->offset;
-                  switch (tex->format) {
-                     case TYPE_TEX_IA:
-                     {
-                        ia *img = file2ia(binfilename, offset, w, h, tex->depth);
-                        if (img) {
-                           sprintf(outfilename, "%s.0x%05X.ia%d.png", sec->label, offset, tex->depth);
-                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
-                           ia2png(img, w, h, outfilepath);
-                           free(img);
-                           fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
-                        }
-                        break;
-                     }
-                     case TYPE_TEX_I:
-                     {
-                        ia *img = file2i(binfilename, offset, w, h, tex->depth);
-                        if (img) {
-                           sprintf(outfilename, "%s.0x%05X.i%d.png", sec->label, offset, tex->depth);
-                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
-                           ia2png(img, w, h, outfilepath);
-                           free(img);
-                           fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
-                        }
-                        break;
-                     }
-                     case TYPE_TEX_RGBA:
-                     {
-                        rgba *img = file2rgba(binfilename, offset, w, h, tex->depth);
-                        if (img) {
-                           sprintf(outfilename, "%s.0x%05X.rgba%d.png", sec->label, offset, tex->depth);
-                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
-                           rgba2png(img, w, h, outfilepath);
-                           free(img);
-                           fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
-                        }
-                        break;
-                     }
-                     case TYPE_TEX_SKYBOX:
-                     {
-                        // read in grid of MxN 32x32 tiles and save them as M*31xN*31 image
-                        rgba *img;
-                        unsigned int sky_offset = offset;
-                        int m, n;
-                        int tx, ty;
-                        m = w/32;
-                        n = h/32;
-                        img = malloc(w*h*sizeof(rgba));
-                        w -= m; // adjust for overlap
-                        h -= n;
-                        for (ty = 0; ty < n; ty++) {
-                           for (tx = 0; tx < m; tx++) {
-                              rgba *tile = file2rgba(binfilename, sky_offset, 32, 32, tex->depth);
-                              int cx, cy;
-                              for (cy = 0; cy < 31; cy++) {
-                                 for (cx = 0; cx < 31; cx++) {
-                                    int out_off = 31*w*ty + 31*tx + w*cy + cx;
-                                    int in_off = 32*cy+cx;
-                                    img[out_off] = tile[in_off];
-                                 }
-                              }
-                              free(tile);
-                              sky_offset += 32*32*2;
-                           }
-                        }
-                        sprintf(outfilename, "%s.0x%05X.skybox.png", sec->label, offset);
-                        sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
-                        rgba2png(img, w, h, outfilepath);
-                        free(img);
-                        fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
-                        break;
-                     }
-                     case TYPE_SM64_COLLISION:
-                     {
-                        sprintf(outfilename, "%s.0x%05X.collision.obj", sec->label, offset);
-                        sprintf(outfilepath, "%s/%s", model_dir, outfilename);
-                        INFO("Generating collision model %s\n", outfilename);
-                        collision2obj(binfilename, offset, outfilepath, sec->label, args->scale);
+                        collision2obj(binfilename, offset, outfilepath, start_label, args->scale);
                         break;
                      }
                      default:
@@ -1568,12 +1340,12 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
 
             // extract texture data
             if (args->large_texture) {
-               INFO("Generating large texture for %s\n", sec->label);
+               INFO("Generating large texture for %s\n", start_label);
                w = 32;
                h = filesize(binfilename) / (w * (args->large_texture_depth / 8));
                rgba *img = file2rgba(binfilename, 0, w, h, args->large_texture_depth);
                if (img) {
-                  sprintf(outfilename, "%s.ALL.png", sec->label);
+                  sprintf(outfilename, "%s.ALL.png", start_label);
                   sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                   rgba2png(img, w, h, outfilepath);
                   free(img);
@@ -1581,6 +1353,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                   img = NULL;
                }
             }
+            // TODO: write files in correct order to avoid this
             // touch bin, then mio0 files so 'make' doesn't rebuild them right away
             touch_file(binfilename);
             touch_file(mio0filename);
