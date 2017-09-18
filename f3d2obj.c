@@ -279,13 +279,13 @@ static void generate_material_file(arg_config *config, char *mtl_filename, char 
          }
          if (rgba_img != NULL) {
             int ret = rgba2png(rgba_img, t->width, t->height, texture_path);
-            if (ret != 0) {
+            if (ret != 1) {
                ERROR("Error writing to %s: %d\n", texture_filename, ret);
             }
          }
          if (ia_img != NULL) {
             int ret = ia2png(ia_img, t->width, t->height, texture_path);
-            if (ret != 0) {
+            if (ret != 1) {
                ERROR("Error writing to %s: %d\n", texture_filename, ret);
             }
          }
