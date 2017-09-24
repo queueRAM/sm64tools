@@ -52,6 +52,7 @@
 #if defined(_MSC_VER) || defined(__MINGW32__)
   #include <direct.h>
   #define mkdir(DIR_, PERM_) _mkdir(DIR_)
+  #define strcasecmp(A, B) stricmp(A, B)
 #endif
 
 // typedefs

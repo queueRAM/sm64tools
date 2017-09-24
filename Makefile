@@ -22,8 +22,7 @@ CKSUM_SRC_FILES := n64cksum.c
 COMPRESS_SRC_FILES := sm64compress.c
 
 DISASM_SRC_FILES := mipsdisasm.c \
-                    utils.c \
-                    yamlconfig.c
+                    utils.c
 
 EXTEND_SRC_FILES := sm64extend.c
 
@@ -126,7 +125,7 @@ $(MIO0_TARGET): libmio0.c libmio0.h
 	$(CC) $(CFLAGS) -DMIO0_STANDALONE $(LDFLAGS) -o $@ $<
 
 $(DISASM_TARGET): $(DISASM_SRC_FILES)
-	$(CC) $(CFLAGS) -DMIPSDISASM_STANDALONE $^ $(LDFLAGS) -o $@ -lcapstone -lyaml
+	$(CC) $(CFLAGS) -DMIPSDISASM_STANDALONE $^ $(LDFLAGS) -o $@ -lcapstone
 
 $(SPLIT_TARGET): $(SPLIT_OBJ_FILES)
 	$(LD) $(LDFLAGS) -o $@ $^ $(SPLIT_LIBS)

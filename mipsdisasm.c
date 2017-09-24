@@ -4,420 +4,154 @@
 
 #include <capstone/capstone.h>
 
-#include "config.h"
 #include "mipsdisasm.h"
 #include "utils.h"
 
-#define MIPSDISASM_VERSION "0.2"
+#define MIPSDISASM_VERSION "0.2+"
 
-#define DEFAULT_CONFIG "configs/sm64.u.config"
-
-static int known_index(rom_config *config, unsigned int ram_addr)
+// typedefs
+typedef struct
 {
-   int i;
-   for (i = 0; i < config->label_count; i++) {
-      if (ram_addr == config->labels[i].ram_addr) {
-         return i;
-      }
-   }
-   return -1;
-}
+   char name[59];
+   char global;
+   unsigned int vaddr;
+} asm_label;
 
-static int find_local(local_table *locals, unsigned int offset)
+typedef struct
 {
-   int i;
-   for (i = 0; i < locals->count; i++) {
-      if (locals->offsets[i] == offset) {
-         return i;
-      }
-   }
-   return -1;
-}
+   int linked_insn;
+   union
+   {
+      unsigned int linked_value;
+      float linked_float;
+   };
+   int newline;
+} disasm_extra;
 
-static void add_local(local_table *locals, unsigned int offset)
+// hidden disassembler state struct
+typedef struct _disasm_state
 {
-   if (find_local(locals, offset) >= 0) {
-      return;
-   }
-   locals->offsets[locals->count] = offset;
-   locals->count++;
-}
+   asm_label *labels;
+   int label_alloc;
+   int label_count;
 
-static int cmp_local(const void *a, const void *b)
-{
-   const unsigned int *uia = a;
-   const unsigned int *uib = b;
-   return (*uia > *uib) ?  1 :
-          (*uib > *uia) ? -1 : 0;
-}
-
-static void add_proc(proc_table *procs, unsigned int start, unsigned int end)
-{
-   int i;
-   int warning = -1;
-   for (i = 0; i < procs->count; i++) {
-      if (procs->procedures[i].start == start) {
-         return;
-      } else if (start > procs->procedures[i].start && start < procs->procedures[i].end) {
-         warning = i;
-      }
-   }
-   // TODO: workaround for __osExceptionHandler (80327650) and inner asm routines
-   if (warning >= 0 && procs->procedures[warning].start != 0x80327650) {
-      ERROR("Warning: %X in middle of proc %X - %X\n", start, procs->procedures[warning].start, procs->procedures[warning].end);
-   }
-   procs->procedures[procs->count].start = start;
-   procs->procedures[procs->count].end = end;
-   procs->count++;
-}
-
-// collect JALs and local labels for a given procedure
-static void collect_proc_jals(unsigned char *data, long datalen, proc_table *ptbl, int p, rom_config *config)
-{
-#define MAX_LOCALS 256
-#define MAX_BYTES_PER_CALL 1024
-   unsigned int local_offsets[MAX_LOCALS];
-   local_table locals;
    csh handle;
-   cs_insn *insn;
-   unsigned int ram_address;
-   unsigned int rom_offset;
-   unsigned int alloc_size;
-   unsigned int last_label;
-   unsigned int processed;
-   int remaining;
-   int cur_amount;
-   int count;
-   int disassembling;
-   procedure *proc;
+   cs_insn *instructions;
+   disasm_extra *insn_extra;
+   int instruction_count;
 
-   // open capstone disassembler
-   if (cs_open(CS_ARCH_MIPS, CS_MODE_MIPS64 + CS_MODE_BIG_ENDIAN, &handle) != CS_ERR_OK) {
-      ERROR("Error initializing disassembler\n");
-      exit(EXIT_FAILURE);
+   unsigned int vaddr;
+
+   asm_syntax syntax;
+} disasm_state;
+
+// state: disassemble state to search for known label
+// vaddr: virtual address to find
+// returns index in state labels if found, -1 otherwise
+static int label_find(const disasm_state *state, unsigned int vaddr)
+{
+   for (int i = 0; i < state->label_count; i++) {
+      if (state->labels[i].vaddr == vaddr) {
+         return i;
+      }
    }
-   cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
-   cs_option(handle, CS_OPT_SKIPDATA, CS_OPT_ON);
+   return -1;
+}
 
-   proc = &ptbl->procedures[p];
-   ram_address = proc->start;
-   rom_offset = ram_to_rom(config, ram_address);
+// add label to state even if one already exists at that address
+// state: disassemble state to add label
+// vaddr: virtual address of label
+// global: true if global, false if local
+static void label_add(disasm_state *state, const char *name, unsigned int vaddr, char global)
+{
+   if (state->label_count >= state->label_alloc) {
+      state->label_alloc *= 2;
+      state->labels = realloc(state->labels, sizeof(*state->labels) * state->label_alloc);
+   }
+   asm_label *l = &state->labels[state->label_count];
+   strcpy(l->name, name);
+   l->global = global;
+   l->vaddr = vaddr;
+   state->label_count++;
+}
 
-   // find referenced JAL, local labels, and find end marked by last JR or ERET
-   locals.offsets = local_offsets;
-   locals.count = 0;
-
-   // don't try to disassemble if not in ROM bounds
-   if (rom_offset < datalen) {
-      disassembling = 1;
+static int cmp_label(const void *a, const void *b)
+{
+   const asm_label *ala = a;
+   const asm_label *alb = b;
+   // first sort by vaddr, then by global, then by name
+   if (ala->vaddr > alb->vaddr) {
+      return 1;
+   } else if (alb->vaddr > ala->vaddr) {
+      return -1;
    } else {
-      ERROR("Error: unknown ROM mapping for proc %08X (tried %X)\n", ram_address, rom_offset);
-      disassembling = 0;
-   }
-   processed = 0;
-   remaining = 0;
-   last_label = 0;
-   while (disassembling) {
-      cur_amount = MIN(MAX_BYTES_PER_CALL, datalen - rom_offset - processed);
-      count = cs_disasm(handle, &data[rom_offset + processed], cur_amount, ram_address + processed, 0, &insn);
-      if (count > 0) {
-         int i, o;
-         for (i = 0; i < count && disassembling; i++) {
-            if (cs_insn_group(handle, &insn[i], MIPS_GRP_JUMP)) {
-               // all branches and jumps
-               cs_mips *mips = &insn[i].detail->mips;
-               for (o = 0; o < mips->op_count; o++) {
-                  if (mips->operands[o].type == MIPS_OP_IMM)
-                  {
-                     unsigned int sec_offset = (unsigned int)mips->operands[o].imm - ram_address;
-                     add_local(&locals, sec_offset);
-                     if (sec_offset > last_label) {
-                        last_label = sec_offset;
-                     }
-                     if (locals.count > MAX_LOCALS) {
-                        ERROR("Need more than %d locals for %08x\n", MAX_LOCALS, proc->start);
-                     }
-                  }
-               }
-            } else if (insn[i].id == MIPS_INS_JAL || insn[i].id == MIPS_INS_BAL) {
-               unsigned int addr;
-               cs_mips *mips = &insn[i].detail->mips;
-               addr = (unsigned int)mips->operands[0].imm;
-               add_proc(ptbl, addr, 0);
-            }
-
-            // if we encounter B, JR, or ERET past last local label, end disassembly
-            if (processed >= last_label) {
-               switch (insn[i].id) {
-                  case MIPS_INS_B:    remaining = 2; break; // a positive branch would update last_label above
-                  case MIPS_INS_JR:   remaining = 2; break;
-                  case MIPS_INS_ERET: remaining = 1; break;
-                  default: break;
-               }
-            }
-
-            // manually set end
-            if (proc->end) {
-               if (proc->end == ram_address + processed + 4) {
-                  disassembling = 0;
-               }
-            } else {
-               // automatically find terminating instruction
-               if (remaining > 0) {
-                  remaining--;
-                  if (remaining == 0) {
-                     disassembling = 0;
-                  }
-               }
-            }
-            processed += 4;
-         }
-         cs_free(insn, count);
+      if (ala->global > alb->global) {
+         return 1;
+      } else if (alb->global > ala->global) {
+         return -1;
       } else {
-         fprintf(stderr, "ERROR: Failed to disassemble given code!\n");
-         disassembling = 0;
+         return strcmp(ala->name, alb->name);
       }
    }
-
-   // sort labels
-   qsort(locals.offsets, locals.count, sizeof(locals.offsets[0]), cmp_local);
-   // copy labels to procedure
-   alloc_size = locals.count * sizeof(*locals.offsets);
-   proc->locals.offsets = malloc(alloc_size);
-   memcpy(proc->locals.offsets, locals.offsets, alloc_size);
-   proc->locals.count = locals.count;
-   proc->end = ram_address + processed;
-
-   cs_close(&handle);
 }
 
-// call this function with at least one procedure in procs
-static void collect_jals(unsigned char *data, long datalen, proc_table *procs, rom_config *config)
+// try to find a matching LUI for a given register
+static void link_with_lui(disasm_state *state, int offset, unsigned int reg, unsigned int mem_imm)
 {
-   int proc_idx;
-   for (proc_idx = 0; proc_idx < procs->count; proc_idx++) {
-      collect_proc_jals(data, datalen, procs, proc_idx, config);
-   }
-}
-
-static int proc_cmp(const void *a, const void *b)
-{
-   const procedure *pa = a;
-   const procedure *pb = b;
-   return (pa->start > pb->start) ?  1 :
-          (pb->start > pa->start) ? -1 : 0;
-}
-
-// interpret MIPS pseudoinstructions
-// returns number of instructions consumed
-// TODO: memory operations
-// TODO: pseudo-instruction detection: li, la (more cases), bgt, blt
-static int pseudoins_detected(FILE *out, csh handle, cs_insn *insn, int count, rom_config *config)
-{
-   int retVal = 0;
-   int i;
-   int luis;
-   if (count >= 2) {
-      /* lui   $a1, 0x11
-       * lui   $a2, 0x11
-       * addiu $a2, $a2, 0x4750
-       * addiu $a1, $a1, -0x75c0
-       * lui   $t6, 0xa00
-       * lui   $t7, 0x4c0
-       * ori   $t7, $t7, 0x280
-       * ori   $t6, $t6, 0x740
-       */
-      // count leading LUIs
-      luis = 0;
-      while (luis < count/2 && insn[luis].id == MIPS_INS_LUI) {
-         luis++;
-      }
-      // first check for LA wrapped around JAL (LUI/JAL/ADDIU)
-      if (luis == 1 && count >= 3) {
-         unsigned int reg = insn[0].detail->mips.operands[0].reg;
-         if (insn[1].id == MIPS_INS_JAL && insn[2].id == MIPS_INS_ADDIU) {
-            // ensure addiu uses same register
-            if (insn[2].detail->mips.operands[0].reg == reg &&
-                insn[2].detail->mips.operands[1].reg == reg) {
-               char label[128];
-               const char *reg_name;
-               unsigned int jal_addr;
-               unsigned int addr;
-               unsigned int lui_imm;
-               unsigned int addiu_imm;
-               int known_idx;
-               lui_imm = (unsigned int)insn[0].detail->mips.operands[1].imm;
-               addiu_imm = (unsigned int)insn[2].detail->mips.operands[2].imm;
-               jal_addr = (unsigned int)insn[1].detail->mips.operands[0].imm;
-               addr = ((lui_imm << 16) + addiu_imm);
-               fill_addr_label(config, addr, label, -1);
-               reg_name = cs_reg_name(handle, reg);
-               fprintf(out, "  lui   $%s, %%hi(%s) # 0x%X\n", reg_name, label, lui_imm);
-               known_idx = known_index(config, jal_addr);
-               if (known_idx < 0) {
-                  fprintf(out, "  jal   proc_%08X\n", jal_addr);
-               } else {
-                  fprintf(out, "  jal   %s\n", config->labels[known_idx].name);
+#define MAX_LOOKBACK 128
+   cs_insn *insn = state->instructions;
+   // don't attempt to compute addresses for zero offset
+   if (mem_imm != 0x0) {
+      // end search after some sane max number of instructions
+      int end_search = MAX(0, offset - MAX_LOOKBACK);
+      for (int search = offset - 1; search >= end_search; search--) {
+         // use an `if` instead of `case` block to allow breaking out of the `for` loop
+         if (insn[search].id == MIPS_INS_LUI) {
+            unsigned int rd = insn[search].detail->mips.operands[0].reg;
+            if (reg == rd) {
+               unsigned int lui_imm = (unsigned int)insn[search].detail->mips.operands[1].imm;
+               unsigned int addr = ((lui_imm << 16) + mem_imm);
+               state->insn_extra[search].linked_insn = offset;
+               state->insn_extra[search].linked_value = addr;
+               state->insn_extra[offset].linked_insn = search;
+               state->insn_extra[offset].linked_value = addr;
+               // if not ORI, create global data label if one does not exist
+               if (insn[offset].id != MIPS_INS_ORI) {
+                  int label = label_find(state, addr);
+                  if (label < 0) {
+                     char label_name[32];
+                     sprintf(label_name, "D_%08X", addr);
+                     label_add(state, label_name, addr, 1);
+                  }
                }
-               fprintf(out, "  addiu $%s, $%s, %%lo(%s) # 0x%X", reg_name, reg_name, label, addiu_imm & 0xFFFF);
-               return 3; // consume LUI/JAL/ADDIU
+               break;
             }
-         }
-      }
-      if (luis > 0 && 2*luis <= count) {
-         char label[128];
-         unsigned int addr[16]; // some sane max
-         // verify trailing ADDIUs, ORIs, or Loads
-         for (i = 0; i < luis; i++) {
-            int rev = 2*luis - i - 1;
-            unsigned int reg = insn[i].detail->mips.operands[0].reg;
-            switch(insn[rev].id) {
-               case MIPS_INS_ADDIU:
-               case MIPS_INS_ORI:
-                  if (reg == insn[rev].detail->mips.operands[0].reg) {
-                     addr[i] = (unsigned int)((insn[i].detail->mips.operands[1].imm << 16)
-                                             + insn[rev].detail->mips.operands[2].imm);
-                  } else {
-                     return 0;
-                  }
-                  break;
-               case MIPS_INS_LW:
-               case MIPS_INS_LH:
-               case MIPS_INS_LHU:
-               case MIPS_INS_LB:
-               case MIPS_INS_LBU:
-                  if (reg == insn[rev].detail->mips.operands[0].reg &&
-                      reg == insn[rev].detail->mips.operands[1].mem.base) {
-                     addr[i] = (unsigned int)((insn[i].detail->mips.operands[1].imm << 16)
-                                             + insn[rev].detail->mips.operands[1].mem.disp);
-                  } else {
-                     return 0;
-                  }
-                  break;
-               default:
-                  return 0;
+         } else if (insn[search].id == MIPS_INS_LW ||
+                    insn[search].id == MIPS_INS_LD ||
+                    insn[search].id == MIPS_INS_ADDIU ||
+                    insn[search].id == MIPS_INS_ADD ||
+                    insn[search].id == MIPS_INS_SUB ||
+                    insn[search].id == MIPS_INS_SUBU) {
+            unsigned int rd = insn[search].detail->mips.operands[0].reg;
+            if (reg == rd) {
+               // ignore: reg is pointer, offset is probably struct data member
+               break;
             }
-         }
-         for (i = 0; i < luis; i++) {
-            int rev = 2*luis - i - 1;
-            int type;
-            // TODO: this isn't very smart to guess start/end based on register
-            switch (insn[i].detail->mips.operands[0].reg) {
-               case MIPS_REG_A1: type = fill_addr_label(config, addr[i], label, 0); break;
-               case MIPS_REG_A2: type = fill_addr_label(config, addr[i], label, 1); break;
-               default:          type = fill_addr_label(config, addr[i], label, -1); break;
-            }
-            // looks like all the ADDIU cases are addresses and ORI are immediates
-            if (type == 1) {
-               fprintf(out, "  la    $%s, %s # %s %s/%s %s",
-                     cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
-                     label, insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
-            } else if (MIPS_INS_ORI == insn[rev].id) {
-               fprintf(out, "  li    $%s, %s # %s %s/%s %s",
-                     cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
-                     label, insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
-            } else if (MIPS_INS_ADDIU == insn[rev].id) {
-               fprintf(out, "  la    $%s, %s # %s %s/%s %s",
-                     cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
-                     label, insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
-            } else {
-               fprintf(out, "  %-5s $%s, 0x%x # %s %s/%s %s", insn[rev].mnemonic,
-                     cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
-                     addr[i], insn[i].mnemonic, insn[i].op_str, insn[rev].mnemonic, insn[rev].op_str);
-            }
-            if (i < (luis-1)) {
-               fprintf(out, "\n");
-            }
-         }
-         retVal = 2*luis;
-      }
-   }
-   return retVal;
-}
-
-// TODO: the hint is generated based on register a1/a2 = begin/end
-int fill_addr_label(rom_config *config, unsigned int addr, char *label, int hint)
-{
-   int i;
-   // check for RAM addresses
-   if (addr >= 0x80000000) {
-      // first check RAM blocks
-      for (i = 0; i < config->ram_count; i++) {
-         if (config->ram_table[3*i] == addr) {
-            sprintf(label, "0x%X", addr);
-            return 0;
-         }
-      }
-      // second check RAM labels
-      for (i = 0; i < config->label_count; i++) {
-         if (config->labels[i].ram_addr == addr) {
-            sprintf(label, "%s", config->labels[i].name);
-            return 0;
-         }
-      }
-   }
-   if (addr >= 0x13000000 && addr < 0x14000000) {
-      split_section *sec_beh = NULL;
-      for (i = 0; i < config->section_count; i++) {
-         if (config->sections[i].type == TYPE_SM64_BEHAVIOR) {
-            sec_beh = &config->sections[i];
+         } else if (insn[search].id == MIPS_INS_JR &&
+               insn[search].detail->mips.operands[0].reg == MIPS_REG_RA) {
+            // stop looking when previous `jr ra` is hit
             break;
          }
       }
-      if (sec_beh) {
-         split_section *beh = sec_beh->children;
-         unsigned int offset = addr & 0xFFFFFF;
-         for (i = 0; i < sec_beh->child_count; i++) {
-            if (offset == beh[i].start) {
-               sprintf(label, "%s", beh[i].label);
-               return 1;
-            }
-         }
-      }
    }
-   // check for ROM offsets
-   switch (hint) {
-      case 0:
-         for (i = 0; i < config->section_count; i++) {
-            // TODO: hack until mario_animation gets moved or AT() is used
-            if (config->sections[i].start == addr && addr != 0x4EC000) {
-               if (config->sections[i].label[0] != '\0') {
-                  sprintf(label, "%s", config->sections[i].label);
-                  return 0;
-               }
-            }
-         }
-         break;
-      case 1:
-         for (i = 0; i < config->section_count; i++) {
-            if (config->sections[i].end == addr) {
-               if (config->sections[i].label[0] != '\0') {
-                  sprintf(label, "%s_end", config->sections[i].label);
-                  return 0;
-               }
-            }
-         }
-         break;
-      default:
-         break;
-   }
-   sprintf(label, "0x%08X", addr);
-   return 0;
 }
 
-unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, procedure *proc, rom_config *config, int merge_pseudo)
+// disassemble a block of code and collect JALs and local labels
+static void disassemble_block(unsigned char *data, size_t data_len, unsigned int vaddr, disasm_state *state, int merge_pseudo)
 {
-   char sec_name[64];
    csh handle;
    cs_insn *insn;
-   unsigned int ram_address;
-   unsigned int rom_offset;
-   unsigned int length;
-   unsigned int processed;
-   unsigned int cur_amount;
    int count;
-   int disassembling;
-   int known_idx;
 
    // open capstone disassembler
    if (cs_open(CS_ARCH_MIPS, CS_MODE_MIPS64 + CS_MODE_BIG_ENDIAN, &handle) != CS_ERR_OK) {
@@ -427,238 +161,339 @@ unsigned int disassemble_proc(FILE *out, unsigned char *data, long datalen, proc
    cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
    cs_option(handle, CS_OPT_SKIPDATA, CS_OPT_ON);
 
-   ram_address = proc->start;
-   rom_offset = ram_to_rom(config, ram_address);
-   length = proc->end - proc->start;
-
-   // construct procedure label
-   known_idx = known_index(config, ram_address);
-   if (known_idx < 0) {
-      sprintf(sec_name, "proc_%08X", ram_address);
-   } else {
-      sprintf(sec_name, "%s", config->labels[known_idx].name);
-   }
-
-   // perform disassembly
-   disassembling = 1;
-   processed = 0;
-   fprintf(out, "\n%s:\n", sec_name);
-   while (disassembling) {
-      int consumed;
-      cur_amount = MIN(MAX_BYTES_PER_CALL, length - processed);
-      cur_amount = MIN(cur_amount, datalen - rom_offset - processed);
-      count = cs_disasm(handle, &data[rom_offset + processed], cur_amount, ram_address + processed, 0, &insn);
-      if (count > 0) {
-         int i, o;
-
-         for (i = 0; i < count && disassembling; i++) {
-            // handle redirect jump instruction immediates
-            int ll;
-            // TODO: workaround for __osEnqueueThread, __osPopThread, __osDispatchThread
-            switch (ram_address + processed) {
-               case 0x80327B98: fprintf(out, "# end __osExceptionHandler\n\n"
-                                             "proc_80327B98:\n"); break;
-               case 0x80327C4C: fprintf(out, "# end proc_80327B98\n\n"); break;
-               case 0x80327C80: fprintf(out, "\n__osEnqueueAndYield:\n"); break;
-               case 0x80327D10: fprintf(out, "# end __osEnqueueAndYield\n\n"
-                                             "__osEnqueueThread:\n"); break;
-               case 0x80327D58: fprintf(out, "# end __osEnqueueThread\n\n"
-                                             "__osPopThread:\n"); break;
-               case 0x80327D68: fprintf(out, "# end __osPopThread\n\n"
-                                             "__osDispatchThread:\n"); break;
-               default: break;
-            }
-            ll = find_local(&proc->locals, processed);
-            if (ll >= 0) {
-               fprintf(out, ".L%s_%X:\n", sec_name, processed);
-            }
-            if (merge_pseudo) {
-               consumed = pseudoins_detected(out, handle, &insn[i], count-1, config);
+   count = cs_disasm(handle, data, data_len, vaddr, 0, &insn);
+   if (count > 0) {
+      state->instructions = insn;
+      state->instruction_count = count;
+      state->handle = handle;
+      state->vaddr = vaddr;
+      state->insn_extra = calloc(count, sizeof(*state->insn_extra));
+      for (int i = 0; i < count; i++) {
+         cs_mips *mips = &insn[i].detail->mips;
+         state->insn_extra[i].linked_insn = -1;
+         if (cs_insn_group(handle, &insn[i], MIPS_GRP_JUMP)) {
+            if (insn[i].id == MIPS_INS_JR || insn[i].id == MIPS_INS_JALR) {
+               if (insn[i].detail->mips.operands[0].reg == MIPS_REG_RA &&  i + 2 < count) {
+                  state->insn_extra[i + 2].newline = 1;
+               }
             } else {
-               consumed = 0;
-            }
-            if (consumed > 0) {
-               i += (consumed-1);
-               processed += (consumed-1) * 4;
-            } else if (insn[i].id == MIPS_INS_INVALID) {
-               unsigned char *in = &data[rom_offset+processed];
-               fprintf(out, ".byte 0x%02X, 0x%02X, 0x%02X, 0x%02X # Invalid: %X",
-                     in[0], in[1], in[2], in[3], ram_address + processed);
-            } else {
-               fprintf(out, "/* %06X %08X %08X */", rom_offset + processed, ram_address + processed, read_u32_be(&data[rom_offset + processed]));
-               fprintf(out, "  %-5s ", insn[i].mnemonic);
-               if (cs_insn_group(handle, &insn[i], MIPS_GRP_JUMP)) {
-                  cs_mips *mips = &insn[i].detail->mips;
-                  for (o = 0; o < mips->op_count; o++) {
-                     if (o > 0) {
-                        fprintf(out, ", ");
-                     }
-                     switch (mips->operands[o].type) {
-                        case MIPS_OP_REG:
-                           fprintf(out, "$%s", cs_reg_name(handle, mips->operands[o].reg));
-                           break;
-                        case MIPS_OP_IMM:
-                        {
-                           unsigned int sec_offset = (unsigned int)mips->operands[o].imm - ram_address;
-                           fprintf(out, ".L%s_%X", sec_name, sec_offset);
-                           break;
+               // all branches and jumps
+               for (int o = 0; o < mips->op_count; o++) {
+                  if (mips->operands[o].type == MIPS_OP_IMM)
+                  {
+                     char label_name[32];
+                     unsigned int branch_target = (unsigned int)mips->operands[o].imm;
+                     // create label if one does not exist
+                     int label = label_find(state, branch_target);
+                     if (label < 0) {
+                        switch (state->syntax) {
+                           case ASM_GAS:    sprintf(label_name, ".L%08X", branch_target); break;
+                           case ASM_ARMIPS: sprintf(label_name, "@L%08X", branch_target); break;
                         }
-                        default:
-                           break;
+                        label_add(state, label_name, branch_target, 0);
                      }
                   }
-               } else if (insn[i].id == MIPS_INS_JAL || insn[i].id == MIPS_INS_BAL) {
-                  unsigned int addr;
-                  cs_mips *mips = &insn[i].detail->mips;
-                  addr = (unsigned int)mips->operands[0].imm;
-                  known_idx = known_index(config, addr);
-                  if (known_idx < 0) {
-                     fprintf(out, "proc_%08X", addr);
-                  } else {
-                     fprintf(out, "%s", config->labels[known_idx].name);
-                  }
-               } else if (insn[i].id == MIPS_INS_MTC0 || insn[i].id == MIPS_INS_MFC0) {
-                  // workaround bug in capstone/LLVM
-                  unsigned char *in = &data[rom_offset+processed];
-                  unsigned char rd;
-                  cs_mips *mips = &insn[i].detail->mips;
-                  // 31-24 23-16 15-8 7-0
-                  // 0     1     2    3
-                  //       31-26  25-21 20-16 15-11 10-0
-                  // mfc0: 010000 00000   rt    rd  00000000000
-                  // mtc0: 010000 00100   rt    rd  00000000000
-                  // rt = in[1] & 0x1F;
-                  rd = (in[2] & 0xF8) >> 3;
-                  fprintf(out, "$%s, $%d # ", cs_reg_name(handle, mips->operands[0].reg), rd);
-                  fprintf(out, "%02X%02X%02X%02X", in[0], in[1], in[2], in[3]);
-                  fprintf(out, " %s", insn[i].op_str);
-               } else if (insn[i].id == MIPS_INS_SW || insn[i].id == MIPS_INS_SH ||
-                          insn[i].id == MIPS_INS_SB || insn[i].id == MIPS_INS_SWC1) {
-                  unsigned int reg = insn[i].detail->mips.operands[1].mem.base;
-                  unsigned int sw_imm = (unsigned int)insn[i].detail->mips.operands[1].mem.disp;
-                  int lui;
-                  consumed = 0;
-                  // don't attempt to compute addresses for zero offset
-                  if (sw_imm != 0x0) {
-                     for (lui = i - 1; lui >= 0; lui--) {
-                        if (insn[lui].id == MIPS_INS_LUI) {
-                           unsigned int lui_reg = insn[lui].detail->mips.operands[0].reg;
-                           if (reg == lui_reg) {
-                              char label[256];
-                              unsigned int lui_imm = (unsigned int)insn[lui].detail->mips.operands[1].imm;
-                              unsigned int addr = ((lui_imm << 16) + sw_imm);
-                              fill_addr_label(config, addr, label, -1);
-                              fprintf(out, "$%s, %%lo(%s)($%s) # ",
-                                    cs_reg_name(handle, insn[i].detail->mips.operands[0].reg),
-                                    label, cs_reg_name(handle, reg));
-                              consumed = 1;
-                              break;
-                           }
-                        } else if (insn[lui].id == MIPS_INS_LW) {
-                           unsigned int lw_reg = insn[lui].detail->mips.operands[0].reg;
-                           if (reg == lw_reg) {
-                              break;
-                           }
-                        }
-                     }
-                  }
-                  fprintf(out, "%s", insn[i].op_str);
-               } else {
-                  fprintf(out, "%s", insn[i].op_str);
                }
             }
-            fprintf(out, "\n");
-            processed += 4;
+         } else if (insn[i].id == MIPS_INS_JAL || insn[i].id == MIPS_INS_BAL) {
+            unsigned int jal_target  = (unsigned int)mips->operands[0].imm;
+            // create label if one does not exist
+            if (label_find(state, jal_target) < 0) {
+               char label_name[32];
+               sprintf(label_name, "func_%08X", jal_target);
+               label_add(state, label_name, jal_target, 1);
+            }
          }
-         cs_free(insn, count);
-      } else {
-         fprintf(stderr, "ERROR: Failed to disassemble given code!\n");
-         disassembling = 0;
-      }
 
-      if (processed >= length) {
-         disassembling = 0;
-      }
-   }
-
-   fprintf(out, "# end %s\n", sec_name);
-
-   cs_close(&handle);
-
-   return ram_address + processed;
-}
-
-unsigned int ram_to_rom(rom_config *config, unsigned int ram_addr)
-{
-   int i;
-   for (i = 0; i < config->ram_count; i++) {
-      if (ram_addr >= config->ram_table[3*i] && ram_addr <= config->ram_table[3*i+1]) {
-         return ram_addr - config->ram_table[3*i+2];
-      }
-   }
-   return ram_addr;
-}
-
-unsigned int rom_to_ram(rom_config *config, unsigned int rom_addr)
-{
-   int i;
-   for (i = 0; i < config->ram_count; i++) {
-      unsigned int offset = config->ram_table[3*i+2];
-      unsigned int start = config->ram_table[3*i] - offset;
-      unsigned int end   = config->ram_table[3*i+1] - offset;
-      if (rom_addr >= start && rom_addr <= end) {
-         return rom_addr + offset;
-      }
-   }
-   return rom_addr;
-}
-
-void mipsdisasm_add_procs(proc_table *procs, rom_config *config, long file_len)
-{
-   unsigned int ram_address;
-   unsigned int rom_offset;
-   unsigned int end_address;
-   int i;
-   for (i = 0; i < config->label_count; i++) {
-      ram_address = config->labels[i].ram_addr;
-      end_address = config->labels[i].end_addr;
-      rom_offset = ram_to_rom(config, ram_address);
-      if (rom_offset < file_len) {
-         add_proc(procs, ram_address, end_address);
-      }
-   }
-}
-
-void mipsdisasm_pass1(unsigned char *data, long datalen, proc_table *procs, rom_config *config)
-{
-   // collect all JALs
-   collect_jals(data, datalen, procs, config);
-
-   // sort procedures
-   qsort(procs->procedures, procs->count, sizeof(procs->procedures[0]), proc_cmp);
-}
-
-void mipsdisasm_pass2(FILE *out, unsigned char *data, long datalen, proc_table *procs, rom_config *config, int merge)
-{
-   // disassemble all the procedures
-   unsigned int ram_address;
-   unsigned int rom_offset;
-   unsigned int last_end = 0xFFFFFFFF;
-   int proc_idx = 0;
-   while (proc_idx < procs->count) {
-      ram_address = procs->procedures[proc_idx].start;
-      rom_offset = ram_to_rom(config, ram_address);
-      if (rom_offset < datalen) {
-         if (ram_address > last_end) {
-            fprintf(out, "\n# missing section %X-%X (%06X-%06X) [%X]\n",
-                  last_end, ram_address, ram_to_rom(config, last_end), ram_to_rom(config, ram_address), ram_address - last_end);
+         if (merge_pseudo) {
+            switch (insn[i].id) {
+               // find floating point LI
+               case MIPS_INS_MTC1:
+               {
+                  unsigned int rt = insn[i].detail->mips.operands[0].reg;
+                  for (int s = i - 1; s >= 0; s--) {
+                     if (insn[s].id == MIPS_INS_LUI && insn[s].detail->mips.operands[0].reg == rt) {
+                        unsigned int lui_imm = (unsigned int)insn[s].detail->mips.operands[1].imm;
+                        lui_imm <<= 16;
+                        float f = *((float*)&lui_imm);
+                        // link up the LUI with this instruction and the float
+                        state->insn_extra[s].linked_insn = i;
+                        state->insn_extra[s].linked_float = f;
+                        // rewrite LUI instruction to be LI
+                        insn[s].id = MIPS_INS_LI;
+                        strcpy(insn[s].mnemonic, "li");
+                        break;
+                     } else if (insn[s].id == MIPS_INS_LW ||
+                                insn[s].id == MIPS_INS_LD ||
+                                insn[s].id == MIPS_INS_LH ||
+                                insn[s].id == MIPS_INS_LHU ||
+                                insn[s].id == MIPS_INS_LB ||
+                                insn[s].id == MIPS_INS_LBU ||
+                                insn[s].id == MIPS_INS_ADDIU ||
+                                insn[s].id == MIPS_INS_ADD ||
+                                insn[s].id == MIPS_INS_SUB ||
+                                insn[s].id == MIPS_INS_SUBU) {
+                        unsigned int rd = insn[s].detail->mips.operands[0].reg;
+                        if (rt == rd) {
+                           break;
+                        }
+                     } else if (insn[s].id == MIPS_INS_JR &&
+                                insn[s].detail->mips.operands[0].reg == MIPS_REG_RA) {
+                        // stop looking when previous `jr ra` is hit
+                        break;
+                     }
+                  }
+                  break;
+               }
+               case MIPS_INS_SD:
+               case MIPS_INS_SW:
+               case MIPS_INS_SH:
+               case MIPS_INS_SB:
+               case MIPS_INS_LB:
+               case MIPS_INS_LBU:
+               case MIPS_INS_LD:
+               case MIPS_INS_LDL:
+               case MIPS_INS_LDR:
+               case MIPS_INS_LH:
+               case MIPS_INS_LHU:
+               case MIPS_INS_LW:
+               case MIPS_INS_LWU:
+               {
+                  unsigned int mem_rs = insn[i].detail->mips.operands[1].mem.base;
+                  unsigned int mem_imm = (unsigned int)insn[i].detail->mips.operands[1].mem.disp;
+                  link_with_lui(state, i, mem_rs, mem_imm);
+                  break;
+               }
+               case MIPS_INS_ADDIU:
+               case MIPS_INS_ORI:
+               {
+                  unsigned int rd = insn[i].detail->mips.operands[0].reg;
+                  unsigned int rs = insn[i].detail->mips.operands[1].reg;
+                  int64_t imm = insn[i].detail->mips.operands[2].imm;
+                  if (rs == MIPS_REG_ZERO) { // becomes LI
+                     insn[i].id = MIPS_INS_LI;
+                     strcpy(insn[i].mnemonic, "li");
+                     // TODO: is there allocation for this?
+                     sprintf(insn[i].op_str, "$%s, %ld", cs_reg_name(handle, rd), imm);
+                  } else if (rd == rs) { // only look for LUI if rd and rs are the same
+                     link_with_lui(state, i, rs, (unsigned int)imm);
+                  }
+                  break;
+               }
+            }
          }
-         disassemble_proc(out, data, datalen, &procs->procedures[proc_idx], config, merge);
-      } else {
-         ERROR("%s:%d: rom_offset >= datalen\n", __FILE__, __LINE__);
       }
-      last_end = procs->procedures[proc_idx].end;
-      proc_idx++;
+   } else {
+      ERROR("Error: Failed to disassemble 0x%X bytes of code at 0x%08X\n", (unsigned int)data_len, vaddr);
+   }
+}
+
+disasm_state *disasm_state_alloc(void)
+{
+   disasm_state *dstate = malloc(sizeof(*dstate));
+   dstate->label_alloc = 1024;
+   dstate->label_count = 0;
+   dstate->labels = malloc(sizeof(*dstate->labels) * dstate->label_alloc);
+   dstate->instructions = NULL;
+   dstate->instruction_count = 0;
+   return dstate;
+}
+
+void disasm_state_free(disasm_state *state)
+{
+   if (state) {
+      if (state->insn_extra) {
+         free(state->insn_extra);
+         state->insn_extra = NULL;
+      }
+      if (state->instructions) {
+         cs_free(state->instructions, state->instruction_count);
+         state->instructions = NULL;
+      }
+      cs_close(&state->handle);
+   }
+}
+
+disasm_state *mipsdisasm_pass1(unsigned char *data, size_t data_len, unsigned int vaddr, asm_syntax syntax, int merge_pseudo, disasm_state *state)
+{
+   if (state == NULL) {
+      state = disasm_state_alloc();
+   }
+   state->syntax = syntax;
+
+   // collect all branch and jump targets
+   disassemble_block(data, data_len, vaddr, state, merge_pseudo);
+
+   // sort labels
+   qsort(state->labels, state->label_count, sizeof(state->labels[0]), cmp_label);
+
+   return state;
+}
+
+void mipsdisasm_pass2(FILE *out, disasm_state *state)
+{
+   unsigned int vaddr = state->vaddr;
+   int label_idx = 0;
+   int label;
+   // skip labels before this section
+   while ( (label_idx < state->label_count) && (vaddr > state->labels[label_idx].vaddr) ) {
+      label_idx++;
+   }
+   for (int i = 0; i < state->instruction_count; i++) {
+      cs_insn *insn = &state->instructions[i];
+      cs_mips *mips = &insn->detail->mips;
+      // newline between functions
+      if (state->insn_extra[i].newline) {
+         fprintf(out, "\n");
+      }
+      // insert all labels at this address
+      while ( (label_idx < state->label_count) && (vaddr == state->labels[label_idx].vaddr) ) {
+         fprintf(out, "%s:\n", state->labels[label_idx].name);
+         label_idx++;
+      }
+      // TODO: ROM offset?
+      fprintf(out, "/* %08X %02X%02X%02X%02X */  ", vaddr, insn->bytes[0], insn->bytes[1], insn->bytes[2], insn->bytes[3]);
+      if (cs_insn_group(state->handle, insn, MIPS_GRP_JUMP)) {
+         fprintf(out, "%-5s ", insn->mnemonic);
+         for (int o = 0; o < mips->op_count; o++) {
+            if (o > 0) {
+               fprintf(out, ", ");
+            }
+            switch (mips->operands[o].type) {
+               case MIPS_OP_REG:
+                  fprintf(out, "$%s", cs_reg_name(state->handle, mips->operands[o].reg));
+                  break;
+               case MIPS_OP_IMM:
+               {
+                  unsigned int branch_target = (unsigned int)mips->operands[o].imm;
+                  label = label_find(state, branch_target);
+                  fprintf(out, state->labels[label].name);
+                  break;
+               }
+               default:
+                  break;
+            }
+         }
+         fprintf(out, "\n");
+      } else if (insn->id == MIPS_INS_JAL || insn->id == MIPS_INS_BAL) {
+         unsigned int jal_target = (unsigned int)mips->operands[0].imm;
+         label = label_find(state, jal_target);
+         fprintf(out, "%-5s ", insn->mnemonic);
+         if (label >= 0) {
+            fprintf(out, "%s\n", state->labels[label].name);
+         }
+      } else if (insn->id == MIPS_INS_MTC0 || insn->id == MIPS_INS_MFC0) {
+         // workaround bug in capstone/LLVM
+         unsigned char rd;
+         // 31-24 23-16 15-8 7-0
+         // 0     1     2    3
+         //       31-26  25-21 20-16 15-11 10-0
+         // mfc0: 010000 00000   rt    rd  00000000000
+         // mtc0: 010000 00100   rt    rd  00000000000
+         //       010000 00100 00000 11101 000 0000 0000
+         // rt = insn->bytes[1] & 0x1F;
+         rd = (insn->bytes[2] & 0xF8) >> 3;
+         fprintf(out, "%-5s $%s, $%d\n", insn->mnemonic,
+                 cs_reg_name(state->handle, mips->operands[0].reg), rd);
+      } else {
+         int linked_insn = state->insn_extra[i].linked_insn;
+         if (linked_insn >= 0) {
+            if (insn->id == MIPS_INS_LI) {
+               // assume this is LUI converted to LI for matched MTC1
+               fprintf(out, "%-5s ", insn->mnemonic);
+               switch (state->syntax) {
+                  case ASM_GAS:
+                     fprintf(out, "$%s, 0x%04X0000 # %f\n",
+                           cs_reg_name(state->handle, mips->operands[0].reg),
+                           (unsigned int)mips->operands[1].imm,
+                           state->insn_extra[i].linked_float);
+                     break;
+                  case ASM_ARMIPS:
+                     fprintf(out, "$%s, 0x%04X0000 // %f\n",
+                           cs_reg_name(state->handle, mips->operands[0].reg),
+                           (unsigned int)mips->operands[1].imm,
+                           state->insn_extra[i].linked_float);
+                     break;
+                  // TODO: this is ideal, but it doesn't work exactly for all floats since some emit imprecise float strings
+                  /*
+                     fprintf(out, "$%s, %f // 0x%04X\n",
+                           cs_reg_name(state->handle, mips->operands[0].reg),
+                           state->insn_extra[i].linked_float,
+                           (unsigned int)mips->operands[1].imm);
+                     break;
+                   */
+               }
+            } else if (insn->id == MIPS_INS_LUI) {
+               label = label_find(state, state->insn_extra[i].linked_value);
+               // assume matched LUI with ADDIU/LW/SW etc.
+               switch (state->syntax) {
+                  case ASM_GAS:
+                     // TODO: this isn't exactly true for LI -> LUI/ORI pair
+                     fprintf(out, "%-5s $%s, %%hi(%s)\n", insn->mnemonic,
+                           cs_reg_name(state->handle, mips->operands[0].reg),
+                           state->labels[label].name);
+                     break;
+                  case ASM_ARMIPS:
+                     switch (state->instructions[linked_insn].id) {
+                        case MIPS_INS_ADDIU:
+                           fprintf(out, "%-5s $%s, %s // %s %s\n", "la.u",
+                                 cs_reg_name(state->handle, mips->operands[0].reg),
+                                 state->labels[label].name,
+                                 insn->mnemonic, insn->op_str);
+                           break;
+                        case MIPS_INS_ORI:
+                           fprintf(out, "%-5s $%s, 0x%08X // %s %s\n", "li.u",
+                                 cs_reg_name(state->handle, mips->operands[0].reg),
+                                 state->insn_extra[i].linked_value,
+                                 insn->mnemonic, insn->op_str);
+                           break;
+                        default: // LW/SW/etc.
+                           fprintf(out, "%-5s $%s, hi(%s)\n", insn->mnemonic,
+                                 cs_reg_name(state->handle, mips->operands[0].reg),
+                                 state->labels[label].name);
+                           break;
+                     }
+                     break;
+               }
+            } else if (insn->id == MIPS_INS_ADDIU || insn->id == MIPS_INS_ORI) {
+               label = label_find(state, state->insn_extra[i].linked_value);
+               switch (state->syntax) {
+                  case ASM_GAS:
+                     // TODO: this isn't exactly true for LI -> LUI/ORI pair
+                     fprintf(out, "%-5s $%s, %%lo(%s)\n", insn->mnemonic,
+                           cs_reg_name(state->handle, mips->operands[0].reg),
+                           state->labels[label].name);
+                     break;
+                  case ASM_ARMIPS:
+                     switch (insn->id) {
+                        case MIPS_INS_ADDIU:
+                           fprintf(out, "%-5s $%s, %s // %s %s\n", "la.l",
+                                 cs_reg_name(state->handle, mips->operands[0].reg),
+                                 state->labels[label].name,
+                                 insn->mnemonic, insn->op_str);
+                           break;
+                        case MIPS_INS_ORI:
+                           fprintf(out, "%-5s $%s, 0x%08X // %s %s\n", "li.l",
+                                 cs_reg_name(state->handle, mips->operands[0].reg),
+                                 state->insn_extra[i].linked_value,
+                                 insn->mnemonic, insn->op_str);
+                           break;
+                     }
+                     break;
+               }
+            } else {
+               label = label_find(state, state->insn_extra[i].linked_value);
+               fprintf(out, "%-5s $%s, %slo(%s)($%s)\n", insn->mnemonic,
+                     cs_reg_name(state->handle, mips->operands[0].reg),
+                     state->syntax == ASM_GAS ? "%" : "",
+                     state->labels[label].name,
+                     cs_reg_name(state->handle, mips->operands[1].reg));
+            }
+         } else {
+            fprintf(out, "%-5s %s\n", insn->mnemonic, insn->op_str);
+         }
+      }
+      vaddr += 4;
    }
 }
 
@@ -675,91 +510,106 @@ const char *disasm_get_version(void)
 #ifdef MIPSDISASM_STANDALONE
 typedef struct
 {
-   unsigned int *offsets;
-   int offset_count;
+   unsigned int start;
+   unsigned int length;
+   unsigned int vaddr;
+} range;
+
+typedef struct
+{
+   range *ranges;
+   int range_count;
+   unsigned int vaddr;
    char *input_file;
    char *output_file;
-   char *config_file;
    int merge_pseudo;
+   asm_syntax syntax;
 } arg_config;
 
 static arg_config default_args =
 {
-   NULL,
-   0,
-   NULL,
-   NULL,
-   DEFAULT_CONFIG,
-   0
+   NULL, // ranges
+   0,    // range_count
+   0x0,  // vaddr
+   NULL, // input_file
+   NULL, // output_file
+   0,    // merge_pseudo
+   ASM_GAS, // GNU as
 };
-
-static void generate_report(proc_table *procs, rom_config *config)
-{
-   unsigned int cur_start;
-   unsigned int last_end;
-   int i;
-   cur_start = procs->procedures[0].start;
-   last_end = procs->procedures[0].end;
-   for (i = 1; i < procs->count; i++) {
-      if (procs->procedures[i].start > last_end + 0x1000) {
-         INFO("   (0x%06X, 0x%06X, \"asm\"), // %08X - %08X\n",
-               ram_to_rom(config, cur_start), ram_to_rom(config, last_end), cur_start, last_end);
-         cur_start = procs->procedures[i].start;
-      }
-      last_end = procs->procedures[i].end;
-   }
-   INFO("   (0x%06X, 0x%06X, \"asm\"), // %08X - %08X\n",
-         ram_to_rom(config, cur_start), ram_to_rom(config, last_end), cur_start, last_end);
-}
 
 static void print_usage(void)
 {
-   ERROR("Usage: mipsdisasm [-c CONFIG] [-o OUTPUT] [-v] ROM [ADDRESSES]\n"
+   ERROR("Usage: mipsdisasm [-o OUTPUT] [-p] [-s ASSEMBLER] [-v] ROM [RANGES]\n"
          "\n"
-         "mipsdisasm v" MIPSDISASM_VERSION ": Recursive MIPS disassembler\n"
+         "mipsdisasm v" MIPSDISASM_VERSION ": MIPS disassembler\n"
          "\n"
          "Optional arguments:\n"
-         " -c CONFIG    ROM configuration file (default: %s)\n"
-         " -m           merge related instructions in to pseudoinstructions\n"
          " -o OUTPUT    output filename (default: stdout)\n"
+         " -p           emit pseudoinstructions for related instructions\n"
+         " -s SYNTAX    assembler syntax to use [gas, armips] (default: gas)\n"
          " -v           verbose progress output\n"
          "\n"
          "Arguments:\n"
          " FILE         input binary file to disassemble\n"
-         " [ADDRESSES]  optional list of RAM or ROM addresses (default: labels from config file)\n",
-         default_args.config_file);
+         " [RANGES]     optional list of ranges (default: entire input file)\n"
+         "              format: <VAddr>:[<Start>-<End>] or <VAddr>:[<Start>+<Length>]\n"
+         "              example: 0x80246000:0x1000-0x0E6258\n");
    exit(EXIT_FAILURE);
+}
+
+void range_parse(range *r, const char *arg)
+{
+   char *colon = strchr(arg, ':');
+   r->vaddr = strtoul(arg, NULL, 0);
+   if (colon) {
+      char *minus = strchr(colon+1, '-');
+      char *plus = strchr(colon+1, '+');
+      r->start = strtoul(colon+1, NULL, 0);
+      if (minus) {
+         r->length = strtoul(minus+1, NULL, 0) - r->start;
+      } else if (plus) {
+         r->length = strtoul(plus+1, NULL, 0);
+      }
+   }
 }
 
 // parse command line arguments
 static void parse_arguments(int argc, char *argv[], arg_config *config)
 {
-   int i;
    int file_count = 0;
    if (argc < 2) {
       print_usage();
       exit(1);
    }
-   config->offsets = malloc(argc * sizeof(*config->offsets));
-   config->offset_count = 0;
-   for (i = 1; i < argc; i++) {
+   config->ranges = malloc(argc / 2 * sizeof(*config->ranges));
+   config->range_count = 0;
+   for (int i = 1; i < argc; i++) {
       if (argv[i][0] == '-') {
          switch (argv[i][1]) {
-            case 'c':
-               if (++i >= argc) {
-                  print_usage();
-               }
-               config->config_file = argv[i];
-               break;
-            case 'm':
-               config->merge_pseudo = 1;
-               break;
             case 'o':
                if (++i >= argc) {
                   print_usage();
                }
                config->output_file = argv[i];
                break;
+            case 'p':
+               config->merge_pseudo = 1;
+               break;
+            case 's':
+            {
+               if (++i >= argc) {
+                  print_usage();
+               }
+               if ((0 == strcasecmp("gas", argv[i])) ||
+                   (0 == strcasecmp("gnu", argv[i]))) {
+                  config->syntax = ASM_GAS;
+               } else if (0 == strcasecmp("armips", argv[i])) {
+                  config->syntax = ASM_ARMIPS;
+               } else {
+                  print_usage();
+               }
+               break;
+            }
             case 'v':
                g_verbosity = 1;
                break;
@@ -771,8 +621,8 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
          if (file_count == 0) {
             config->input_file = argv[i];
          } else {
-            config->offsets[config->offset_count] = strtoul(argv[i], NULL, 0);
-            config->offset_count++;
+            range_parse(&config->ranges[config->range_count], argv[i]);
+            config->range_count++;
          }
          file_count++;
       }
@@ -784,15 +634,11 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
 
 int main(int argc, char *argv[])
 {
-   rom_config config;
    arg_config args;
    long file_len;
+   disasm_state *state;
    unsigned char *data;
-   unsigned int ram_address;
-   unsigned int rom_offset;
-   proc_table procs;
    FILE *out;
-   int i;
 
    // load defaults and parse arguments
    out = stdout;
@@ -817,54 +663,71 @@ int main(int argc, char *argv[])
       }
    }
 
-   // parse config file
-   INFO("Parsing config file '%s'\n", args.config_file);
-   if (config_parse_file(args.config_file, &config)) {
-      ERROR("Error parsing config file '%s'\n", args.config_file);
-      return EXIT_FAILURE;
+   // if no ranges specified or if only vaddr specified, add one of entire input file
+   if (args.range_count < 1 || (args.range_count == 1 && args.ranges[0].length == 0)) {
+      if (args.range_count < 1) {
+         args.ranges[0].vaddr = 0;
+      }
+      args.ranges[0].start = 0;
+      args.ranges[0].length = file_len;
+      args.range_count = 1;
    }
 
-   // add procedures from either command line offsets or from configuration labels
-   memset(&procs, 0, sizeof(procs));
-   procs.count = 0;
-   if (args.offset_count > 0) {
-      for (i = 0; i < args.offset_count; i++) {
-         if (args.offsets[i] >= 0x80000000) {
-            INFO("Adding RAM address 0x%X\n", args.offsets[i]);
-            ram_address = args.offsets[i];
-            rom_offset = ram_to_rom(&config, ram_address);
-            if (ram_address == rom_offset) {
-               ERROR("Warning: offset %08X not in RAM range\n", args.offsets[i]);
-               return EXIT_FAILURE;
-            }
+   // assembler header output
+   switch (args.syntax) {
+      case ASM_GAS:
+         fprintf(out, ".set noat      # allow manual use of $at\n");
+         fprintf(out, ".set noreorder # don't insert nops after branches\n\n");
+         break;
+      case ASM_ARMIPS:
+      {
+         char output_binary[FILENAME_MAX];
+         if (args.output_file == NULL) {
+            strcpy(output_binary, "test.bin");
          } else {
-            INFO("Adding ROM address 0x%X\n", args.offsets[i]);
-            rom_offset = args.offsets[i];
-            ram_address = rom_to_ram(&config, rom_offset);
-            if (rom_offset == ram_address) {
-               ERROR("Warning: offset %08X not in ROM range\n", args.offsets[i]);
-               return EXIT_FAILURE;
+            const char *base = basename(args.output_file);
+            generate_filename(base, output_binary, "bin");
+         }
+         fprintf(out, ".n64\n");
+         fprintf(out, ".create \"%s\", 0x%08X\n\n", output_binary, 0);
+         break;
+      }
+      default:
+         break;
+   }
+
+   state = disasm_state_alloc();
+   for (int i = 0; i < args.range_count; i++) {
+      range *r = &args.ranges[i];
+      INFO("Disassembling range 0x%X-0x%X at 0x%08X\n", r->start, r->start + r->length, r->vaddr);
+
+      fprintf(out, ".headersize 0x%08X\n\n", r->vaddr);
+      (void)mipsdisasm_pass1(&data[r->start], r->length, r->vaddr, args.syntax, args.merge_pseudo, state);
+
+      if (args.syntax == ASM_ARMIPS) {
+         for (int j = 0; j < state->label_count; j++) {
+            unsigned int vaddr = state->labels[j].vaddr;
+            if (vaddr < r->vaddr || vaddr > r->vaddr + r->length) {
+               fprintf(out, ".definelabel %s, 0x%08X\n", state->labels[j].name, vaddr);
             }
          }
-         add_proc(&procs, ram_address, 0);
       }
-   } else {
-      // populate procedure list from list of known addresses
-      mipsdisasm_add_procs(&procs, &config, file_len);
+      fprintf(out, "\n");
+
+      // second pass, generate output
+      // TODO: either call pass2 with vaddr/length for each section or call once outside of `for` loop
+      mipsdisasm_pass2(out, state);
    }
+   disasm_state_free(state);
 
-   // first pass, collect JALs, local labels, and find procedure ends
-   mipsdisasm_pass1(data, file_len, &procs, &config);
-
-   fprintf(out, ".set noat      # allow manual use of $at\n");
-   fprintf(out, ".set noreorder # don't insert nops after branches\n\n");
-
-   // second pass, disassemble all procedures
-   mipsdisasm_pass2(out, data, file_len, &procs, &config, args.merge_pseudo);
-
-   generate_report(&procs, &config);
-
-   config_free(&config);
+   // assembler footer output
+   switch (args.syntax) {
+      case ASM_ARMIPS:
+         fprintf(out, "\n.close\n");
+         break;
+      default:
+         break;
+   }
 
    free(data);
 
