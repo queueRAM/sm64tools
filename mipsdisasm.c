@@ -487,10 +487,26 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
                // assume matched LUI with ADDIU/LW/SW etc.
                switch (state->syntax) {
                   case ASM_GAS:
-                     // TODO: this isn't exactly true for LI -> LUI/ORI pair
-                     fprintf(out, "%-5s $%s, %%hi(%s)\n", insn->mnemonic,
-                           cs_reg_name(state->handle, mips->operands[0].reg),
-                           state->globals.labels[label].name);
+                     switch (block->instructions[linked_insn].id) {
+                        case MIPS_INS_ADDIU:
+                           fprintf(out, "%-5s $%s, %%hi(%s) # %s\n", insn->mnemonic,
+                                 cs_reg_name(state->handle, mips->operands[0].reg),
+                                 state->globals.labels[label].name,
+                                 insn->op_str);
+                           break;
+                        case MIPS_INS_ORI:
+                           fprintf(out, "%-5s $%s, (0x%08X >> 16) # %s %s\n", insn->mnemonic,
+                                 cs_reg_name(state->handle, mips->operands[0].reg),
+                                 block->insn_extra[i].linked_value,
+                                 insn->mnemonic, insn->op_str);
+                           break;
+                        default: // LW/SW/etc.
+                           fprintf(out, "%-5s $%s, %%hi(%s) # %s\n", insn->mnemonic,
+                                 cs_reg_name(state->handle, mips->operands[0].reg),
+                                 state->globals.labels[label].name,
+                                 insn->op_str);
+                           break;
+                     }
                      break;
                   case ASM_ARMIPS:
                      switch (block->instructions[linked_insn].id) {
@@ -507,37 +523,43 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
                                  insn->mnemonic, insn->op_str);
                            break;
                         default: // LW/SW/etc.
-                           fprintf(out, "%-5s $%s, hi(%s)\n", insn->mnemonic,
+                           fprintf(out, "%-5s $%s, hi(%s) // %s\n", insn->mnemonic,
                                  cs_reg_name(state->handle, mips->operands[0].reg),
-                                 state->globals.labels[label].name);
+                                 state->globals.labels[label].name,
+                                 insn->op_str);
                            break;
                      }
                      break;
                }
-            } else if (insn->id == MIPS_INS_ADDIU || insn->id == MIPS_INS_ORI) {
+            } else if (insn->id == MIPS_INS_ADDIU) {
                label = labels_find(&state->globals, block->insn_extra[i].linked_value);
                switch (state->syntax) {
                   case ASM_GAS:
-                     // TODO: this isn't exactly true for LI -> LUI/ORI pair
-                     fprintf(out, "%-5s $%s, %%lo(%s)\n", insn->mnemonic,
+                     fprintf(out, "%-5s $%s, %%lo(%s) # %s %s\n", insn->mnemonic,
                            cs_reg_name(state->handle, mips->operands[0].reg),
-                           state->globals.labels[label].name);
+                           state->globals.labels[label].name,
+                           insn->mnemonic, insn->op_str);
                      break;
                   case ASM_ARMIPS:
-                     switch (insn->id) {
-                        case MIPS_INS_ADDIU:
-                           fprintf(out, "%-5s $%s, %s // %s %s\n", "la.l",
-                                 cs_reg_name(state->handle, mips->operands[0].reg),
-                                 state->globals.labels[label].name,
-                                 insn->mnemonic, insn->op_str);
-                           break;
-                        case MIPS_INS_ORI:
-                           fprintf(out, "%-5s $%s, 0x%08X // %s %s\n", "li.l",
-                                 cs_reg_name(state->handle, mips->operands[0].reg),
-                                 block->insn_extra[i].linked_value,
-                                 insn->mnemonic, insn->op_str);
-                           break;
-                     }
+                     fprintf(out, "%-5s $%s, %s // %s %s\n", "la.l",
+                           cs_reg_name(state->handle, mips->operands[0].reg),
+                           state->globals.labels[label].name,
+                           insn->mnemonic, insn->op_str);
+                     break;
+               }
+            } else if (insn->id == MIPS_INS_ORI) {
+               switch (state->syntax) {
+                  case ASM_GAS:
+                     fprintf(out, "%-5s $%s, (0x%08X & 0xFFFF) # %s %s\n", insn->mnemonic,
+                           cs_reg_name(state->handle, mips->operands[0].reg),
+                           block->insn_extra[i].linked_value,
+                           insn->mnemonic, insn->op_str);
+                     break;
+                  case ASM_ARMIPS:
+                     fprintf(out, "%-5s $%s, 0x%08X // %s %s\n", "li.l",
+                           cs_reg_name(state->handle, mips->operands[0].reg),
+                           block->insn_extra[i].linked_value,
+                           insn->mnemonic, insn->op_str);
                      break;
                }
             } else {
@@ -788,7 +810,9 @@ int main(int argc, char *argv[])
    // output each section
    for (int i = 0; i < args.range_count; i++) {
       range *r = &args.ranges[i];
-      fprintf(out, ".headersize 0x%08X\n\n", r->vaddr);
+      if (args.syntax == ASM_ARMIPS) {
+         fprintf(out, ".headersize 0x%08X\n\n", r->vaddr);
+      }
 
       // second pass, generate output
       mipsdisasm_pass2(out, state, r->start);
