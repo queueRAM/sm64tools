@@ -345,7 +345,23 @@ void disasm_state_free(disasm_state *state)
    }
 }
 
-void mipsdisasm_pass1(unsigned char *data, unsigned int offset, size_t data_len, unsigned int vaddr, disasm_state *state)
+void disasm_label_add(disasm_state *state, const char *name, unsigned int vaddr)
+{
+   labels_add(&state->globals, name, vaddr);
+}
+
+int disasm_label_lookup(const disasm_state *state, unsigned int vaddr, char *name)
+{
+   int found = 0;
+   int id = labels_find(&state->globals, vaddr);
+   if (id >= 0) {
+      strcpy(name, state->globals.labels[id].name);
+      found = 1;
+   }
+   return found;
+}
+
+void mipsdisasm_pass1(unsigned char *data, size_t data_len, unsigned int offset, unsigned int vaddr, disasm_state *state)
 {
    if (state->block_count >= state->block_alloc) {
       state->block_alloc *= 2;
@@ -785,7 +801,7 @@ int main(int argc, char *argv[])
       range *r = &args.ranges[i];
       INFO("Disassembling range 0x%X-0x%X at 0x%08X\n", r->start, r->start + r->length, r->vaddr);
 
-      (void)mipsdisasm_pass1(data, r->start, r->length, r->vaddr, state);
+      (void)mipsdisasm_pass1(data, r->length, r->start, r->vaddr, state);
    }
 
    // output global labels not in asm sections

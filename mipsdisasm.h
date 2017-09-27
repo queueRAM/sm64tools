@@ -10,9 +10,11 @@ typedef enum
    ASM_ARMIPS, // armips
 } asm_syntax;
 
-// allocate disassembler state to be passed into disassembler routines
+// allocate and initialize disassembler state to be passed into disassembler routines
+// syntax: assembler syntax to use
+// merge_pseudo: if true, attempt to link pseudo instructions
 // returns disassembler state
-disasm_state *disasm_state_alloc(void);
+disasm_state *disasm_state_init(asm_syntax syntax, int merge_pseudo);
 
 // free disassembler state allocated during pass1
 // state: disassembler state returned from disasm_state_alloc() or mipsdisasm_pass1()
@@ -20,19 +22,25 @@ void disasm_state_free(disasm_state *state);
 
 // add a label to the disassembler state
 // state: disassembler state returned from disasm_state_alloc() or mipsdisasm_pass1()
-// vaddr: virtual address of label
 // name: string name of label (if NULL, generated based on vaddr)
-void disasm_state_add_label(disasm_state *state, unsigned int vaddr, const char *name);
+// vaddr: virtual address of label
+void disasm_label_add(disasm_state *state, const char *name, unsigned int vaddr);
+
+// lookup a global label from the disassembler state
+// state: disassembler state returned from disasm_state_alloc() or mipsdisasm_pass1()
+// vaddr: virtual address of label
+// name: string to write label to
+// returns 1 if found, 0 otherwise
+int disasm_label_lookup(const disasm_state *state, unsigned int vaddr, char *name);
 
 // first pass of disassembler - collects procedures called and sorts them
 // data: buffer containing raw MIPS assembly
-// offset: buffer offset to start at
 // data_len: length of 'data'
+// offset: buffer offset to start at
 // vaddr: virtual address of first byte
 // syntax: assembler syntax to use
-// merge_pseudo: if true, link up pseudo instructions
 // state: disassembler state. if NULL, is allocated, returned at end
-void mipsdisasm_pass1(unsigned char *data, unsigned int offset, size_t data_len, unsigned int vaddr, disasm_state *state);
+void mipsdisasm_pass1(unsigned char *data, size_t data_len, unsigned int offset, unsigned int vaddr, disasm_state *state);
 
 // disassemble a region of code, output to file stream
 // out: stream to output data to

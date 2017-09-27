@@ -25,7 +25,6 @@ typedef struct _arg_config
    float scale;
    int  large_texture;
    int  large_texture_depth;
-   int  gen_proc_table;
    int  keep_going;
    int  merge_pseudo;
 } arg_config;
@@ -45,7 +44,6 @@ static const arg_config default_args =
    1024.0f, // scale
    0,  // large textures
    16, // large textures depth
-   0,  // procedure table
    0,  // keep going
    0,  // merge pseudoinstructions
 };
@@ -127,7 +125,62 @@ static void gzip_decode_file(char *gzfilename, int offset, char *binfilename)
    fclose(fout);
 }
 
-static void write_behavior(FILE *out, unsigned char *data, rom_config *config, int s)
+unsigned int ram_to_rom(rom_config *config, unsigned int ram_addr)
+{
+   for (int i = 0; i < config->ram_count; i++) {
+      if (ram_addr >= config->ram_table[3*i] && ram_addr <= config->ram_table[3*i+1]) {
+         return ram_addr - config->ram_table[3*i+2];
+      }
+   }
+   return ram_addr;
+}
+
+unsigned int rom_to_ram(rom_config *config, unsigned int rom_addr)
+{
+   for (int i = 0; i < config->ram_count; i++) {
+      unsigned int offset = config->ram_table[3*i+2];
+      unsigned int start = config->ram_table[3*i] - offset;
+      unsigned int end   = config->ram_table[3*i+1] - offset;
+      if (rom_addr >= start && rom_addr <= end) {
+         return rom_addr + offset;
+      }
+   }
+   return rom_addr;
+}
+
+static int config_section_lookup(rom_config *config, unsigned int addr, char *label, int is_end)
+{
+   int i;
+   // check for ROM offsets
+   switch (is_end) {
+      case 0:
+         for (i = 0; i < config->section_count; i++) {
+            // TODO: hack until mario_animation gets moved or AT() is used
+            if (config->sections[i].start == addr && addr != 0x4EC000) {
+               if (config->sections[i].label[0] != '\0') {
+                  sprintf(label, "%s", config->sections[i].label);
+                  return 0;
+               }
+            }
+         }
+         break;
+      case 1:
+         for (i = 0; i < config->section_count; i++) {
+            if (config->sections[i].end == addr) {
+               if (config->sections[i].label[0] != '\0') {
+                  sprintf(label, "%s_end", config->sections[i].label);
+                  return 0;
+               }
+            }
+         }
+         break;
+      default:
+         break;
+   }
+   return -1;
+}
+
+static void write_behavior(FILE *out, unsigned char *data, rom_config *config, int s, disasm_state *state)
 {
    char label[128];
    unsigned int a, i;
@@ -189,7 +242,7 @@ static void write_behavior(FILE *out, unsigned char *data, rom_config *config, i
       switch(data[a]) {
          case 0x0C: // behavior 0x0C is a function pointer
             val = read_u32_be(&data[a+4]);
-            fill_addr_label(config, val, label, -1);
+            disasm_label_lookup(state, val, label);
             fprintf(out, ", %s\n", label);
             break;
          case 0x02: // jump to another behavior
@@ -202,7 +255,7 @@ static void write_behavior(FILE *out, unsigned char *data, rom_config *config, i
                fprintf(out, ", 0x%08X", val);
             }
             val = read_u32_be(&data[a+len-4]);
-            fill_addr_label(config, val, label, -1);
+            disasm_label_lookup(state, val, label);
             fprintf(out, ", %s\n", label);
             break;
          default:
@@ -217,7 +270,7 @@ static void write_behavior(FILE *out, unsigned char *data, rom_config *config, i
    }
 }
 
-static void write_geolayout(FILE *out, unsigned char *data, unsigned int start, unsigned int end, rom_config *config)
+static void write_geolayout(FILE *out, unsigned char *data, unsigned int start, unsigned int end, disasm_state *state)
 {
    char label[128];
    unsigned int a = start;
@@ -226,7 +279,6 @@ static void write_geolayout(FILE *out, unsigned char *data, unsigned int start, 
    int i;
    indent = 0;
    // TODO: process function pointers and other geo layout references
-   (void)config;
    while (a < end) {
       if (indent == 0) {
          switch (data[a]) {
@@ -302,7 +354,7 @@ static void write_geolayout(FILE *out, unsigned char *data, unsigned int start, 
             fprintf(out, "0x%08X", read_u32_be(&data[a]));
             fprintf(out, ", 0x%08X", read_u32_be(&data[a+4]));
             if (len > 8) {
-               fill_addr_label(config, read_u32_be(&data[a+8]), label, -1);
+               disasm_label_lookup(state, read_u32_be(&data[a+8]), label);
                fprintf(out, ", %s", label);
             }
             break;
@@ -316,7 +368,7 @@ static void write_geolayout(FILE *out, unsigned char *data, unsigned int start, 
             for (i = 4; i < len-4; i+=4) {
                fprintf(out, ", 0x%08X", read_u32_be(&data[a+i]));
             }
-            fill_addr_label(config, read_u32_be(&data[a+len-4]), label, -1);
+            disasm_label_lookup(state, read_u32_be(&data[a+len-4]), label);
             fprintf(out, ", %s", label);
             break;
          default:
@@ -334,7 +386,7 @@ static void write_geolayout(FILE *out, unsigned char *data, unsigned int start, 
    }
 }
 
-static void write_level(FILE *out, unsigned char *data, rom_config *config, int s)
+static void write_level(FILE *out, unsigned char *data, rom_config *config, int s, disasm_state *state)
 {
    char start_label[128];
    char end_label[128];
@@ -371,8 +423,8 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
          case 0x1A: // decompress MIO0 data from ROM and copy it into a RAM segment (for texture only segments?)
             ptr_start = read_u32_be(&data[a+4]);
             ptr_end = read_u32_be(&data[a+8]);
-            fill_addr_label(config, ptr_start, start_label, 0);
-            fill_addr_label(config,   ptr_end,   end_label, 1);
+            config_section_lookup(config, ptr_start, start_label, 0);
+            config_section_lookup(config,   ptr_end,   end_label, 1);
             fprintf(out, ".word 0x");
             for (i = 0; i < 4; i++) {
                fprintf(out, "%02X", data[a+i]);
@@ -393,16 +445,17 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
          case 0x11: // call function
          case 0x12: // call function
             ptr_start = read_u32_be(&data[a+0x4]);
-            fill_addr_label(config, ptr_start, start_label, -1);
+            disasm_label_lookup(state, ptr_start, start_label);
             fprintf(out, ".word 0x%08X, %s # %08X\n", read_u32_be(&data[a]), start_label, ptr_start);
             break;
          case 0x16: // load ASM into RAM
             dst       = read_u32_be(&data[a+0x4]);
             ptr_start = read_u32_be(&data[a+0x8]);
             ptr_end   = read_u32_be(&data[a+0xc]);
-            fill_addr_label(config, dst, dst_label, 0);
-            fill_addr_label(config, ptr_start, start_label, 0);
-            fill_addr_label(config, ptr_end, end_label, 1);
+            // TODO: differentiate between start/end
+            disasm_label_lookup(state, dst, dst_label);
+            config_section_lookup(config, ptr_start, start_label, 0);
+            config_section_lookup(config, ptr_end, end_label, 1);
             fprintf(out, ".word 0x");
             for (i = 0; i < 4; i++) {
                fprintf(out, "%02X", data[a+i]);
@@ -453,136 +506,7 @@ static void write_level(FILE *out, unsigned char *data, rom_config *config, int 
    }
    // remaining is geo layout script
    fprintf(out, "# begin %s geo 0x%X\n", sec->label, a);
-   write_geolayout(out, &data[sec->start], a - sec->start, sec->end - sec->start, config);
-}
-
-static int disassemble_dummy(FILE *out, rom_config *config, unsigned char *data, unsigned int start, unsigned int end)
-{
-   unsigned int instr;
-   unsigned int i;
-   unsigned int len = end - start;
-   unsigned int rom_start = ram_to_rom(config, start);
-   unsigned int rom_end = ram_to_rom(config, end);
-   int allnops = 1;
-   // first check all nops
-   for (i = rom_start; i < rom_end; i += 4) {
-      instr = read_u32_be(&data[i]);
-      if (instr != 0x0) {
-         allnops = 0;
-         break;
-      }
-   }
-   if (allnops) {
-      fprintf(out, "\n# alignment");
-      for (i = 0; i < len; i += 4) {
-         if (i % 0x10 == 0) {
-            fprintf(out, "\n.word 0x00000000");
-         } else {
-            fprintf(out, ", 0x00000000");
-         }
-      }
-      fprintf(out, "\n");
-      return 1;
-   }
-   // ensure multiple of 4 (also takes care of < 4)
-   if (len & 0x3) return 0;
-   for (i = rom_start; i < rom_end; i += 4) {
-      instr = read_u32_be(&data[i]);
-      if (instr != 0x03e00008 && instr != 0x00000000) return 0;
-   }
-   fprintf(out, "\ndummy%08X:\n", start);
-   for (i = rom_start; i < rom_end; i += 4) {
-      instr = read_u32_be(&data[i]);
-      switch (instr) {
-         case 0x03e00008: fprintf(out, "  jr    $ra\n"); break;
-         case 0x00000000: fprintf(out, "  nop\n"); break;
-      }
-   }
-   return 1;
-}
-
-static void disassemble_section(FILE *out, unsigned char *data, long len, split_section *sec, proc_table *procs, rom_config *config, int merge_pseudo)
-{
-   // disassemble all the procedures
-   unsigned int ram_address;
-   unsigned int prev_end;
-   unsigned int end_address;
-   int start_proc;
-   int proc_idx;
-   // find first procedure in section
-   prev_end = rom_to_ram(config, sec->start);
-   for (start_proc = 0; start_proc < procs->count; start_proc++) {
-      if (procs->procedures[start_proc].start >= prev_end) {
-         break;
-      }
-   }
-   // disassemble each procedure
-   end_address = rom_to_ram(config, sec->end);
-   for (proc_idx = start_proc; proc_idx < procs->count; proc_idx++) {
-      ram_address = procs->procedures[proc_idx].start;
-      // TODO: this is a workaround for inner procedures
-      switch (ram_address) {
-         // SM64 (U)
-         case 0x80327B98: // proc_80327B98
-         case 0x80327C80: // __osEnqueueAndYield
-         case 0x80327D10: // __osEnqueueThread
-         case 0x80327D58: // __osPopThread
-         case 0x80327D68: // __osDispatchThread
-         // SM64 (J)
-         case 0x80326D00: // __osEnqueueAndYield
-         case 0x80326D90: // __osEnqueueThread
-         case 0x80326DD8: // __osPopThread
-         case 0x80326DE8: // __osDispatchThread
-            continue;
-         default: break;
-      }
-      if (ram_address > end_address) {
-         ram_address = end_address;
-      }
-      if (ram_address == end_address) {
-         break;
-      }
-      if (ram_address > prev_end) {
-         int is_dummy = disassemble_dummy(out, config, data, prev_end, ram_address);
-         if (!is_dummy) {
-            fprintf(out, "\n# unknown assembly section %X-%X (%06X-%06X) [%X]",
-                  prev_end, ram_address, ram_to_rom(config, prev_end), ram_to_rom(config, ram_address), ram_address - prev_end);
-            unsigned int a = ram_to_rom(config, prev_end);
-            int count = 0;
-            unsigned int rom_address = ram_to_rom(config, ram_address);
-            int newline = 0;
-            while (a < rom_address) {
-               unsigned int val = read_u32_be(&data[a]);
-               if (val == 0x03e00008) {
-                  newline = 2;
-               }
-               if ((count % 4) == 0) {
-                  fprintf(out, "\n.word 0x%08x", val);
-               } else {
-                  fprintf(out, ", 0x%08x", val);
-               }
-               a += 4;
-               count++;
-               if (newline) {
-                  newline--;
-                  if (!newline) {
-                     count = 0;
-                     fprintf(out, "\n# %X (%06X)", rom_to_ram(config, a), a);
-                  }
-               }
-            }
-            fprintf(out, "\n# end unknown section\n");
-         }
-      }
-      if (ram_address < prev_end) {
-         ERROR("Warning: %08X < %08X\n", ram_address, prev_end);
-      }
-      disassemble_proc(out, data, len, &procs->procedures[proc_idx], config, merge_pseudo);
-      prev_end = procs->procedures[proc_idx].end;
-      if (prev_end >= end_address) {
-         break;
-      }
-   }
+   write_geolayout(out, &data[sec->start], a - sec->start, sec->end - sec->start, state);
 }
 
 static void parse_music_sequences(FILE *out, unsigned char *data, split_section *sec, arg_config *args, strbuf *makeheader)
@@ -912,7 +836,7 @@ void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename,
    free(data);
 }
 
-static void split_file(unsigned char *data, unsigned int length, proc_table *procs, arg_config *args, rom_config *config)
+static void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_config *config, disasm_state *state)
 {
 #define BIN_SUBDIR      "bin"
 #define MIO0_SUBDIR     "bin"
@@ -1086,13 +1010,13 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             fprintf(fasm, "%s:\n", start_label);
             for (a = sec->start; a < sec->end; a += 4) {
                ptr = read_u32_be(&data[a]);
-               fill_addr_label(config, ptr, start_label, -1);
+               disasm_label_lookup(state, ptr, start_label);
                fprintf(fasm, ".word %s", start_label);
                if (sec->child_count > 0) {
                   for (i = 1; i < sec->child_count; i++) {
                      a += 4;
                      ptr = read_u32_be(&data[a]);
-                     fill_addr_label(config, ptr, start_label, -1);
+                     disasm_label_lookup(state, ptr, start_label);
                      fprintf(fasm, ", %s", start_label);
                   }
                }
@@ -1102,7 +1026,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             break;
          case TYPE_ASM:
             INFO("Section asm: %X-%X\n", sec->start, sec->end);
-            disassemble_section(fasm, data, length, sec, procs, config, args->merge_pseudo);
+            mipsdisasm_pass2(fasm, state, sec->start);
             break;
          case TYPE_SM64_LEVEL:
             // relocate level scripts to .mio0 area
@@ -1166,7 +1090,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                perror(outfilepath);
                exit(1);
             }
-            write_geolayout(fgeo, &data[sec->start], 0, sec->end - sec->start, config);
+            write_geolayout(fgeo, &data[sec->start], 0, sec->end - sec->start, state);
             fclose(fgeo);
 
             fprintf(fasm, "\n.align 4, 0x01\n");
@@ -1384,7 +1308,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
             fprintf(flevel, ".global %s\n", start_label);
             fprintf(flevel, ".align 4, 0x01\n");
             fprintf(flevel, "%s:\n", start_label);
-            write_level(flevel, data, config, s);
+            write_level(flevel, data, config, s, state);
             fprintf(flevel, "%s_end:\n", start_label);
             fclose(flevel);
 
@@ -1416,7 +1340,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
                perror(outfilepath);
                exit(1);
             }
-            write_behavior(f_beh, data, config, s);
+            write_behavior(f_beh, data, config, s, state);
             fclose(f_beh);
 
             fprintf(fasm, "\n.section .behavior, \"a\"\n");
@@ -1438,29 +1362,6 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
    fprintf(fmake, "\n\n%s", makeheader_mio0.buf);
    fprintf(fmake, "\n\n%s", makeheader_level.buf);
    fprintf(fmake, "\n\n%s", makeheader_music.buf);
-
-   // dump the proc table
-   if (args->gen_proc_table)
-   {
-      unsigned int ram_address;
-      unsigned int rom_offset;
-      int i, j;
-      printf("static const procedure proc_table[] = {\n");
-      for (i = 0; i < config->label_count; i++) {
-         ram_address = config->labels[i].ram_addr;
-         rom_offset = ram_to_rom(config, ram_address);
-         for (j = 0; j < procs->count; j++) {
-            procedure *p = &procs->procedures[j];
-            if (p->start == ram_address) {
-            printf("   {0x%08X, 0x%08X, 0x%06X, 0x%06X, \"%s\"},\n",
-                   p->start, p->end, rom_offset, ram_to_rom(config, p->end),
-                   config->labels[i].name);
-               break;
-            }
-         }
-      }
-      printf("};\n");
-   }
 
    // cleanup
    strbuf_free(&makeheader_mio0);
@@ -1486,7 +1387,7 @@ static void split_file(unsigned char *data, unsigned int length, proc_table *pro
 
 static void print_usage(void)
 {
-   ERROR("Usage: n64split [-c CONFIG] [-k] [-m] [-o OUTPUT_DIR] [-s SCALE] [-p] [-t] [-v] [-V] ROM\n"
+   ERROR("Usage: n64split [-c CONFIG] [-k] [-m] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] [-V] ROM\n"
          "\n"
          "n64split v" N64SPLIT_VERSION ": N64 ROM splitter, resource ripper, disassembler\n"
          "\n"
@@ -1496,7 +1397,6 @@ static void print_usage(void)
          " -m            merge related instructions in to pseudoinstructions\n"
          " -o OUTPUT_DIR output directory (default: {CONFIG.basename}.split)\n"
          " -s SCALE      amount to scale models by (default: %.1f)\n"
-         " -p            generate procedure table for analysis\n"
          " -t            generate large texture for MIO0 blocks\n"
          " -v            verbose progress output\n"
          " -V            print version information\n"
@@ -1546,9 +1446,6 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                   print_usage();
                }
                strcpy(config->output_dir, argv[i]);
-               break;
-            case 'p':
-               config->gen_proc_table = 1;
                break;
             case 's':
                if (++i >= argc) {
@@ -1616,18 +1513,14 @@ int main(int argc, char *argv[])
 {
    arg_config args;
    rom_config config;
-   proc_table procs;
+   disasm_state *state;
    long len;
    unsigned char *data;
    int ret_val;
    unsigned int size;
-   unsigned int asm_size;
    float percent;
    int i;
    n64_rom_format rom_type;
-
-   memset(&procs, 0, sizeof(procs));
-   procs.count = 0;
 
    args = default_args;
    parse_arguments(argc, argv, &args);
@@ -1680,37 +1573,36 @@ int main(int argc, char *argv[])
       printf("Splitting into \"%s\" directory\n", args.output_dir);
    }
 
-   // fill procs table from config labels
-   mipsdisasm_add_procs(&procs, &config, len);
+   // add config labels to disasm state labels
+   state = disasm_state_init(ASM_GAS, 1);
+   for (i = 0; i < config.label_count; i++) {
+      disasm_label_add(state, config.labels[i].name, config.labels[i].ram_addr);
+   }
 
-   // first pass disassembler
+   // first pass disassembler on each asm section
    INFO("Running first pass disassembler...\n");
-   mipsdisasm_pass1(data, len, &procs, &config);
+   for (i = 0; i < config.section_count; i++) {
+      if (config.sections[i].type == TYPE_ASM) {
+         unsigned int offset = config.sections[i].start;
+         mipsdisasm_pass1(data, len, offset, ram_to_rom(&config, offset), state);
+      }
+   }
 
    // split the ROM
    INFO("Splitting ROM...\n");
-   split_file(data, len, &procs, &args, &config);
+   split_file(data, len, &args, &config, state);
 
    // print some stats
    printf("\nROM split statistics:\n");
    size = 0;
-   asm_size = 0;
    for (i = 0; i < config.section_count; i++) {
       if (config.sections[i].type != TYPE_BIN) {
          size += config.sections[i].end - config.sections[i].start;
-      }
-      if (config.sections[i].type == TYPE_ASM) {
-         asm_size += config.sections[i].end - config.sections[i].start;
       }
    }
    percent = (float)(100 * size) / (float)(len);
    printf("Total decoded section size:  %X/%lX (%.2f%%)\n", size, len, percent);
    size = 0;
-   for (i = 0; i < procs.count; i++) {
-      size += procs.procedures[i].end - procs.procedures[i].start;
-   }
-   percent = (float)(100 * size) / (float)(asm_size);
-   printf("Total disassembled ASM size: %X/%X (%.2f%%)\n", size, asm_size, percent);
 
    return 0;
 }

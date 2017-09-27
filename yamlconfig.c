@@ -380,7 +380,6 @@ void load_label(label *lab, yaml_document_t *doc, yaml_node_t *node)
                switch (i) {
                   case 0: lab->ram_addr = strtoul(val, NULL, 0); break;
                   case 1: strcpy(lab->name, val); break;
-                  case 2: lab->end_addr = strtoul(val, NULL, 0); break;
                }
             } else {
                ERROR("Error: non-scalar value in label sequence\n");
@@ -598,13 +597,7 @@ void config_print(const rom_config *config)
    // labels
    printf("labels:\n");
    for (i = 0; i < config->label_count; i++) {
-      char end_str[16];
-      if (l[i].end_addr) {
-         sprintf(end_str, "%08X", l[i].end_addr);
-      } else {
-         sprintf(end_str, "        ");
-      }
-      printf("0x%08X-%s %s\n", l[i].ram_addr, end_str, l[i].name);
+      printf("0x%08X: %s\n", l[i].ram_addr, l[i].name);
    }
 }
 
