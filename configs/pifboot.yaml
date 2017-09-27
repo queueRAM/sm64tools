@@ -28,7 +28,7 @@ ranges:
 # Order does not matter
 labels:
    - [0x1FC00000, "Reset"]
-   - [0xA4000000, "Main", 0xA400013C]
+   - [0xA4000000, "Main"]
    - [0xA4000550, "Multiply"]
-   - [0xA4000184, "proc_A4000184", 0xA4000550]
+   - [0xA4000184, "proc_A4000184"]
 

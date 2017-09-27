@@ -8393,7 +8393,7 @@ ranges:
 # Order does not matter
 labels:
    - [0x8021ED00, "EntryPoint"]
-   - [0x80220730, "Main", 0x802208F8]
+   - [0x80220730, "Main"]
    - [0x80220BA0, "bzero"]
    - [0x80220C40, "osInitialize"]
    - [0x80220E70, "DmaCopy"]
@@ -8408,4 +8408,4 @@ labels:
    - [0x80221AC8, "__ull_div"]
    - [0x80221BC8, "__ll_mul"]
    - [0x80221DE0, "__osSiDeviceBusy"]
-   - [0x802447C0, "MainJump", 0x802457C0]
+   - [0x802447C0, "MainJump"]

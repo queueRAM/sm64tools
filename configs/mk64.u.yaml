@@ -1845,7 +1845,7 @@ labels:
    - [0x800D18CC, "__osEnqueueThread"]
    - [0x800D1914, "__osPopThread"]
    - [0x800D1924, "__osDispatchThread"]
-   - [0x800D1AA0, "__osCleanupThread", 0x800D1AA8]
+   - [0x800D1AA0, "__osCleanupThread"]
    - [0x800D1AB0, "__osDisableInt"]
    - [0x800D1AD0, "__osRestoreInt"]
    - [0x800D1B40, "__osGetSR"]
