@@ -389,6 +389,7 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
    int local_idx = 0;
    int global_idx = 0;
    int label;
+   int indent = 0;
    // lookup block by offset
    for (int i = 0; i < state->block_count; i++) {
       if (state->blocks[i].offset == offset) {
@@ -426,7 +427,13 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
          local_idx++;
       }
       fprintf(out, "/* %06X %08X %02X%02X%02X%02X */  ", offset, vaddr, insn->bytes[0], insn->bytes[1], insn->bytes[2], insn->bytes[3]);
+      // indent the lines after a jump or branch
+      if (indent) {
+         indent = 0;
+         fputc(' ', out);
+      }
       if (cs_insn_group(state->handle, insn, MIPS_GRP_JUMP)) {
+         indent = 1;
          fprintf(out, "%-5s ", insn->mnemonic);
          for (int o = 0; o < mips->op_count; o++) {
             if (o > 0) {
