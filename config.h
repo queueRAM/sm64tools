@@ -81,6 +81,9 @@ void config_print(const rom_config *config);
 int config_validate(const rom_config *config, unsigned int max_len);
 void config_free(rom_config *config);
 
+section_type config_str2section(const char *type_name);
+const char *config_section2str(section_type section);
+
 // get version of underlying config library
 const char *config_get_version(void);
 

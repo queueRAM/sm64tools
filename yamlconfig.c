@@ -36,17 +36,26 @@ static const section_entry section_table[] = {
    {"sm64.level",     TYPE_SM64_LEVEL},
 };
 
-static section_type str2section(const char *type_name)
+section_type config_str2section(const char *type_name)
 {
-   unsigned i;
    if (type_name != NULL) {
-      for (i = 0; i < DIM(section_table); i++) {
+      for (unsigned i = 0; i < DIM(section_table); i++) {
          if (0 == strcmp(section_table[i].name, type_name)) {
             return section_table[i].section;
          }
       }
    }
    return TYPE_INVALID;
+}
+
+const char *config_section2str(section_type section)
+{
+   for (unsigned int i = 0; i < DIM(section_table); i++) {
+      if (section == section_table[i].section) {
+         return section_table[i].name;
+      }
+   }
+   return "";
 }
 
 int get_scalar_value(char *scalar, yaml_node_t *node)
@@ -129,7 +138,7 @@ void load_texture(texture *tex, yaml_document_t *doc, yaml_node_t *node)
          switch (i) {
             case 0: tex->offset = strtoul(val, NULL, 0); break;
             case 1:
-               tex->format = str2section(val);
+               tex->format = config_str2section(val);
                if (tex->format == TYPE_INVALID) {
                   ERROR("Error: " SIZE_T_FORMAT " - invalid texture format '%s'\n", node->start_mark.line, val);
                   return;
@@ -241,7 +250,7 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
             switch (i) {
                case 0: section->start = strtoul(val, NULL, 0); break;
                case 1: section->end = strtoul(val, NULL, 0); break;
-               case 2: section->type = str2section(val); break;
+               case 2: section->type = config_str2section(val); break;
             }
          } else {
             ERROR("Error: non-scalar value in section sequence\n");
