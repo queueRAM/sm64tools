@@ -159,8 +159,11 @@ static int config_section_lookup(rom_config *config, unsigned int addr, char *la
             if (config->sections[i].start == addr && addr != 0x4EC000) {
                if (config->sections[i].label[0] != '\0') {
                   sprintf(label, "%s", config->sections[i].label);
-                  return 0;
+               } else {
+                  sprintf(label, "%s_%06X", config_section2str(config->sections[i].type), addr);
                }
+               INFO("Found 0 %06X: %s\n", addr, label);
+               return 0;
             }
          }
          break;
@@ -169,14 +172,18 @@ static int config_section_lookup(rom_config *config, unsigned int addr, char *la
             if (config->sections[i].end == addr) {
                if (config->sections[i].label[0] != '\0') {
                   sprintf(label, "%s_end", config->sections[i].label);
-                  return 0;
+               } else {
+                  sprintf(label, "%s_%06X", config_section2str(config->sections[i].type), addr);
                }
+               INFO("Found 1 %06X: %s\n", addr, label);
+               return 0;
             }
          }
          break;
       default:
          break;
    }
+   sprintf(label, "0x%X", addr);
    return -1;
 }
 
@@ -1583,8 +1590,14 @@ int main(int argc, char *argv[])
    INFO("Running first pass disassembler...\n");
    for (i = 0; i < config.section_count; i++) {
       if (config.sections[i].type == TYPE_ASM) {
-         unsigned int offset = config.sections[i].start;
-         mipsdisasm_pass1(data, len, offset, ram_to_rom(&config, offset), state);
+         unsigned int start = config.sections[i].start;
+         unsigned int end = config.sections[i].end;
+         if (end <= len) {
+            mipsdisasm_pass1(data, start, end - start, rom_to_ram(&config, start), state);
+         } else {
+            ERROR("Trying to disassemble past end of file (%X > %X)\n", end, (unsigned int)len);
+            exit(1);
+         }
       }
    }
 

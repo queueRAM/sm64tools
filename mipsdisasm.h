@@ -35,12 +35,12 @@ int disasm_label_lookup(const disasm_state *state, unsigned int vaddr, char *nam
 
 // first pass of disassembler - collects procedures called and sorts them
 // data: buffer containing raw MIPS assembly
-// data_len: length of 'data'
 // offset: buffer offset to start at
+// length: length to disassemble starting at 'offset'
 // vaddr: virtual address of first byte
 // syntax: assembler syntax to use
 // state: disassembler state. if NULL, is allocated, returned at end
-void mipsdisasm_pass1(unsigned char *data, size_t data_len, unsigned int offset, unsigned int vaddr, disasm_state *state);
+void mipsdisasm_pass1(unsigned char *data, unsigned int offset, unsigned int length, unsigned int vaddr, disasm_state *state);
 
 // disassemble a region of code, output to file stream
 // out: stream to output data to

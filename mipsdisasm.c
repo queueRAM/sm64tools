@@ -25,6 +25,15 @@ typedef struct
 
 typedef struct
 {
+   // copied from cs_insn structure
+   unsigned int id;
+   uint8_t bytes[4];
+   char op_str[32];
+   char mnemonic[16];
+   cs_mips_op operands[8];
+   uint8_t op_count;
+   // n64split-specific data
+   int is_jump;
    int linked_insn;
    union
    {
@@ -32,13 +41,12 @@ typedef struct
       float linked_float;
    };
    int newline;
-} disasm_extra;
+} disasm_data;
 
 typedef struct _asm_block
 {
    label_buf locals;
-   cs_insn *instructions;
-   disasm_extra *insn_extra;
+   disasm_data *instructions;
    int instruction_count;
    unsigned int offset;
    unsigned int length;
@@ -122,7 +130,7 @@ static void link_with_lui(disasm_state *state, int block_id, int offset, unsigne
 {
    asm_block *block = &state->blocks[block_id];
 #define MAX_LOOKBACK 128
-   cs_insn *insn = block->instructions;
+   disasm_data *insn = block->instructions;
    // don't attempt to compute addresses for zero offset
    if (mem_imm != 0x0) {
       // end search after some sane max number of instructions
@@ -130,14 +138,14 @@ static void link_with_lui(disasm_state *state, int block_id, int offset, unsigne
       for (int search = offset - 1; search >= end_search; search--) {
          // use an `if` instead of `case` block to allow breaking out of the `for` loop
          if (insn[search].id == MIPS_INS_LUI) {
-            unsigned int rd = insn[search].detail->mips.operands[0].reg;
+            unsigned int rd = insn[search].operands[0].reg;
             if (reg == rd) {
-               unsigned int lui_imm = (unsigned int)insn[search].detail->mips.operands[1].imm;
+               unsigned int lui_imm = (unsigned int)insn[search].operands[1].imm;
                unsigned int addr = ((lui_imm << 16) + mem_imm);
-               block->insn_extra[search].linked_insn = offset;
-               block->insn_extra[search].linked_value = addr;
-               block->insn_extra[offset].linked_insn = search;
-               block->insn_extra[offset].linked_value = addr;
+               insn[search].linked_insn = offset;
+               insn[search].linked_value = addr;
+               insn[offset].linked_insn = search;
+               insn[offset].linked_value = addr;
                // if not ORI, create global data label if one does not exist
                if (insn[offset].id != MIPS_INS_ORI) {
                   int label = labels_find(&state->globals, addr);
@@ -156,13 +164,13 @@ static void link_with_lui(disasm_state *state, int block_id, int offset, unsigne
                     insn[search].id == MIPS_INS_ADD ||
                     insn[search].id == MIPS_INS_SUB ||
                     insn[search].id == MIPS_INS_SUBU) {
-            unsigned int rd = insn[search].detail->mips.operands[0].reg;
+            unsigned int rd = insn[search].operands[0].reg;
             if (reg == rd) {
                // ignore: reg is pointer, offset is probably struct data member
                break;
             }
          } else if (insn[search].id == MIPS_INS_JR &&
-               insn[search].detail->mips.operands[0].reg == MIPS_REG_RA) {
+               insn[search].operands[0].reg == MIPS_REG_RA) {
             // stop looking when previous `jr ra` is hit
             break;
          }
@@ -171,31 +179,66 @@ static void link_with_lui(disasm_state *state, int block_id, int offset, unsigne
 }
 
 // disassemble a block of code and collect JALs and local labels
-static void disassemble_block(unsigned char *data, size_t data_len, unsigned int vaddr, disasm_state *state, int block_id)
+static void disassemble_block(unsigned char *data, unsigned int length, unsigned int vaddr, disasm_state *state, int block_id)
 {
    asm_block *block = &state->blocks[block_id];
-   cs_insn *insn;
-   int count;
 
-   count = cs_disasm(state->handle, data, data_len, vaddr, 0, &insn);
-   if (count > 0) {
-      block->instructions = insn;
-      block->instruction_count = count;
-      block->insn_extra = calloc(count, sizeof(*block->insn_extra));
+   // capstone structures require a lot of data, so only request a small block at a time and preserve the required data
+   int remaining = length;
+   int processed = 0;
+   block->instruction_count = 0;
+   block->instructions = calloc(length / 4, sizeof(*block->instructions));
+   while (remaining > 0) {
+      cs_insn *insn;
+      int current_len = MIN(remaining, 1024);
+      int count = cs_disasm(state->handle, &data[processed], current_len, vaddr + processed, 0, &insn);
       for (int i = 0; i < count; i++) {
-         cs_mips *mips = &insn[i].detail->mips;
-         block->insn_extra[i].linked_insn = -1;
-         if (cs_insn_group(state->handle, &insn[i], MIPS_GRP_JUMP)) {
-            if (insn[i].id == MIPS_INS_JR || insn[i].id == MIPS_INS_JALR) {
-               if (insn[i].detail->mips.operands[0].reg == MIPS_REG_RA &&  i + 2 < count) {
-                  block->insn_extra[i + 2].newline = 1;
+         disasm_data *dis_insn = &block->instructions[block->instruction_count + i];
+         dis_insn->id = insn[i].id;
+         memcpy(dis_insn->bytes, insn[i].bytes, sizeof(dis_insn->bytes));
+         strcpy(dis_insn->mnemonic, insn[i].mnemonic);
+         strcpy(dis_insn->op_str,   insn[i].op_str);
+         if (insn[i].detail->mips.op_count > 0 && insn[i].detail != NULL) {
+            dis_insn->op_count = insn[i].detail->mips.op_count;
+            memcpy(dis_insn->operands, insn[i].detail->mips.operands, sizeof(dis_insn->operands));
+         } else {
+            dis_insn->op_count = 0;
+         }
+         dis_insn->is_jump = cs_insn_group(state->handle, &insn[i], MIPS_GRP_JUMP) || insn[i].id == MIPS_INS_JAL || insn[i].id == MIPS_INS_BAL;
+      }
+      cs_free(insn, count);
+      block->instruction_count += count;
+      processed += count * 4;
+      remaining = length - processed;
+   }
+
+   if (block->instruction_count > 0) {
+      disasm_data *insn = block->instructions;
+      for (int i = 0; i < block->instruction_count; i++) {
+         insn[i].linked_insn = -1;
+         if (insn[i].is_jump) {
+            // flag for newline two instructions after `jr ra` or `j`
+            if ( ((insn[i].id == MIPS_INS_JR || insn[i].id == MIPS_INS_JALR) && insn[i].operands[0].reg == MIPS_REG_RA) ||
+                   insn[i].id == MIPS_INS_J) {
+               if (i + 2 < block->instruction_count) {
+                   insn[i + 2].newline = 1;
+               }
+            }
+
+            if (insn[i].id == MIPS_INS_JAL || insn[i].id == MIPS_INS_BAL || insn[i].id == MIPS_INS_J) {
+               unsigned int jal_target  = (unsigned int)insn[i].operands[0].imm;
+               // create label if one does not exist
+               if (labels_find(&state->globals, jal_target) < 0) {
+                  char label_name[32];
+                  sprintf(label_name, "func_%08X", jal_target);
+                  labels_add(&state->globals, label_name, jal_target);
                }
             } else {
                // all branches and jumps
-               for (int o = 0; o < mips->op_count; o++) {
-                  if (mips->operands[o].type == MIPS_OP_IMM) {
+               for (int o = 0; o < insn[i].op_count; o++) {
+                  if (insn[i].operands[o].type == MIPS_OP_IMM) {
                      char label_name[32];
-                     unsigned int branch_target = (unsigned int)mips->operands[o].imm;
+                     unsigned int branch_target = (unsigned int)insn[i].operands[o].imm;
                      // create label if one does not exist
                      int label = labels_find(&block->locals, branch_target);
                      if (label < 0) {
@@ -208,14 +251,6 @@ static void disassemble_block(unsigned char *data, size_t data_len, unsigned int
                   }
                }
             }
-         } else if (insn[i].id == MIPS_INS_JAL || insn[i].id == MIPS_INS_BAL) {
-            unsigned int jal_target  = (unsigned int)mips->operands[0].imm;
-            // create label if one does not exist
-            if (labels_find(&state->globals, jal_target) < 0) {
-               char label_name[32];
-               sprintf(label_name, "func_%08X", jal_target);
-               labels_add(&state->globals, label_name, jal_target);
-            }
          }
 
          if (state->merge_pseudo) {
@@ -223,15 +258,15 @@ static void disassemble_block(unsigned char *data, size_t data_len, unsigned int
                // find floating point LI
                case MIPS_INS_MTC1:
                {
-                  unsigned int rt = insn[i].detail->mips.operands[0].reg;
+                  unsigned int rt = insn[i].operands[0].reg;
                   for (int s = i - 1; s >= 0; s--) {
-                     if (insn[s].id == MIPS_INS_LUI && insn[s].detail->mips.operands[0].reg == rt) {
-                        unsigned int lui_imm = (unsigned int)insn[s].detail->mips.operands[1].imm;
+                     if (insn[s].id == MIPS_INS_LUI && insn[i].operands[0].reg == rt) {
+                        unsigned int lui_imm = (unsigned int)insn[i].operands[1].imm;
                         lui_imm <<= 16;
                         float f = *((float*)&lui_imm);
                         // link up the LUI with this instruction and the float
-                        block->insn_extra[s].linked_insn = i;
-                        block->insn_extra[s].linked_float = f;
+                        insn[s].linked_insn = i;
+                        insn[s].linked_float = f;
                         // rewrite LUI instruction to be LI
                         insn[s].id = MIPS_INS_LI;
                         strcpy(insn[s].mnemonic, "li");
@@ -246,12 +281,12 @@ static void disassemble_block(unsigned char *data, size_t data_len, unsigned int
                                 insn[s].id == MIPS_INS_ADD ||
                                 insn[s].id == MIPS_INS_SUB ||
                                 insn[s].id == MIPS_INS_SUBU) {
-                        unsigned int rd = insn[s].detail->mips.operands[0].reg;
+                        unsigned int rd = insn[s].operands[0].reg;
                         if (rt == rd) {
                            break;
                         }
                      } else if (insn[s].id == MIPS_INS_JR &&
-                                insn[s].detail->mips.operands[0].reg == MIPS_REG_RA) {
+                                insn[s].operands[0].reg == MIPS_REG_RA) {
                         // stop looking when previous `jr ra` is hit
                         break;
                      }
@@ -272,17 +307,17 @@ static void disassemble_block(unsigned char *data, size_t data_len, unsigned int
                case MIPS_INS_LW:
                case MIPS_INS_LWU:
                {
-                  unsigned int mem_rs = insn[i].detail->mips.operands[1].mem.base;
-                  unsigned int mem_imm = (unsigned int)insn[i].detail->mips.operands[1].mem.disp;
+                  unsigned int mem_rs = insn[i].operands[1].mem.base;
+                  unsigned int mem_imm = (unsigned int)insn[i].operands[1].mem.disp;
                   link_with_lui(state, block_id, i, mem_rs, mem_imm);
                   break;
                }
                case MIPS_INS_ADDIU:
                case MIPS_INS_ORI:
                {
-                  unsigned int rd = insn[i].detail->mips.operands[0].reg;
-                  unsigned int rs = insn[i].detail->mips.operands[1].reg;
-                  int64_t imm = insn[i].detail->mips.operands[2].imm;
+                  unsigned int rd = insn[i].operands[0].reg;
+                  unsigned int rs = insn[i].operands[1].reg;
+                  int64_t imm = insn[i].operands[2].imm;
                   if (rs == MIPS_REG_ZERO) { // becomes LI
                      insn[i].id = MIPS_INS_LI;
                      strcpy(insn[i].mnemonic, "li");
@@ -297,7 +332,7 @@ static void disassemble_block(unsigned char *data, size_t data_len, unsigned int
          }
       }
    } else {
-      ERROR("Error: Failed to disassemble 0x%X bytes of code at 0x%08X\n", (unsigned int)data_len, vaddr);
+      ERROR("Error: Failed to disassemble 0x%X bytes of code at 0x%08X\n", (unsigned int)length, vaddr);
    }
 }
 
@@ -328,12 +363,8 @@ void disasm_state_free(disasm_state *state)
 {
    if (state) {
       for (int i = 0; i < state->block_count; i++) {
-         if (state->blocks[i].insn_extra) {
-            free(state->blocks[i].insn_extra);
-            state->blocks[i].insn_extra = NULL;
-         }
          if (state->blocks[i].instructions) {
-            cs_free(state->blocks[i].instructions, state->blocks[i].instruction_count);
+            free(state->blocks[i].instructions);
             state->blocks[i].instructions = NULL;
          }
       }
@@ -358,10 +389,11 @@ int disasm_label_lookup(const disasm_state *state, unsigned int vaddr, char *nam
       strcpy(name, state->globals.labels[id].name);
       found = 1;
    }
+   sprintf(name, "0x%08X", vaddr);
    return found;
 }
 
-void mipsdisasm_pass1(unsigned char *data, size_t data_len, unsigned int offset, unsigned int vaddr, disasm_state *state)
+void mipsdisasm_pass1(unsigned char *data, unsigned int offset, unsigned int length, unsigned int vaddr, disasm_state *state)
 {
    if (state->block_count >= state->block_alloc) {
       state->block_alloc *= 2;
@@ -370,11 +402,11 @@ void mipsdisasm_pass1(unsigned char *data, size_t data_len, unsigned int offset,
    asm_block *block = &state->blocks[state->block_count];
    labels_alloc(&block->locals);
    block->offset = offset;
-   block->length = data_len;
+   block->length = length;
    block->vaddr = vaddr;
 
    // collect all branch and jump targets
-   disassemble_block(&data[offset], data_len, vaddr, state, state->block_count);
+   disassemble_block(&data[offset], length, vaddr, state, state->block_count);
 
    // sort global and local labels
    labels_sort(&state->globals);
@@ -410,10 +442,9 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
       local_idx++;
    }
    for (int i = 0; i < block->instruction_count; i++) {
-      cs_insn *insn = &block->instructions[i];
-      cs_mips *mips = &insn->detail->mips;
+      disasm_data *insn = &block->instructions[i];
       // newline between functions
-      if (block->insn_extra[i].newline) {
+      if (insn->newline) {
          fprintf(out, "\n");
       }
       // insert all global labels at this address
@@ -432,37 +463,42 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
          indent = 0;
          fputc(' ', out);
       }
-      if (cs_insn_group(state->handle, insn, MIPS_GRP_JUMP)) {
+      if (insn->is_jump) {
          indent = 1;
          fprintf(out, "%-5s ", insn->mnemonic);
-         for (int o = 0; o < mips->op_count; o++) {
-            if (o > 0) {
-               fprintf(out, ", ");
+         if (insn->id == MIPS_INS_JAL || insn->id == MIPS_INS_BAL || insn->id == MIPS_INS_J) {
+            unsigned int jal_target = (unsigned int)insn->operands[0].imm;
+            label = labels_find(&state->globals, jal_target);
+            if (label >= 0) {
+               fprintf(out, "%s\n", state->globals.labels[label].name);
+            } else {
+               fprintf(out, "0x%08X\n", jal_target);
             }
-            switch (mips->operands[o].type) {
-               case MIPS_OP_REG:
-                  fprintf(out, "$%s", cs_reg_name(state->handle, mips->operands[o].reg));
-                  break;
-               case MIPS_OP_IMM:
-               {
-                  unsigned int branch_target = (unsigned int)mips->operands[o].imm;
-                  label = labels_find(&block->locals, branch_target);
-                  fprintf(out, block->locals.labels[label].name);
-                  break;
-               }
-               default:
-                  break;
-            }
-         }
-         fprintf(out, "\n");
-      } else if (insn->id == MIPS_INS_JAL || insn->id == MIPS_INS_BAL) {
-         unsigned int jal_target = (unsigned int)mips->operands[0].imm;
-         label = labels_find(&state->globals, jal_target);
-         fprintf(out, "%-5s ", insn->mnemonic);
-         if (label >= 0) {
-            fprintf(out, "%s\n", state->globals.labels[label].name);
          } else {
-            fprintf(out, "0x%08X\n", jal_target);
+            for (int o = 0; o < insn->op_count; o++) {
+               if (o > 0) {
+                  fprintf(out, ", ");
+               }
+               switch (insn->operands[o].type) {
+                  case MIPS_OP_REG:
+                     fprintf(out, "$%s", cs_reg_name(state->handle, insn->operands[o].reg));
+                     break;
+                  case MIPS_OP_IMM:
+                  {
+                     unsigned int branch_target = (unsigned int)insn->operands[o].imm;
+                     label = labels_find(&block->locals, branch_target);
+                     if (label >= 0) {
+                        fprintf(out, block->locals.labels[label].name);
+                     } else {
+                        fprintf(out, "0x%08X", branch_target);
+                     }
+                     break;
+                  }
+                  default:
+                     break;
+               }
+            }
+            fprintf(out, "\n");
          }
       } else if (insn->id == MIPS_INS_MTC0 || insn->id == MIPS_INS_MFC0) {
          // workaround bug in capstone/LLVM
@@ -476,9 +512,9 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
          // rt = insn->bytes[1] & 0x1F;
          rd = (insn->bytes[2] & 0xF8) >> 3;
          fprintf(out, "%-5s $%s, $%d\n", insn->mnemonic,
-                 cs_reg_name(state->handle, mips->operands[0].reg), rd);
+                 cs_reg_name(state->handle, insn->operands[0].reg), rd);
       } else {
-         int linked_insn = block->insn_extra[i].linked_insn;
+         int linked_insn = insn->linked_insn;
          if (linked_insn >= 0) {
             if (insn->id == MIPS_INS_LI) {
                // assume this is LUI converted to LI for matched MTC1
@@ -486,48 +522,45 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
                switch (state->syntax) {
                   case ASM_GAS:
                      fprintf(out, "$%s, 0x%04X0000 # %f\n",
-                           cs_reg_name(state->handle, mips->operands[0].reg),
-                           (unsigned int)mips->operands[1].imm,
-                           block->insn_extra[i].linked_float);
+                           cs_reg_name(state->handle, insn->operands[0].reg),
+                           (unsigned int)insn->operands[1].imm,
+                           insn->linked_float);
                      break;
                   case ASM_ARMIPS:
                      fprintf(out, "$%s, 0x%04X0000 // %f\n",
-                           cs_reg_name(state->handle, mips->operands[0].reg),
-                           (unsigned int)mips->operands[1].imm,
-                           block->insn_extra[i].linked_float);
+                           cs_reg_name(state->handle, insn->operands[0].reg),
+                           (unsigned int)insn->operands[1].imm,
+                           insn->linked_float);
                      break;
                   // TODO: this is ideal, but it doesn't work exactly for all floats since some emit imprecise float strings
                   /*
                      fprintf(out, "$%s, %f // 0x%04X\n",
-                           cs_reg_name(state->handle, mips->operands[0].reg),
-                           block->insn_extra[i].linked_float,
-                           (unsigned int)mips->operands[1].imm);
+                           cs_reg_name(state->handle, insn->operands[0].reg),
+                           insn->linked_float,
+                           (unsigned int)insn->operands[1].imm);
                      break;
                    */
                }
             } else if (insn->id == MIPS_INS_LUI) {
-               label = labels_find(&state->globals, block->insn_extra[i].linked_value);
+               label = labels_find(&state->globals, insn->linked_value);
                // assume matched LUI with ADDIU/LW/SW etc.
                switch (state->syntax) {
                   case ASM_GAS:
                      switch (block->instructions[linked_insn].id) {
                         case MIPS_INS_ADDIU:
                            fprintf(out, "%-5s $%s, %%hi(%s) # %s\n", insn->mnemonic,
-                                 cs_reg_name(state->handle, mips->operands[0].reg),
-                                 state->globals.labels[label].name,
-                                 insn->op_str);
+                                 cs_reg_name(state->handle, insn->operands[0].reg),
+                                 state->globals.labels[label].name, insn->op_str);
                            break;
                         case MIPS_INS_ORI:
                            fprintf(out, "%-5s $%s, (0x%08X >> 16) # %s %s\n", insn->mnemonic,
-                                 cs_reg_name(state->handle, mips->operands[0].reg),
-                                 block->insn_extra[i].linked_value,
-                                 insn->mnemonic, insn->op_str);
+                                 cs_reg_name(state->handle, insn->operands[0].reg),
+                                 insn->linked_value, insn->mnemonic, insn->op_str);
                            break;
                         default: // LW/SW/etc.
                            fprintf(out, "%-5s $%s, %%hi(%s) # %s\n", insn->mnemonic,
-                                 cs_reg_name(state->handle, mips->operands[0].reg),
-                                 state->globals.labels[label].name,
-                                 insn->op_str);
+                                 cs_reg_name(state->handle, insn->operands[0].reg),
+                                 state->globals.labels[label].name, insn->op_str);
                            break;
                      }
                      break;
@@ -535,37 +568,35 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
                      switch (block->instructions[linked_insn].id) {
                         case MIPS_INS_ADDIU:
                            fprintf(out, "%-5s $%s, %s // %s %s\n", "la.u",
-                                 cs_reg_name(state->handle, mips->operands[0].reg),
+                                 cs_reg_name(state->handle, insn->operands[0].reg),
                                  state->globals.labels[label].name,
                                  insn->mnemonic, insn->op_str);
                            break;
                         case MIPS_INS_ORI:
                            fprintf(out, "%-5s $%s, 0x%08X // %s %s\n", "li.u",
-                                 cs_reg_name(state->handle, mips->operands[0].reg),
-                                 block->insn_extra[i].linked_value,
-                                 insn->mnemonic, insn->op_str);
+                                 cs_reg_name(state->handle, insn->operands[0].reg),
+                                 insn->linked_value, insn->mnemonic, insn->op_str);
                            break;
                         default: // LW/SW/etc.
                            fprintf(out, "%-5s $%s, hi(%s) // %s\n", insn->mnemonic,
-                                 cs_reg_name(state->handle, mips->operands[0].reg),
-                                 state->globals.labels[label].name,
-                                 insn->op_str);
+                                 cs_reg_name(state->handle, insn->operands[0].reg),
+                                 state->globals.labels[label].name, insn->op_str);
                            break;
                      }
                      break;
                }
             } else if (insn->id == MIPS_INS_ADDIU) {
-               label = labels_find(&state->globals, block->insn_extra[i].linked_value);
+               label = labels_find(&state->globals, insn->linked_value);
                switch (state->syntax) {
                   case ASM_GAS:
                      fprintf(out, "%-5s $%s, %%lo(%s) # %s %s\n", insn->mnemonic,
-                           cs_reg_name(state->handle, mips->operands[0].reg),
+                           cs_reg_name(state->handle, insn->operands[0].reg),
                            state->globals.labels[label].name,
                            insn->mnemonic, insn->op_str);
                      break;
                   case ASM_ARMIPS:
                      fprintf(out, "%-5s $%s, %s // %s %s\n", "la.l",
-                           cs_reg_name(state->handle, mips->operands[0].reg),
+                           cs_reg_name(state->handle, insn->operands[0].reg),
                            state->globals.labels[label].name,
                            insn->mnemonic, insn->op_str);
                      break;
@@ -574,24 +605,24 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
                switch (state->syntax) {
                   case ASM_GAS:
                      fprintf(out, "%-5s $%s, (0x%08X & 0xFFFF) # %s %s\n", insn->mnemonic,
-                           cs_reg_name(state->handle, mips->operands[0].reg),
-                           block->insn_extra[i].linked_value,
+                           cs_reg_name(state->handle, insn->operands[0].reg),
+                           insn->linked_value,
                            insn->mnemonic, insn->op_str);
                      break;
                   case ASM_ARMIPS:
                      fprintf(out, "%-5s $%s, 0x%08X // %s %s\n", "li.l",
-                           cs_reg_name(state->handle, mips->operands[0].reg),
-                           block->insn_extra[i].linked_value,
+                           cs_reg_name(state->handle, insn->operands[0].reg),
+                           insn->linked_value,
                            insn->mnemonic, insn->op_str);
                      break;
                }
             } else {
-               label = labels_find(&state->globals, block->insn_extra[i].linked_value);
+               label = labels_find(&state->globals, insn->linked_value);
                fprintf(out, "%-5s $%s, %slo(%s)($%s)\n", insn->mnemonic,
-                     cs_reg_name(state->handle, mips->operands[0].reg),
+                     cs_reg_name(state->handle, insn->operands[0].reg),
                      state->syntax == ASM_GAS ? "%" : "",
                      state->globals.labels[label].name,
-                     cs_reg_name(state->handle, mips->operands[1].reg));
+                     cs_reg_name(state->handle, insn->operands[1].reg));
             }
          } else {
             fprintf(out, "%-5s %s\n", insn->mnemonic, insn->op_str);
@@ -808,7 +839,7 @@ int main(int argc, char *argv[])
       range *r = &args.ranges[i];
       INFO("Disassembling range 0x%X-0x%X at 0x%08X\n", r->start, r->start + r->length, r->vaddr);
 
-      (void)mipsdisasm_pass1(data, r->length, r->start, r->vaddr, state);
+      (void)mipsdisasm_pass1(data, r->start, r->length, r->vaddr, state);
    }
 
    // output global labels not in asm sections
