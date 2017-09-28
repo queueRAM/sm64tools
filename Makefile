@@ -63,7 +63,7 @@ AR        = $(CROSS)ar
 INCLUDES  = -I./ext
 DEFS      = 
 # Release flags
-CFLAGS    = -Wall -Wextra -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(DEFS) -MMD
+CFLAGS    = -Wall -Wextra -Wno-format-overflow -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(DEFS) -MMD
 LDFLAGS   = -s -Wl,--gc-sections
 # Debug flags
 #CFLAGS    = -Wall -Wextra -O0 -g $(INCLUDES) $(DEFS) -MMD
