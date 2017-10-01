@@ -198,7 +198,7 @@ static void disassemble_block(unsigned char *data, unsigned int length, unsigned
          memcpy(dis_insn->bytes, insn[i].bytes, sizeof(dis_insn->bytes));
          strcpy(dis_insn->mnemonic, insn[i].mnemonic);
          strcpy(dis_insn->op_str,   insn[i].op_str);
-         if (insn[i].detail->mips.op_count > 0 && insn[i].detail != NULL) {
+         if (insn[i].detail != NULL && insn[i].detail->mips.op_count > 0) {
             dis_insn->op_count = insn[i].detail->mips.op_count;
             memcpy(dis_insn->operands, insn[i].detail->mips.operands, sizeof(dis_insn->operands));
          } else {
