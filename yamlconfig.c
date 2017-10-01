@@ -79,51 +79,6 @@ int get_scalar_uint(unsigned int *val, yaml_node_t *node)
    return status;
 }
 
-void load_memory(unsigned int *mem, yaml_document_t *doc, yaml_node_t *node)
-{
-   yaml_node_item_t *i_node;
-   yaml_node_t *next_node;
-   if (node->type == YAML_SEQUENCE_NODE) {
-      size_t count = node->data.sequence.items.top - node->data.sequence.items.start;
-      if (count == 3) {
-         i_node = node->data.sequence.items.start;
-         for (size_t i = 0; i < count; i++) {
-            next_node = yaml_document_get_node(doc, i_node[i]);
-            if (next_node && next_node->type == YAML_SCALAR_NODE) {
-               get_scalar_uint(&mem[i], next_node);
-            } else {
-               ERROR("Error: non-scalar value in memory sequence\n");
-            }
-         }
-      } else {
-         ERROR("Error: memory sequence needs 3 scalars\n");
-      }
-   }
-}
-
-int load_memory_sequence(rom_config *c, yaml_document_t *doc, yaml_node_t *node)
-{
-   yaml_node_t *next_node;
-   int ret_val = -1;
-   if (node->type == YAML_SEQUENCE_NODE) {
-      size_t count = node->data.sequence.items.top - node->data.sequence.items.start;
-      c->ram_table = calloc(3 * count, sizeof(*c->ram_table));
-      c->ram_count = 0;
-      yaml_node_item_t *i_node = node->data.sequence.items.start;
-      for (size_t i = 0; i < count; i++) {
-         next_node = yaml_document_get_node(doc, i_node[i]);
-         if (next_node && next_node->type == YAML_SEQUENCE_NODE) {
-            load_memory(&c->ram_table[3*c->ram_count], doc, next_node);
-            c->ram_count++;
-         } else {
-            ERROR("Error: non-sequence in memory sequence\n");
-         }
-      }
-      ret_val = 0;
-   }
-   return ret_val;
-}
-
 void load_texture(texture *tex, yaml_document_t *doc, yaml_node_t *node)
 {
    char val[64];
@@ -251,6 +206,7 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
                case 0: section->start = strtoul(val, NULL, 0); break;
                case 1: section->end = strtoul(val, NULL, 0); break;
                case 2: section->type = config_str2section(val); break;
+               case 3: section->vaddr = strtoul(val, NULL, 0); break;
             }
          } else {
             ERROR("Error: non-scalar value in section sequence\n");
@@ -266,8 +222,8 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
          case TYPE_M64:
          case TYPE_SM64_GEO:
          case TYPE_SM64_LEVEL:
-            if (count > 4) {
-               ERROR("Error: " SIZE_T_FORMAT " - expected 3-4 fields for section\n", node->start_mark.line);
+            if (count > 5) {
+               ERROR("Error: " SIZE_T_FORMAT " - expected 3-5 fields for section\n", node->start_mark.line);
                return;
             }
             break;
@@ -295,6 +251,7 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
          next_node = yaml_document_get_node(doc, i_node[3]);
          if (next_node && next_node->type == YAML_SCALAR_NODE) {
             get_scalar_value(val, next_node);
+            // most are label names, blast is subtype
             switch (section->type) {
                case TYPE_BLAST:
                   section->subtype = strtoul(val, NULL, 0);
@@ -315,6 +272,10 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
          if (next_node && next_node->type == YAML_SCALAR_NODE) {
             get_scalar_value(val, next_node);
             switch (section->type) {
+               case TYPE_ASM:
+               case TYPE_MIO0:
+                  section->vaddr = strtoul(val, NULL, 0);
+                  break;
                case TYPE_PTR:
                case TYPE_INSTRUMENT_SET:
                   section->child_count = strtoul(val, NULL, 0);
@@ -453,8 +414,6 @@ void parse_yaml_root(yaml_document_t *doc, yaml_node_t *node, rom_config *c)
                   unsigned int val;
                   get_scalar_uint(&val, val_node);
                   c->checksum2 = (unsigned int)val;
-               } else if (!strcmp(key, "memory")) {
-                  load_memory_sequence(c, doc, val_node);
                } else if (!strcmp(key, "ranges")) {
                   load_sections_sequence(c, doc, val_node);
                } else if (!strcmp(key, "labels")) {
@@ -480,7 +439,6 @@ int config_parse_file(const char *filename, rom_config *c)
 
    c->name[0] = '\0';
    c->basename[0] = '\0';
-   c->ram_count = 0;
    c->section_count = 0;
    c->label_count = 0;
 
@@ -513,11 +471,6 @@ int config_parse_file(const char *filename, rom_config *c)
 void config_free(rom_config *config)
 {
    if (config) {
-      if (config->ram_table) {
-         free(config->ram_table);
-         config->ram_table = NULL;
-         config->ram_count = 0;
-      }
       if (config->sections) {
          for (int i = 0; i < config->section_count; i++) {
             switch (config->sections[i].type) {
@@ -550,7 +503,6 @@ void config_free(rom_config *config)
 void config_print(const rom_config *config)
 {
    int i, j;
-   unsigned int *r = config->ram_table;
    split_section *s = config->sections;
    label *l = config->labels;
 
@@ -559,18 +511,10 @@ void config_print(const rom_config *config)
    printf("checksum1: %08X\n", config->checksum1);
    printf("checksum2: %08X\n\n", config->checksum2);
 
-   // memory
-   printf("memory:\n");
-   printf("%-12s %-12s %-12s\n", "start", "end", "offset");
-   for (i = 0; i < config->ram_count; i++) {
-      printf("0x%08X   0x%08X   0x%08X\n", r[3*i], r[3*i+1], r[3*i+2]);
-   }
-   printf("\n");
-
    // ranges
    printf("ranges:\n");
    for (i = 0; i < config->section_count; i++) {
-      printf("0x%08X 0x%08X %d %s %d\n", s[i].start, s[i].end, s[i].type, s[i].label, s[i].child_count);
+      printf("0x%08X 0x%08X 0x%08X %d %s %d\n", s[i].start, s[i].end, s[i].vaddr, s[i].type, s[i].label, s[i].child_count);
       if (s[i].child_count > 0) {
          switch (s[i].type) {
             case TYPE_BLAST:

@@ -47,6 +47,7 @@ typedef struct _split_section
    char label[128];
    unsigned int start;
    unsigned int end;
+   unsigned int vaddr;
    section_type type;
 
    int subtype;
@@ -65,9 +66,6 @@ typedef struct _rom_config
 
    unsigned int checksum1;
    unsigned int checksum2;
-
-   unsigned int *ram_table;
-   int ram_count;
 
    split_section *sections;
    int section_count;

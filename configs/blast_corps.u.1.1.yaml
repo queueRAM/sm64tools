@@ -9,12 +9,6 @@ checksum2: 0x1948D305
 # base filename used for outputs (please, no spaces)
 basename: "blast_corps.u.1.1"
 
-# memory map from KSEG0 RAM addresses to ROM offsets
-# these were decoded from DMA accesses
-memory:
-   # start     end         ram-to-rom
-   - [0x8021ED00, 0x8031ECFF, 0x8021DD00] # 001000-100FFF 100000
-
 # ranges to split the ROM into
 # types:
 #   asm      - MIPS assembly block.  Symbol names are in 'labels' list below
@@ -37,7 +31,7 @@ ranges:
    # start,  end,      type,     label
    - [0x000000, 0x000040, "header", "header"]
    - [0x000040, 0x001000, "bin",    "boot"]
-   - [0x001000, 0x004A3C, "asm"]
+   - [0x001000, 0x004A3C, "asm", "decompress", 0x8021ED00]
    - [0x004CE0, 0x00CCE0, "bin"] # table of textures and types
    - [0x00CCE0, 0x00CDE0, "blast", 0]:
       - [0x0, "tex.ia",    8, 16, 16]

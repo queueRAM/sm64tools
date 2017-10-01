@@ -9,14 +9,6 @@ checksum2: 0x74757C24
 # base filename used for outputs (please, no spaces)
 basename: "sm64.j"
 
-# memory map from KSEG0 RAM addresses to ROM offsets
-# these were decoded from DMA accesses
-memory:
-   # start     end         ram-to-rom
-   - [0x8016F000, 0x801B99DF, 0x7FF51830] # 21D7D0-26801F 4A9E0
-   - [0x80246000, 0x8033920F, 0x80245000] # 001000-0F4210 F3210
-   - [0x80378800, 0x8038BC8F, 0x802845F0] # 0F4210-10769F 13490
-
 # ranges to split the ROM into
 # types:
 #   asm      - MIPS assembly block.  Symbol names are in 'labels' list below
@@ -37,7 +29,7 @@ ranges:
    # start,  end,      type,     label
    - [0x000000, 0x000040, "header", "header"]
    - [0x000040, 0x001000, "bin",    "boot"]
-   - [0x001000, 0x0E5320, "asm"] # 80246000-8032B258
+   - [0x001000, 0x0E5320, "asm", "main", 0x80246000]
    - [0x0E5320, 0x0E53F0, "bin",    "rsp.boot"]
    - [0x0E53F0, 0x0E63F0, "bin",    "rsp.graphics"]
    - [0x0E6800, 0x0E7000, "bin",    "rsp.audio"]
@@ -157,14 +149,14 @@ ranges:
    - [0x0EAD50, 0x0EAD64, "ptr", "TableBooGivingStarActions"]
    - [0x0EAD64, 0x0EAD74, "ptr", "TableBooWithCageActions"]
    - [0x0EAD84, 0x0EADAC, "ptr", "TableWhompActions"]
-   - [0x0F4210, 0x107220, "asm"] # 80378800-80385F88
+   - [0x0F4210, 0x107220, "asm", 0x80378800]
    # Script Function Tables
    - [0x107220, 0x1072A4, "ptr", "GeoLayoutJumpTable"]
    - [0x1072C8, 0x1073BC, "ptr", "LevelScriptJumpTable"]
    - [0x1073C0, 0x1074A0, "ptr", "BehaviorJumpTable"]
    # Level Scripts, Geo Layout, Graphics, and Behaviors
    - [0x1076A0, 0x1076D0, "sm64.level",  "main_entry"]
-   - [0x1076D0, 0x112B50, "mio0", "font_graphics"]:
+   - [0x1076D0, 0x112B50, "mio0", "font_graphics", 0x02000000]:
       #offset, format, depth,width,height
       - [0x00000, "tex.rgba",   16, 16, 16]
       - [0x00200, "tex.rgba",   16, 16, 16]
@@ -1462,7 +1454,7 @@ ranges:
       - [0x563C, "beh_end_birds_1"]
       - [0x5660, "beh_end_birds_2"]
       - [0x5684, "beh_intro_scene"]
-   - [0x21D7D0, 0x268020, "asm"] # 8016F000-801B99DF
+   - [0x21D7D0, 0x268020, "asm", "menu", 0x8016F000]
    - [0x268020, 0x268520, "sm64.level", "game_over_level"]
    - [0x268520, 0x26D5A0, "mio0", "wood_trademark"]:
       - [0x07EA0, "tex.rgba",   16, 32, 32]
@@ -1480,7 +1472,7 @@ ranges:
       - [0x04CC0, "tex.rgba",   16, 80, 20]
       - [0x05940, "tex.rgba",   16, 80, 20]
    - [0x2A42A0, 0x2A4730, "sm64.level", "main_menu_level"]
-   - [0x2A4730, 0x2AA240, "mio0", "main_menu_segment7"]:
+   - [0x2A4730, 0x2AA240, "mio0", "main_menu_segment7", 0x07000000]:
       - [0x00018, "tex.rgba",   16, 32, 32]
       - [0x00818, "tex.rgba",   16, 32, 32]
       - [0x01018, "tex.rgba",   16, 64, 32]
@@ -1940,7 +1932,7 @@ ranges:
       - [0x06048, "tex.rgba",   16, 32, 32]
       - [0x0684C, "tex.rgba",   16, 16, 16]
       - [0x06AD8, "tex.rgba",   16, 16, 16]
-   - [0x3701E0, 0x380E60, "mio0", "bbh_segment7"]:
+   - [0x3701E0, 0x380E60, "mio0", "bbh_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 64]
       - [0x01000, "tex.rgba",   16, 32, 32]
       - [0x01800, "tex.rgba",   16, 32, 32]
@@ -1950,7 +1942,7 @@ ranges:
       - [0x04400, "tex.rgba",   16, 16, 32]
       - [0x207A0, "sm64.collision"]
    - [0x380E60, 0x381EF0, "sm64.level", "bbh_level"]
-   - [0x381EF0, 0x394230, "mio0", "ccm_segment7"]:
+   - [0x381EF0, 0x394230, "mio0", "ccm_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 32,  4]
       - [0x00900, "tex.rgba",   16, 32, 32]
@@ -1967,7 +1959,7 @@ ranges:
       - [0x138E8, "sm64.collision"]
       - [0x20880, "sm64.collision"]
    - [0x394230, 0x3948D0, "sm64.level", "ccm_level"]
-   - [0x3948D0, 0x3CD140, "mio0", "inside_castle_segment7"]:
+   - [0x3948D0, 0x3CD140, "mio0", "inside_castle_segment7", 0x07000000]:
       - [0x00000, "tex.ia",     16, 32, 32]
       - [0x00800, "tex.rgba",   16, 32, 32]
       - [0x01000, "tex.ia",     16, 32, 64]
@@ -2013,7 +2005,7 @@ ranges:
       - [0x6E364, "sm64.collision"]
       - [0x73AAC, "sm64.collision"]
    - [0x3CD140, 0x3CEE30, "sm64.level", "inside_castle_level"]
-   - [0x3CEE30, 0x3E4A60, "mio0", "hmc_segment7"]:
+   - [0x3CEE30, 0x3E4A60, "mio0", "hmc_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 64]
       - [0x01000, "tex.rgba",   16, 32, 64]
       - [0x02000, "tex.rgba",   16, 32, 64]
@@ -2024,7 +2016,7 @@ ranges:
       - [0x24CE0, "tex.rgba",   16, 32, 32]
       - [0x25594, "sm64.collision"]
    - [0x3E4A60, 0x3E5710, "sm64.level", "hmc_level"]
-   - [0x3E5710, 0x3F99F0, "mio0", "ssl_segment7"]:
+   - [0x3E5710, 0x3F99F0, "mio0", "ssl_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.ia",     16, 32, 32]
       - [0x01000, "tex.rgba",   16, 32, 32]
@@ -2041,7 +2033,7 @@ ranges:
       - [0x23678, "sm64.collision"]
       - [0x275BC, "sm64.collision"]
    - [0x3F99F0, 0x3FA310, "sm64.level", "ssl_level"]
-   - [0x3FA310, 0x403AC0, "mio0", "bob_segment7"]:
+   - [0x3FA310, 0x403AC0, "mio0", "bob_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 32, 32]
       - [0x01000, "tex.rgba",   16, 32, 32]
@@ -2049,7 +2041,7 @@ ranges:
       - [0x02000, "tex.rgba",   16, 32, 32]
       - [0x0E958, "sm64.collision"]
    - [0x403AC0, 0x404010, "sm64.level", "bob_level"]
-   - [0x404010, 0x40C8A0, "mio0", "sl_segment7"]:
+   - [0x404010, 0x40C8A0, "mio0", "sl_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 32, 32]
       - [0x01000, "tex.rgba",   16, 32, 32]
@@ -2058,7 +2050,7 @@ ranges:
       - [0x0CBD8, "sm64.collision"]
       - [0x0EFFC, "sm64.collision"]
    - [0x40C8A0, 0x40CDD0, "sm64.level", "sl_level"]
-   - [0x40CDD0, 0x417FF0, "mio0", "wdw_segment7"]:
+   - [0x40CDD0, 0x417FF0, "mio0", "wdw_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 32, 32]
       - [0x01000, "tex.rgba",   16, 32, 32]
@@ -2067,7 +2059,7 @@ ranges:
       - [0x14150, "sm64.collision"]
       - [0x1633C, "sm64.collision"]
    - [0x417FF0, 0x4187C0, "sm64.level", "wdw_level"]
-   - [0x4187C0, 0x421B80, "mio0", "jrb_segment7"]:
+   - [0x4187C0, 0x421B80, "mio0", "jrb_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 64, 32]
       - [0x01800, "tex.rgba",   16, 32, 32]
@@ -2075,26 +2067,26 @@ ranges:
       - [0x0B058, "sm64.collision"]
       - [0x105B8, "sm64.collision"]
    - [0x421B80, 0x422730, "sm64.level", "jrb_level"]
-   - [0x422730, 0x42A740, "mio0", "thi_segment7"]:
+   - [0x422730, 0x42A740, "mio0", "thi_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 32, 32]
       - [0x09FC8, "sm64.collision"]
       - [0x0BD60, "sm64.collision"]
       - [0x0D444, "sm64.collision"]
    - [0x42A740, 0x42AF80, "sm64.level", "thi_level"]
-   - [0x42AF80, 0x435460, "mio0", "ttc_segment7"]:
+   - [0x42AF80, 0x435460, "mio0", "ttc_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 16, 64]
       - [0x15F90, "tex.rgba",   16, 32, 32]
       - [0x12330, "sm64.collision"]
    - [0x435460, 0x4358D0, "sm64.level", "ttc_level"]
-   - [0x4358D0, 0x448200, "mio0", "rr_segment7"]:
+   - [0x4358D0, 0x448200, "mio0", "rr_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 64, 32]
       - [0x01800, "tex.ia",     16, 32, 32]
       - [0x2A9A8, "sm64.collision"]
    - [0x448200, 0x448C80, "sm64.level", "rr_level"]
-   - [0x448C80, 0x452520, "mio0", "castle_grounds_segment7"]:
+   - [0x448C80, 0x452520, "mio0", "castle_grounds_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 64]
       - [0x01000, "tex.rgba",   16, 64, 32]
       - [0x02000, "tex.rgba",   16, 64, 32]
@@ -2102,36 +2094,36 @@ ranges:
       - [0x0D9E8, "tex.rgba",   16, 32, 64]
       - [0x0EAE8, "sm64.collision"]
    - [0x452520, 0x452D40, "sm64.level", "castle_grounds_level"]
-   - [0x452D40, 0x459EA0, "mio0", "bidw_segment7"]:
+   - [0x452D40, 0x459EA0, "mio0", "bidw_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 32, 32]
       - [0x01000, "tex.rgba",   16, 32, 32]
       - [0x01800, "tex.rgba",   16, 32, 32]
       - [0x0D460, "sm64.collision"]
    - [0x459EA0, 0x45A540, "sm64.level", "bidw_level"]
-   - [0x45A540, 0x45F160, "mio0", "vanish_cap_segment7"]:
+   - [0x45A540, 0x45F160, "mio0", "vanish_cap_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 64, 32]
       - [0x01800, "tex.rgba",   16, 32, 64]
       - [0x02800, "tex.rgba",   16, 32, 32]
       - [0x09750, "sm64.collision"]
    - [0x45F160, 0x45F410, "sm64.level", "vanish_cap_level"]
-   - [0x45F410, 0x468780, "mio0", "bifs_segment7"]:
+   - [0x45F410, 0x468780, "mio0", "bifs_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 64]
       - [0x01000, "tex.rgba",   16, 32, 32]
       - [0x01800, "tex.rgba",   16, 32, 32]
       - [0x11E98, "sm64.collision"]
    - [0x468780, 0x468FD0, "sm64.level", "bifs_level"]
-   - [0x468FD0, 0x46A0E0, "mio0", "secret_aquarium_segment7"]:
+   - [0x468FD0, 0x46A0E0, "mio0", "secret_aquarium_segment7", 0x07000000]:
       - [0x03000, "sm64.collision"]
    - [0x46A0E0, 0x46A2E0, "sm64.level", "secret_aquarium_level"]
-   - [0x46A2E0, 0x475C20, "mio0", "bits_segment7"]:
+   - [0x46A2E0, 0x475C20, "mio0", "bits_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 64]
       - [0x01000, "tex.rgba",   16, 64, 32]
       - [0x02000, "tex.rgba",   16, 32, 32]
       - [0x16E18, "sm64.collision"]
    - [0x475C20, 0x4763C0, "sm64.level", "bits_level"]
-   - [0x4763C0, 0x48A950, "mio0", "lll_segment7"]:
+   - [0x4763C0, 0x48A950, "mio0", "lll_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 32, 32]
       - [0x01000, "tex.rgba",   16, 32, 32]
@@ -2168,7 +2160,7 @@ ranges:
       - [0x1ADE8, "sm64.collision"]
       - [0x25F80, "sm64.collision"]
    - [0x48A950, 0x48B8D0, "sm64.level", "lll_level"]
-   - [0x48B8D0, 0x493A00, "mio0", "ddd_segment7"]:
+   - [0x48B8D0, 0x493A00, "mio0", "ddd_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 64]
       - [0x01000, "tex.rgba",   16, 32, 32]
       - [0x01800, "tex.rgba",   16, 32, 32]
@@ -2177,7 +2169,7 @@ ranges:
       - [0x0D310, "sm64.collision"]
       - [0x0DE70, "sm64.collision"]
    - [0x493A00, 0x494030, "sm64.level", "ddd_level"]
-   - [0x494030, 0x49B9F0, "mio0", "wf_segment7"]:
+   - [0x494030, 0x49B9F0, "mio0", "wf_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 32, 32]
       - [0x01000, "tex.rgba",   16, 32, 32]
@@ -2236,16 +2228,16 @@ ranges:
       - [0x23F00, "tex.rgba",   16, 80, 20]
       - [0x24B80, "tex.rgba",   16, 80, 20]
    - [0x4AA450, 0x4AA510, "sm64.level", "cake_end_level"]
-   - [0x4AA510, 0x4AD610, "mio0", "castle_courtyard_segment7"]:
+   - [0x4AA510, 0x4AD610, "mio0", "castle_courtyard_segment7", 0x07000000]:
       - [0x059A8, "sm64.collision"]
    - [0x4AD610, 0x4AD8D0, "sm64.level", "castle_courtyard_level"]
-   - [0x4AD8D0, 0x4B5EB0, "mio0", "secret_slide_segment7"]:
+   - [0x4AD8D0, 0x4B5EB0, "mio0", "secret_slide_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.ia",     16, 32, 32]
       - [0x01000, "tex.rgba",   16, 32, 32]
       - [0x0E490, "sm64.collision"]
    - [0x4B5EB0, 0x4B6070, "sm64.level", "secret_slide_level"]
-   - [0x4B6070, 0x4BC980, "mio0", "metal_cap_segment7"]:
+   - [0x4B6070, 0x4BC980, "mio0", "metal_cap_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 64, 32]
       - [0x01000, "tex.rgba",   16, 32, 32]
       - [0x01800, "tex.rgba",   16, 32, 32]
@@ -2253,20 +2245,20 @@ ranges:
       - [0x02800, "tex.rgba",   16, 64, 16]
       - [0x0A508, "sm64.collision"]
    - [0x4BC980, 0x4BCBD0, "sm64.level", "metal_cap_level"]
-   - [0x4BCBD0, 0x4C06A0, "mio0", "wing_cap_segment7"]:
+   - [0x4BCBD0, 0x4C06A0, "mio0", "wing_cap_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 64]
       - [0x01000, "tex.rgba",   16, 32, 32]
       - [0x01800, "tex.rgba",   16, 32, 32]
       - [0x02000, "tex.ia",     16, 32, 32]
       - [0x07A18, "sm64.collision"]
    - [0x4C06A0, 0x4C08C0, "sm64.level", "wing_cap_level"]
-   - [0x4C08C0, 0x4C2160, "mio0", "bidw_platform_segment7"]:
+   - [0x4C08C0, 0x4C2160, "mio0", "bidw_platform_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 64]
       - [0x01000, "tex.rgba",   16, 32, 32]
       - [0x01800, "tex.rgba",   16, 32, 32]
       - [0x02838, "sm64.collision"]
    - [0x4C2160, 0x4C22C0, "sm64.level", "bidw_platform_level"]
-   - [0x4C22C0, 0x4CB8D0, "mio0", "rainbow_bonus_segment7"]:
+   - [0x4C22C0, 0x4CB8D0, "mio0", "rainbow_bonus_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 32, 16]
       - [0x00C00, "tex.rgba",   16, 32, 32]
@@ -2274,17 +2266,17 @@ ranges:
       - [0x01600, "tex.rgba",   16,  8, 32]
       - [0x10688, "sm64.collision"]
    - [0x4CB8D0, 0x4CBB70, "sm64.level", "rainbow_bonus_level"]
-   - [0x4CBB70, 0x4CC990, "mio0", "bifs_platform_segment7"]:
+   - [0x4CBB70, 0x4CC990, "mio0", "bifs_platform_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x019F0, "sm64.collision"]
    - [0x4CC990, 0x4CCBA0, "sm64.level", "bifs_platform_level"]
-   - [0x4CCBA0, 0x4CF490, "mio0", "bits_platform_segment7"]:
+   - [0x4CCBA0, 0x4CF490, "mio0", "bits_platform_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 32, 32]
       - [0x01000, "tex.rgba",   16, 32, 64]
       - [0x049C8, "sm64.collision"]
    - [0x4CF490, 0x4CF8B0, "sm64.level", "bits_platform_level"]
-   - [0x4CF8B0, 0x4E9190, "mio0", "ttm_segment7"]:
+   - [0x4CF8B0, 0x4E9190, "mio0", "ttm_segment7", 0x07000000]:
       - [0x00000, "tex.ia",     16, 32, 32]
       - [0x00800, "tex.rgba",   16, 32, 32]
       - [0x01000, "tex.rgba",   16, 32, 32]

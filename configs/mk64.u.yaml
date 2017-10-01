@@ -9,15 +9,6 @@ checksum2: 0x2E92DA52
 # base filename used for outputs (please, no spaces)
 basename: "mk64.u"
 
-# memory map from KSEG0 RAM addresses to ROM offsets
-# these were decoded from DMA accesses
-# 8028DF00-802BA100 were copied in FF chunks for some reason
-memory:
-   # start     end         ram-to-rom
-   - [0x80000400, 0x800F690F, 0x7FFFF400] # 001000-0F750F 0F6510
-   - [0x80280000, 0x802874A0, 0x8015C9C0] # 123640-12AAE0 0074A0
-   - [0x8028DF00, 0x802BA0FF, 0x801969F0] # 0F7510-12361F 02C200
-
 # ranges to split the ROM into
 # types:
 #   asm      - MIPS assembly block.  Symbol names are in 'labels' list below
@@ -38,16 +29,16 @@ ranges:
    # start,  end,      type,     label
    - [0x000000, 0x000040, "header", "header"]
    - [0x000040, 0x001000, "bin",    "boot"]
-   - [0x001000, 0x0D9B70, "asm"]
+   - [0x001000, 0x0D9B70, "asm", "main", 0x80000400]
    - [0x0D9B70, 0x0D9C40, "bin", "rsp.boot"]     # 800D8F70-800D9040
    - [0x0D9C40, 0x0DAC40, "bin", "rsp.graphics"] # 800DB830-800DC830
    - [0x0DC430, 0x0DD430, "bin", "rsp.audio"]    # 800DB830-800DC830
    # 0x0DD044, 0x0F7510, data
 #   - [0x0F3A84, 0x0F3A98, "ptr",    "JumpTable"] # 800F2E84
 #   - [0x0F3AE0, 0x0F3B04, "ptr",    "JumpTable"] # 800F2EE0
-   - [0x0F7510, 0x121A24, "asm"] # TODO: not sure if this is all asm
+   - [0x0F7510, 0x121A24, "asm", "unknown", 0x8028DF00] # TODO: not sure if this is all asm
    - [0x122390, 0x122750, "ptr",  "table_levels", 12]
-   - [0x123640, 0x12AAE0, "asm"] # TODO: not sure if this is all asm
+   - [0x123640, 0x12AAE0, "asm", "unknown", 0x80280000] # TODO: not sure if this is all asm
    - [0x132B50, 0x145470, "mio0", "some_textures"]:
       #offset, type, depth,width,height
       - [0x00200, "tex.rgba", 16,  32, 64]

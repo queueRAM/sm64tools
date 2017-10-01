@@ -9,18 +9,12 @@ checksum2: 0x35CEB000
 # base filename used for outputs (please, no spaces)
 basename: "blast_dozer.hd_code_text"
 
-# memory map from KSEG0 RAM addresses to ROM offsets
-# these were decoded from DMA accesses
-memory:
-   # start     end         ram-to-rom
-   - [0x802447C0, 0x802E8BD0, 0x802447C0]
-
 # ranges to split the ROM into
 # types:
 #   asm      - MIPS assembly block.  Symbol names are in 'labels' list below
 ranges:
    # start,  end,      type,     label
-   - [0x000000, 0x0A4360, "asm"]
+   - [0x000000, 0x0A4360, "asm", "main", 0x802447C0]
 
 # Labels for functions or data memory addresses
 # All label addresses are RAM addresses

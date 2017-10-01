@@ -125,29 +125,6 @@ static void gzip_decode_file(char *gzfilename, int offset, char *binfilename)
    fclose(fout);
 }
 
-unsigned int ram_to_rom(rom_config *config, unsigned int ram_addr)
-{
-   for (int i = 0; i < config->ram_count; i++) {
-      if (ram_addr >= config->ram_table[3*i] && ram_addr <= config->ram_table[3*i+1]) {
-         return ram_addr - config->ram_table[3*i+2];
-      }
-   }
-   return ram_addr;
-}
-
-unsigned int rom_to_ram(rom_config *config, unsigned int rom_addr)
-{
-   for (int i = 0; i < config->ram_count; i++) {
-      unsigned int offset = config->ram_table[3*i+2];
-      unsigned int start = config->ram_table[3*i] - offset;
-      unsigned int end   = config->ram_table[3*i+1] - offset;
-      if (rom_addr >= start && rom_addr <= end) {
-         return rom_addr + offset;
-      }
-   }
-   return rom_addr;
-}
-
 static int config_section_lookup(rom_config *config, unsigned int addr, char *label, int is_end)
 {
    int i;
@@ -638,7 +615,6 @@ static void generate_ld_script(arg_config *args, rom_config *config)
 {
    char ldfilename[FILENAME_MAX];
    FILE *fld;
-   int i;
    sprintf(ldfilename, "%s/%s.ld", args->output_dir, config->basename);
    fld = fopen(ldfilename, "w");
    if (fld == NULL) {
@@ -681,19 +657,21 @@ static void generate_ld_script(arg_config *args, rom_config *config)
 "   __load_behavior_data = LOADADDR(.behavior);\n"
 "   __load_behavior_data_end = LOADADDR(.behavior) + behavior_length;\n"
 "\n", config->name, N64SPLIT_VERSION);
-   for (i = 0; i < config->ram_count; i++) {
-      unsigned int ram_start = config->ram_table[3*i];
-      unsigned int ram_end = config->ram_table[3*i+1];
-      unsigned int ram_to_rom = config->ram_table[3*i+2];
-      unsigned int length = ram_end - ram_start + 1;
-      unsigned int rom_start = ram_start - ram_to_rom;
-      unsigned int rom_end = rom_start + length;
-      fprintf(fld,
-"   /* (0x%08X, 0x%08X, 0x%08X), // %06X-%06X [%X] */\n"
+   for (int i = 0; i < config->section_count; i++) {
+      split_section *s = &config->sections[i];
+      if (s->type == TYPE_ASM) {
+         unsigned int rom_start = s->start;
+         unsigned int rom_end = s->end;
+         unsigned int ram_start = s->vaddr;
+         unsigned int length = rom_end - rom_start;
+         fprintf(fld,
+"   /* 0x%08X %06X-%06X [%X] */\n"
 "   .text%08X 0x%08X : AT(0x%06X) {\n"
 "      * (.text%08X);\n"
 "   }\n"
-"\n", ram_start, ram_end, ram_to_rom, rom_start, rom_end, length, ram_start, ram_start, rom_start, ram_start);
+"\n", ram_start, rom_start, rom_end, length,
+      ram_start, ram_start, rom_start, ram_start);
+      }
    }
    fprintf(fld, "}\n");
 
@@ -946,13 +924,6 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
          fprintf(fasm, "\n");
       }
 
-      // print section header for new RAM segments
-      for (i = 0; i < config->ram_count; i++) {
-         if (sec->start == (config->ram_table[3*i] - config->ram_table[3*i+2])) {
-            fprintf(fasm, "\n.section .text%08X, \"ax\"\n\n", rom_to_ram(config, sec->start));
-         }
-      }
-
       switch (sec->type)
       {
          case TYPE_HEADER:
@@ -1033,6 +1004,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             break;
          case TYPE_ASM:
             INFO("Section asm: %X-%X\n", sec->start, sec->end);
+            fprintf(fasm, "\n.section .text%08X, \"ax\"\n\n", sec->vaddr);
             mipsdisasm_pass2(fasm, state, sec->start);
             break;
          case TYPE_SM64_LEVEL:
@@ -1592,8 +1564,9 @@ int main(int argc, char *argv[])
       if (config.sections[i].type == TYPE_ASM) {
          unsigned int start = config.sections[i].start;
          unsigned int end = config.sections[i].end;
+         unsigned int vaddr = config.sections[i].vaddr;
          if (end <= len) {
-            mipsdisasm_pass1(data, start, end - start, rom_to_ram(&config, start), state);
+            mipsdisasm_pass1(data, start, end - start, vaddr, state);
          } else {
             ERROR("Trying to disassemble past end of file (%X > %X)\n", end, (unsigned int)len);
             exit(1);
