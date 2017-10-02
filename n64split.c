@@ -8,6 +8,7 @@
 #include "config.h"
 #include "libblast.h"
 #include "libmio0.h"
+#include "libsfx.h"
 #include "mipsdisasm.h"
 #include "n64graphics.h"
 #include "strutils.h"
@@ -611,6 +612,57 @@ static void generate_globals(arg_config *args, rom_config *config)
    fclose(fglobal);
 }
 
+static void parse_sound_banks(FILE *out, unsigned char *data, split_section *secCtl, split_section *secTbl, arg_config *args, strbuf *makeheader)
+{
+#define SOUNDS_SUBDIR    "sounds"
+
+   char sound_dir[FILENAME_MAX];
+   char sfx_file[FILENAME_MAX];
+   unsigned i, j, sound_count;
+
+   sfx_initialize_key_table();
+   
+   sprintf(sound_dir, "%s/%s", args->output_dir, SOUNDS_SUBDIR);
+   make_dir(sound_dir);
+
+   sound_data_header sound_data = read_sound_data(data, secTbl->start);
+   sound_bank_header sound_banks = read_sound_bank(data, secCtl->start);
+   
+   sound_count = 0;
+   
+   for (i = 0; i < sound_banks.bank_count; i++) {
+      for (j = 0; j < sound_banks.banks[i].instrument_count; j++) {
+        if(sound_banks.banks[i].sounds[j].wav_prev != NULL) {
+          sprintf(sfx_file, "Bank%uSound%uPrev", i, j);
+          extract_raw_sound(sound_dir, sfx_file, sound_banks.banks[i].sounds[j].wav_prev, sound_banks.banks[i].sounds[j].key_base_prev, sound_data.data[i], 16000);
+          sound_count++;
+       }
+        if(sound_banks.banks[i].sounds[j].wav != NULL) {
+          sprintf(sfx_file, "Bank%uSound%u", i, j);
+          extract_raw_sound(sound_dir, sfx_file, sound_banks.banks[i].sounds[j].wav, sound_banks.banks[i].sounds[j].key_base, sound_data.data[i], 16000);
+          sound_count++;
+       }
+        if(sound_banks.banks[i].sounds[j].wav_sec != NULL) {
+          sprintf(sfx_file, "Bank%uSound%uSec", i, j);
+          extract_raw_sound(sound_dir, sfx_file, sound_banks.banks[i].sounds[j].wav_sec, sound_banks.banks[i].sounds[j].key_base_sec, sound_data.data[i], 16000);
+          sound_count++;
+       }
+     }
+     
+     // Todo: add percussion export here
+   }
+
+   // free used memory
+   if (sound_banks.bank_count > 0) {
+      free(sound_banks.banks);
+   }
+   
+   INFO("Successfully exported sounds:\n");
+   INFO("  # of banks: %u\n", sound_banks.bank_count);
+   INFO("  # of sounds: %u\n", sound_count);
+
+}
+
 static void generate_ld_script(arg_config *args, rom_config *config)
 {
    char ldfilename[FILENAME_MAX];
@@ -889,6 +941,9 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
    strbuf_alloc(&makeheader_music, 256);
    strbuf_sprintf(&makeheader_music, "MUSIC_FILES =");
 
+   //Need both sfx sections to parse
+   split_section *sfxSec = NULL;
+   
    for (s = 0; s < config->section_count; s++) {
       split_section *sec = &sections[s];
 
@@ -1018,6 +1073,18 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             break;
          case TYPE_M64:
             parse_music_sequences(fasm, data, sec, args, &makeheader_music);
+            break;
+         case TYPE_SFX_CTL:
+            if (sfxSec == NULL)
+               sfxSec = sec;
+            else
+               parse_sound_banks(fasm, data, sec, sfxSec, args, &makeheader_music); //Fix header later
+            break;
+         case TYPE_SFX_TBL:
+            if (sfxSec == NULL)
+               sfxSec = sec;
+            else
+               parse_sound_banks(fasm, data, sfxSec, sec, args, &makeheader_music); //Fix header later
             break;
          case TYPE_INSTRUMENT_SET:
             parse_instrument_set(fasm, data, sec);

@@ -36,9 +36,9 @@ ranges:
    # 0x0DD044, 0x0F7510, data
 #   - [0x0F3A84, 0x0F3A98, "ptr",    "JumpTable"] # 800F2E84
 #   - [0x0F3AE0, 0x0F3B04, "ptr",    "JumpTable"] # 800F2EE0
-   - [0x0F7510, 0x121A24, "asm", "unknown", 0x8028DF00] # TODO: not sure if this is all asm
+   - [0x0F7510, 0x121DA0, "asm", "unknown", 0x8028DF00] # TODO: not sure if this is all asm
    - [0x122390, 0x122750, "ptr",  "table_levels", 12]
-   - [0x123640, 0x12AAE0, "asm", "unknown", 0x80280000] # TODO: not sure if this is all asm
+   - [0x123640, 0x128480, "asm", "unknown", 0x80280000] # TODO: not sure if this is all asm
    - [0x132B50, 0x145470, "mio0", "some_textures"]:
       #offset, type, depth,width,height
       - [0x00200, "tex.rgba", 16,  32, 64]
@@ -1734,7 +1734,8 @@ ranges:
    - [0x956670, 0x963EF0, "mio0", "level_dks_jungle_parkway_vertex"]
    - [0x963EF0, 0x966260, "mio0", "level_big_donut_vertex"]
    # Yet to be decoded - include as binary
-   - [0x966260, 0xBC5F60, "bin"]
+   - [0x966260, 0x979AA0, "sfx.ctl"]
+   - [0x979AA0, 0xBC5F60, "sfx.tbl"]
    - [0xBC5F60, 0xBE90D0, "m64"]
    - [0xBE90E0, 0xBE9160, "instrset", "instrument_set", 0x1E]
 

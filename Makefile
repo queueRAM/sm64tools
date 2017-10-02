@@ -15,6 +15,7 @@ WALK_TARGET     := sm64walk
 
 LIB_SRC_FILES  := libmio0.c    \
                   libsm64.c    \
+                  libsfx.c     \
                   utils.c
 
 CKSUM_SRC_FILES := n64cksum.c
@@ -42,6 +43,7 @@ GRAPHICS_SRC_FILES := n64graphics.c \
 
 SPLIT_SRC_FILES := blast.c \
                    libmio0.c \
+                   libsfx.c \
                    mipsdisasm.c \
                    n64graphics.c \
                    n64split.c \
