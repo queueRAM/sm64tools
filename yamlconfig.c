@@ -21,6 +21,8 @@ static const section_entry section_table[] = {
    {"header",     TYPE_HEADER},
    {"instrset",   TYPE_INSTRUMENT_SET},
    {"m64",        TYPE_M64},
+   {"sfx.ctl",    TYPE_SFX_CTL},
+   {"sfx.tbl",    TYPE_SFX_TBL},
    {"mio0",       TYPE_MIO0},
    {"ptr",        TYPE_PTR},
    // Texture formats
@@ -222,6 +224,8 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
          case TYPE_M64:
          case TYPE_SM64_GEO:
          case TYPE_SM64_LEVEL:
+         case TYPE_SFX_CTL:
+         case TYPE_SFX_TBL:
             if (count > 5) {
                ERROR("Error: " SIZE_T_FORMAT " - expected 3-5 fields for section\n", node->start_mark.line);
                return;

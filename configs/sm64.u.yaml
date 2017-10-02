@@ -2136,7 +2136,9 @@ ranges:
    - [0x4EB1F0, 0x4EC000, "sm64.level", "ttm_level"]
    - [0x4EC000, 0x579C26, "bin", "mario_animation"]
    # Yet to be decoded - include as binary
-   - [0x579C26, 0x7B0860, "bin"]
+   - [0x579C26, 0x57B720, "bin"]
+   - [0x57B720, 0x593560, "sfx.ctl"]
+   - [0x593560, 0x7B0860, "sfx.tbl"] # note: the sound table supposedly ends at 0x7AADD0, but similar data continues to 0x7B0860 : evidence of unused sound data??
    - [0x7B0860, 0x7CC620, "m64"]
    - [0x7CC620, 0x7CC6B7, "instrset", "instrument_set", 35]
 

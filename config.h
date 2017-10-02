@@ -11,6 +11,8 @@ typedef enum
    TYPE_HEADER,
    TYPE_INSTRUMENT_SET,
    TYPE_M64,
+   TYPE_SFX_CTL,
+   TYPE_SFX_TBL,
    TYPE_MIO0,
    TYPE_PTR,
    // Textures
