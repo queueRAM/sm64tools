@@ -239,7 +239,7 @@ static int walk_scripts(block *blocks, int block_count, unsigned char *buf, unsi
    return block_count;
 }
 
-static int find_sequence_bank(block *blocks, int block_count, unsigned char *buf)
+static int find_sequence_bank(block *blocks, int block_count, unsigned char *buf, long buf_len)
 {
    unsigned upper, lower;
    unsigned offset;
@@ -265,18 +265,21 @@ static int find_sequence_bank(block *blocks, int block_count, unsigned char *buf
    }
 
    // add sequence bank to table
-   blocks[block_count].old     = offset;
-   blocks[block_count].old_end = end;
-   blocks[block_count].type    = BLOCK_RAW;
-   add_ref(&blocks[block_count], 0, 0xD4714, 0xFE);
-   // TODO: removed these because the code below handles all of them
-   // add_ref(&blocks[block_count], 0, 0xD4768, 0xFE);
-   // add_ref(&blocks[block_count], 0, 0xD4784, 0xFE);
+   if (offset < buf_len && end < buf_len) {
+      blocks[block_count].old     = offset;
+      blocks[block_count].old_end = end;
+      blocks[block_count].type    = BLOCK_RAW;
+      add_ref(&blocks[block_count], 0, 0xD4714, 0xFE);
+      // TODO: removed these because the code below handles all of them
+      // add_ref(&blocks[block_count], 0, 0xD4768, 0xFE);
+      // add_ref(&blocks[block_count], 0, 0xD4784, 0xFE);
+      block_count++;
+   }
 
-   return block_count + 1;
+   return block_count;
 }
 
-static int find_some_block(block *blocks, int block_count, unsigned char *buf)
+static int find_some_block(block *blocks, int block_count, unsigned char *buf, long buf_len)
 {
    unsigned upper, lower;
    unsigned offset, end;
@@ -295,12 +298,15 @@ static int find_some_block(block *blocks, int block_count, unsigned char *buf)
    end = (upper << 16) + lower;
 
    // add this block to table
-   blocks[block_count].old     = offset;
-   blocks[block_count].old_end = end;
-   blocks[block_count].type    = BLOCK_RAW;
-   add_ref(&blocks[block_count], 0, 0x101BB0, 0xFD);
+   if (offset < buf_len && end < buf_len) {
+      blocks[block_count].old     = offset;
+      blocks[block_count].old_end = end;
+      blocks[block_count].type    = BLOCK_RAW;
+      add_ref(&blocks[block_count], 0, 0x101BB0, 0xFD);
+      block_count++;
+   }
 
-   return block_count + 1;
+   return block_count;
 }
 
 // set different parameters for G_SETCOMBINE blending parameters
@@ -361,9 +367,9 @@ static int sm64_compress_mio0(const compress_config *config,
    // find blocks in level scripts
    block_count = walk_scripts(block_table, block_count, in_buf, in_length, ENTRY_SCRIPT, ENTRY_SCRIPT + 0x30);
    // find sequence bank block (usually 0x02F00000 or 0x03E00000)
-   block_count = find_sequence_bank(block_table, block_count, in_buf);
+   block_count = find_sequence_bank(block_table, block_count, in_buf, in_length);
    // some block (usually ROM 0x01200000) is DMAd to 0x80400000
-   block_count = find_some_block(block_table, block_count, in_buf);
+   block_count = find_some_block(block_table, block_count, in_buf, in_length);
    printf("count: %d\n", block_count);
 
    // sort the blocks
@@ -415,7 +421,7 @@ static int sm64_compress_mio0(const compress_config *config,
             src_len = cmp_len;
             INFO("Compressed %08X[%06X=%06X] => %08X[%06X]\n", blk->old, block_len, raw_len, cur_offset, cmp_len);
          } else if(config->compress && blk->compressible) {
-            // decompress to remove fake header and recompress
+            // compress blocks that don't have a fake header and are compressible
             int cmp_len = mio0_encode(&in_buf[blk->old], block_len, tmp_cmp);
             src = tmp_cmp;
             src_len = cmp_len;
@@ -430,6 +436,9 @@ static int sm64_compress_mio0(const compress_config *config,
          } else {
             src = &in_buf[blk->old];
             src_len = block_len;
+         }
+         if (src_len < 0) {
+            ERROR("%d: old: %X %X cur: %X %X\n", i, blk->old, blk->old_end, cur_offset, src_len);
          }
          // copy new data
          memcpy(&out_buf[cur_offset], src, src_len);
@@ -620,7 +629,7 @@ int main(int argc, char *argv[])
       exit(1);
    }
 
-   INFO("Size: %dMB -> %dMB\n", (int)in_size/(1*MB), (int)out_size/(1*MB));
+   printf("Size: %dMB -> %dMB\n", (int)in_size/(1*MB), (int)out_size/(1*MB));
 
    return 0;
 }
