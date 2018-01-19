@@ -48,6 +48,6 @@ add_executable(n64graphics n64graphics.c utils.c)
 set_target_properties(n64graphics PROPERTIES COMPILE_DEFINITIONS "N64GRAPHICS_STANDALONE")
 target_link_libraries(n64graphics png z)
 
-add_executable(n64split blast.c mipsdisasm.c n64split.c n64graphics.c strutils.c yamlconfig.c)
+add_executable(n64split blast.c libsfx.c mipsdisasm.c n64split.c n64graphics.c strutils.c yamlconfig.c)
 target_link_libraries(n64split sm64 capstone yaml z)
 
