@@ -10,19 +10,18 @@ N64 ROM Splitter and Build System
 
 ### Usage
 ```console
-n64split [-c CONFIG] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] ] [-V] ROM
+n64split [-c CONFIG] [-k] [-m] [-o OUTPUT_DIR] [-s SCALE] [-t] [-v] [-V] ROM
 ```
 Options:
- - <code>-c CONFIG</code> ROM configuration file (default: auto-detect).
- - <code>-o OUTPUT_DIR</code> output directory (default: {CONFIG.basename}.split).
- - <code>-s SCALE</code> amount to scale models by (default: 1024.0).
- - <code>-p</code> generate procedure table for analysis.
- - <code>-t</code> generate large texture for MIO0 blocks.
- - <code>-v</code> verbose output.
- - <code>-V</code> print version information.
+ - <code>-c CONFIG</code> ROM configuration file (default: auto-detect)
+ - <code>-k</code> keep going as much as possible after error
+ - <code>-m</code> merge related instructions in to pseudoinstructions
+ - <code>-o OUTPUT_DIR</code> output directory (default: {CONFIG.basename}.split)
+ - <code>-s SCALE</code> amount to scale models by (default: 1024.0)
+ - <code>-t</code> generate large texture for MIO0 blocks
+ - <code>-v</code> verbose output
+ - <code>-V</code> print version information
 
-Output files are stored in the 'gen' directory.
-              
 ## sm64extend
 Super Mario 64 ROM Extender
  - accepts Z64 (BE), V64 (byte-swapped), or N64 (little-endian) ROMs as input
