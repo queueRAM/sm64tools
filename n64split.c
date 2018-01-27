@@ -1632,7 +1632,7 @@ int main(int argc, char *argv[])
          unsigned int start = config.sections[i].start;
          unsigned int end = config.sections[i].end;
          unsigned int vaddr = config.sections[i].vaddr;
-         if (end <= len) {
+         if (end <= (unsigned int)len) {
             mipsdisasm_pass1(data, start, end - start, vaddr, state);
          } else {
             ERROR("Trying to disassemble past end of file (%X > %X)\n", end, (unsigned int)len);

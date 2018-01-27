@@ -2,6 +2,7 @@
 // Ice Mario on the N64 Sound Tool and VADPCM decoding/encoding. This wouldn't be possible without their
 // enormous contribution. Thanks guys!
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -48,7 +49,7 @@ static wave_table * read_wave_table(unsigned char *data, unsigned int wave_offse
      wav->predictor->predictor_count = read_u32_be(&data[predictor_offset+4]);
     unsigned int num_predictor = wav->predictor->order * wav->predictor->predictor_count * 8;
      wav->predictor->data = malloc(num_predictor * sizeof(unsigned));
-     for (int k = 0; k < num_predictor; k++) {
+     for (unsigned int k = 0; k < num_predictor; k++) {
           wav->predictor->data[k] = read_u16_be(&data[predictor_offset+8+k*2]);
      }
    }
@@ -78,7 +79,7 @@ static unsigned char sfx_convert_ead_game_value_to_key_base(float eadKeyvalue)
 
    for (int x = 0; x < 0x100; x++)
    {
-      float distance = (fabs(keybaseReal - sfx_key_table[x]));
+      float distance = (fabsf(keybaseReal - sfx_key_table[x]));
 
       if (distance < smallestDistance)
       {
@@ -241,7 +242,7 @@ static unsigned long decode( unsigned char *in, signed short *out, unsigned long
 
    // flip the predictors
    signed short *preds = (signed short*)malloc( 32 * book->predictor_count );
-   for (int p = 0; p < (8 * book->order * book->predictor_count); p++)
+   for (unsigned int p = 0; p < (8 * book->order * book->predictor_count); p++)
    {
       preds[p] = book->data[p];
    }
@@ -338,7 +339,7 @@ int extract_raw_sound(unsigned char *sound_dir, unsigned char *wav_name, wave_ta
       return 0;
    
    unsigned char *sndData = malloc(wav->sound_length * sizeof(unsigned char));
-   for(int i = 0; i < wav->sound_length; i++) {
+   for(unsigned int i = 0; i < wav->sound_length; i++) {
       sndData[i] = snd_data[wav->sound_offset+i];
    }
    

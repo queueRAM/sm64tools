@@ -301,12 +301,12 @@ int main(int argc, char *argv[])
       config.length = size - config.offset;
       stop_on_enddl = 1;
    }
-   if (config.offset >= size) {
+   if (config.offset >= (unsigned int)size) {
       ERROR("Error: offset greater than file size (%X > %X)\n",
             config.offset, (unsigned int)size);
       return EXIT_FAILURE;
    }
-   if (config.offset + config.length > size) {
+   if (config.offset + config.length > (unsigned int)size) {
       ERROR("Warning: length goes beyond file size (%X > %X), truncating\n",
             config.offset + config.length, (unsigned int)size);
       config.length = size - config.offset;

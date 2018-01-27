@@ -239,7 +239,7 @@ static int walk_scripts(block *blocks, int block_count, unsigned char *buf, unsi
    return block_count;
 }
 
-static int find_sequence_bank(block *blocks, int block_count, unsigned char *buf, long buf_len)
+static int find_sequence_bank(block *blocks, int block_count, unsigned char *buf, unsigned buf_len)
 {
    unsigned upper, lower;
    unsigned offset;
@@ -279,7 +279,7 @@ static int find_sequence_bank(block *blocks, int block_count, unsigned char *buf
    return block_count;
 }
 
-static int find_some_block(block *blocks, int block_count, unsigned char *buf, long buf_len)
+static int find_some_block(block *blocks, int block_count, unsigned char *buf, unsigned buf_len)
 {
    unsigned upper, lower;
    unsigned offset, end;
