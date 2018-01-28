@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -261,9 +262,10 @@ static void disassemble_block(unsigned char *data, unsigned int length, unsigned
                   unsigned int rt = insn[i].operands[0].reg;
                   for (int s = i - 1; s >= 0; s--) {
                      if (insn[s].id == MIPS_INS_LUI && insn[i].operands[0].reg == rt) {
-                        unsigned int lui_imm = (unsigned int)insn[i].operands[1].imm;
+                        float f;
+                        uint32_t lui_imm = (uint32_t)insn[i].operands[1].imm;
                         lui_imm <<= 16;
-                        float f = *((float*)&lui_imm);
+                        memcpy(&f, &lui_imm, sizeof(f));
                         // link up the LUI with this instruction and the float
                         insn[s].linked_insn = i;
                         insn[s].linked_float = f;

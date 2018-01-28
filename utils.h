@@ -78,6 +78,9 @@ extern int g_verbosity;
 // convert two bytes in big-endian to signed int
 int read_s16_be(unsigned char *buf);
 
+// convert four bytes in big-endian to float
+float read_f32_be(unsigned char *buf);
+
 // determine if value is power of 2
 // returns 1 if val is power of 2, 0 otherwise
 int is_power2(unsigned int val);

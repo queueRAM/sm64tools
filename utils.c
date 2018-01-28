@@ -1,5 +1,6 @@
 #include <dirent.h>
 #include <fcntl.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,6 +28,13 @@ int read_s16_be(unsigned char *buf)
       ret = (int)tmp;
    }
    return ret;
+}
+
+float read_f32_be(unsigned char *buf)
+{
+   union {uint32_t i; float f;} ret;
+   ret.i = read_u32_be(buf);
+   return ret.f;
 }
 
 int is_power2(unsigned int val)

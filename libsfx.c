@@ -230,13 +230,6 @@ static unsigned long decode( unsigned char *in, signed short *out, unsigned long
 
    int index;
    int pred;
-   unsigned char cmd;
-   unsigned char *pin = in;
-   signed short *pout = out;
-   int j;
-   unsigned char n1,n2;
-   int total = 0;
-   int _tmp;
 
    int samples = 0;
 
@@ -304,7 +297,7 @@ static unsigned long decode( unsigned char *in, signed short *out, unsigned long
 }
 
 
-int extract_raw_sound(unsigned char *sound_dir, unsigned char *wav_name, wave_table *wav, float key_base, unsigned char *snd_data, unsigned long sampling_rate)
+int extract_raw_sound(char *sound_dir, char *wav_name, wave_table *wav, float key_base, unsigned char *snd_data, unsigned long sampling_rate)
 {
    char wav_file[FILENAME_MAX];
    sprintf(wav_file, "%s/%s.wav", sound_dir, wav_name);
@@ -564,8 +557,7 @@ sound_bank_header read_sound_bank(unsigned char *data, unsigned int data_offset)
                else {
                   sound_banks.banks[i].sounds[j].wav_prev = NULL;
                }
-               unsigned int flt = read_u32_be(&data[sound_offset+12]);
-               sound_banks.banks[i].sounds[j].key_base_prev = *((float*)&flt);
+               sound_banks.banks[i].sounds[j].key_base_prev = read_f32_be(&data[sound_offset+12]);
                
                //wav
                unsigned int wav_offset = read_u32_be(&data[sound_offset+16]);
@@ -575,8 +567,7 @@ sound_bank_header read_sound_bank(unsigned char *data, unsigned int data_offset)
                else {
                   sound_banks.banks[i].sounds[j].wav = NULL;
                }
-               flt = read_u32_be(&data[sound_offset+20]);
-               sound_banks.banks[i].sounds[j].key_base = *((float*)&flt);
+               sound_banks.banks[i].sounds[j].key_base = read_f32_be(&data[sound_offset+20]);
                
                //wav_sec
                unsigned int wav_sec_offset = read_u32_be(&data[sound_offset+24]);
@@ -586,8 +577,7 @@ sound_bank_header read_sound_bank(unsigned char *data, unsigned int data_offset)
                else {
                   sound_banks.banks[i].sounds[j].wav_sec = NULL;
                }
-               flt = read_u32_be(&data[sound_offset+28]);
-               sound_banks.banks[i].sounds[j].key_base_sec = *((float*)&flt);
+               sound_banks.banks[i].sounds[j].key_base_sec = read_f32_be(&data[sound_offset+28]);
             }
             else {
                sound_banks.banks[i].sounds[j].wav_prev = NULL;
@@ -617,8 +607,7 @@ sound_bank_header read_sound_bank(unsigned char *data, unsigned int data_offset)
                if(wav_offset != 0) {
                  sound_banks.banks[i].percussions.items[j].wav = read_wave_table(data, wav_offset + sound_bank_offset + 16, sound_bank_offset);
                }
-               unsigned int flt = read_u32_be(&data[perc_offset+8]);
-               sound_banks.banks[i].percussions.items[j].key_base = *((float*)&flt);
+               sound_banks.banks[i].percussions.items[j].key_base = read_f32_be(&data[perc_offset+8]);
                
                //adrs
                unsigned int adrs_offset = read_u32_be(&data[perc_offset+12]);

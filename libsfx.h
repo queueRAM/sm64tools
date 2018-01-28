@@ -102,6 +102,6 @@ sound_data_header read_sound_data(unsigned char *data, unsigned int data_offset)
 // snd_data: buffer containing the raw, encoded sound data
 // sampling_rate: sample rate for the sound data (higher sampling rate = wav file speeds up)
 // returns 1 if the .wav file was created, 0 if not
-int extract_raw_sound(unsigned char *sound_dir, unsigned char *wav_name, wave_table *wav, float key_base, unsigned char *snd_data, unsigned long sampling_rate);
+int extract_raw_sound(char *sound_dir, char *wav_name, wave_table *wav, float key_base, unsigned char *snd_data, unsigned long sampling_rate);
 
 #endif // LIBMIO0_H_

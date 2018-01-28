@@ -660,7 +660,6 @@ static void parse_sound_banks(FILE *out, unsigned char *data, split_section *sec
    INFO("Successfully exported sounds:\n");
    INFO("  # of banks: %u\n", sound_banks.bank_count);
    INFO("  # of sounds: %u\n", sound_count);
-
 }
 
 static void generate_ld_script(arg_config *args, rom_config *config)
