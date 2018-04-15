@@ -261,10 +261,9 @@ static void disassemble_block(unsigned char *data, unsigned int length, unsigned
                {
                   unsigned int rt = insn[i].operands[0].reg;
                   for (int s = i - 1; s >= 0; s--) {
-                     if (insn[s].id == MIPS_INS_LUI && insn[i].operands[0].reg == rt) {
+                     if (insn[s].id == MIPS_INS_LUI && insn[s].operands[0].reg == rt) {
                         float f;
-                        uint32_t lui_imm = (uint32_t)insn[i].operands[1].imm;
-                        lui_imm <<= 16;
+                        uint32_t lui_imm = (uint32_t)(insn[s].operands[1].imm << 16);
                         memcpy(&f, &lui_imm, sizeof(f));
                         // link up the LUI with this instruction and the float
                         insn[s].linked_insn = i;
@@ -324,7 +323,7 @@ static void disassemble_block(unsigned char *data, unsigned int length, unsigned
                      insn[i].id = MIPS_INS_LI;
                      strcpy(insn[i].mnemonic, "li");
                      // TODO: is there allocation for this?
-                     sprintf(insn[i].op_str, "$%s, %ld", cs_reg_name(state->handle, rd), imm);
+                     sprintf(insn[i].op_str, "$%s, %" PRIi64, cs_reg_name(state->handle, rd), imm);
                   } else if (rd == rs) { // only look for LUI if rd and rs are the same
                      link_with_lui(state, block_id, i, rs, (unsigned int)imm);
                   }
