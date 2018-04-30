@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include <zlib.h>
 
@@ -23,11 +24,12 @@ typedef struct _arg_config
    char input_file[FILENAME_MAX];
    char config_file[FILENAME_MAX];
    char output_dir[FILENAME_MAX];
-   float scale;
-   int  large_texture;
-   int  large_texture_depth;
-   int  keep_going;
-   int  merge_pseudo;
+   float model_scale;
+   bool raw_texture; // TODO: this should be the default path once n64graphics is updated
+   bool large_texture;
+   bool large_texture_depth;
+   bool keep_going;
+   bool merge_pseudo;
 } arg_config;
 
 typedef enum {
@@ -39,14 +41,15 @@ typedef enum {
 // default configuration
 static const arg_config default_args = 
 {
-   "", // input filename
-   "", // config filename
-   "", // output directory
-   1024.0f, // scale
-   0,  // large textures
-   16, // large textures depth
-   0,  // keep going
-   0,  // merge pseudoinstructions
+   .input_file = "",
+   .config_file = "",
+   .output_dir = "",
+   .model_scale = 1024.0f,
+   .raw_texture = false,
+   .large_texture = false,
+   .large_texture_depth = 16,
+   .keep_going = false,
+   .merge_pseudo = false,
 };
 
 // static files
@@ -782,7 +785,7 @@ char *terrain2str(unsigned type)
    return retval;
 }
 
-void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename, char *name, float scale)
+int collision2obj(char *binfilename, unsigned int binoffset, char *objfilename, char *name, float scale)
 {
    unsigned char *data;
    FILE *fobj;
@@ -797,6 +800,7 @@ void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename,
    unsigned i;
    unsigned vidx[3];
    short x, y, z;
+   int ret_len = 0;
 
    fobj = fopen(objfilename, "w");
    if (fobj == NULL) {
@@ -813,7 +817,7 @@ void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename,
    offset = binoffset;
    if (data[offset] != 0x00 || data[offset+1] != 0x40) {
       ERROR("Unknown collision data %s.%X: %08X\n", name, offset, read_u32_be(data));
-      return;
+      return 0;
    }
 
    fprintf(fobj, "# collision model generated from n64split v%s\n"
@@ -870,6 +874,9 @@ void collision2obj(char *binfilename, unsigned int binoffset, char *objfilename,
 
    fclose(fobj);
    free(data);
+
+   ret_len = offset - binoffset;
+   return ret_len;
 }
 
 static void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_config *config, disasm_state *state)
@@ -1213,6 +1220,11 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             // extract texture data
             if (sec->children) {
                unsigned int offset = 0;
+               unsigned char *binfilecontents = NULL;
+               long binfilelen = 0;
+               if (args->raw_texture) {
+                  binfilelen = read_file(binfilename, &binfilecontents);
+               }
                fprintf(fmake, "$(MIO0_DIR)/%s.bin:", start_label);
                INFO("Extracting textures from %s\n", start_label);
                for (int t = 0; t < sec->child_count; t++) {
@@ -1223,37 +1235,55 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                   switch (tex->format) {
                      case TYPE_TEX_IA:
                      {
+                        sprintf(outfilename, "%s.%05X.ia%d", start_label, offset, tex->depth);
                         ia *img = file2ia(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.ia%d.png", start_label, offset, tex->depth);
-                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                           sprintf(outfilepath, "%s/%s.png", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);
                            fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
+                        }
+                        if (args->raw_texture && binfilelen > 0) {
+                           INFO("Saving raw texture for %s\n", start_label);
+                           int len = w*h*tex->depth/8;
+                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                           write_file(outfilepath, &binfilecontents[offset], len);
                         }
                         break;
                      }
                      case TYPE_TEX_I:
                      {
+                        sprintf(outfilename, "%s.%05X.i%d", start_label, offset, tex->depth);
                         ia *img = file2i(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.i%d.png", start_label, offset, tex->depth);
-                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                           sprintf(outfilepath, "%s/%s.png", texture_dir, outfilename);
                            ia2png(img, w, h, outfilepath);
                            free(img);
                            fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
+                        }
+                        if (args->raw_texture && binfilelen > 0) {
+                           INFO("Saving raw texture for %s\n", start_label);
+                           int len = w*h*tex->depth/8;
+                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                           write_file(outfilepath, &binfilecontents[offset], len);
                         }
                         break;
                      }
                      case TYPE_TEX_RGBA:
                      {
+                        sprintf(outfilename, "%s.%05X.rgba%d", start_label, offset, tex->depth);
                         rgba *img = file2rgba(binfilename, offset, w, h, tex->depth);
                         if (img) {
-                           sprintf(outfilename, "%s.0x%05X.rgba%d.png", start_label, offset, tex->depth);
-                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                           sprintf(outfilepath, "%s/%s.png", texture_dir, outfilename);
                            rgba2png(img, w, h, outfilepath);
                            free(img);
                            fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
+                        }
+                        if (args->raw_texture && binfilelen > 0) {
+                           INFO("Saving raw texture for %s\n", start_label);
+                           int len = w*h*tex->depth/8;
+                           sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
+                           write_file(outfilepath, &binfilecontents[offset], len);
                         }
                         break;
                      }
@@ -1284,7 +1314,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                               sky_offset += 32*32*2;
                            }
                         }
-                        sprintf(outfilename, "%s.0x%05X.skybox.png", start_label, offset);
+                        sprintf(outfilename, "%s.%05X.skybox.png", start_label, offset);
                         sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                         rgba2png(img, w, h, outfilepath);
                         free(img);
@@ -1293,10 +1323,16 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                      }
                      case TYPE_SM64_COLLISION:
                      {
-                        sprintf(outfilename, "%s.0x%05X.collision.obj", start_label, offset);
-                        sprintf(outfilepath, "%s/%s", model_dir, outfilename);
+                        int len;
+                        sprintf(outfilename, "%s.%05X.collision", start_label, offset);
+                        sprintf(outfilepath, "%s/%s.obj", model_dir, outfilename);
                         INFO("Generating collision model %s\n", outfilename);
-                        collision2obj(binfilename, offset, outfilepath, start_label, args->scale);
+                        len = collision2obj(binfilename, offset, outfilepath, start_label, args->model_scale);
+                        if (args->raw_texture && binfilelen > 0) {
+                           INFO("Saving raw collision for %s\n", start_label);
+                           sprintf(outfilepath, "%s/%s", model_dir, outfilename);
+                           write_file(outfilepath, &binfilecontents[offset], len);
+                        }
                         break;
                      }
                      default:
@@ -1441,6 +1477,7 @@ static void print_usage(void)
          " -k            keep going as much as possible after error\n"
          " -m            merge related instructions in to pseudoinstructions\n"
          " -o OUTPUT_DIR output directory (default: {CONFIG.basename}.split)\n"
+         " -r            output raw texture binaries\n"
          " -s SCALE      amount to scale models by (default: %.1f)\n"
          " -t            generate large texture for MIO0 blocks\n"
          " -v            verbose progress output\n"
@@ -1448,7 +1485,7 @@ static void print_usage(void)
          "\n"
          "File arguments:\n"
          " ROM        input ROM file\n",
-         default_args.scale);
+         default_args.model_scale);
    exit(1);
 }
 
@@ -1481,10 +1518,10 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                strcpy(config->config_file, argv[i]);
                break;
             case 'k':
-               config->keep_going = 1;
+               config->keep_going = true;
                break;
             case 'm':
-               config->merge_pseudo = 1;
+               config->merge_pseudo = true;
                break;
             case 'o':
                if (++i >= argc) {
@@ -1492,14 +1529,17 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                }
                strcpy(config->output_dir, argv[i]);
                break;
+            case 'r':
+               config->raw_texture = true;
+               break;
             case 's':
                if (++i >= argc) {
                   print_usage();
                }
-               config->scale = strtof(argv[i], NULL);
+               config->model_scale = strtof(argv[i], NULL);
                break;
             case 't':
-               config->large_texture = 1;
+               config->large_texture = true;
                break;
             case 'v':
                g_verbosity = 1;
