@@ -308,6 +308,12 @@ static void disassemble_block(unsigned char *data, unsigned int length, unsigned
                case MIPS_INS_LHU:
                case MIPS_INS_LW:
                case MIPS_INS_LWU:
+               case MIPS_INS_LWC1:
+               case MIPS_INS_LWC2:
+               case MIPS_INS_LWC3:
+               case MIPS_INS_SWC1:
+               case MIPS_INS_SWC2:
+               case MIPS_INS_SWC3:
                {
                   unsigned int mem_rs = insn[i].operands[1].mem.base;
                   unsigned int mem_imm = (unsigned int)insn[i].operands[1].mem.disp;
