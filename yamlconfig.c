@@ -25,6 +25,10 @@ static const section_entry section_table[] = {
    {"sfx.tbl",    TYPE_SFX_TBL},
    {"mio0",       TYPE_MIO0},
    {"ptr",        TYPE_PTR},
+   // F3D formats
+   {"f3d.dl",       TYPE_F3D_DL},
+   {"f3d.light",    TYPE_F3D_LIGHT},
+   {"f3d.vertices", TYPE_F3D_VERTICES},
    // Texture formats
    {"tex.ci",     TYPE_TEX_CI},
    {"tex.i",      TYPE_TEX_I},
@@ -37,6 +41,20 @@ static const section_entry section_table[] = {
    {"sm64.geo",       TYPE_SM64_GEO},
    {"sm64.level",     TYPE_SM64_LEVEL},
 };
+
+static inline int is_texture(section_type section)
+{
+   switch (section) {
+      case TYPE_TEX_CI:
+      case TYPE_TEX_I:
+      case TYPE_TEX_IA:
+      case TYPE_TEX_RGBA:
+      case TYPE_TEX_SKYBOX:
+         return 1;
+      default:
+         return 0;
+   }
+}
 
 section_type config_str2section(const char *type_name)
 {
@@ -81,11 +99,12 @@ int get_scalar_uint(unsigned int *val, yaml_node_t *node)
    return status;
 }
 
-void load_texture(texture *tex, yaml_document_t *doc, yaml_node_t *node)
+void load_child_node(split_section *section, yaml_document_t *doc, yaml_node_t *node)
 {
    char val[64];
    yaml_node_item_t *i_node;
    yaml_node_t *next_node;
+   texture *tex = &section->tex;
    size_t count = node->data.sequence.items.top - node->data.sequence.items.start;
    i_node = node->data.sequence.items.start;
    for (size_t i = 0; i < count; i++) {
@@ -93,7 +112,9 @@ void load_texture(texture *tex, yaml_document_t *doc, yaml_node_t *node)
       if (next_node && next_node->type == YAML_SCALAR_NODE) {
          get_scalar_value(val, next_node);
          switch (i) {
-            case 0: tex->offset = strtoul(val, NULL, 0); break;
+            case 0:
+               section->start = tex->offset = strtoul(val, NULL, 0);
+               break;
             case 1:
                tex->format = config_str2section(val);
                if (tex->format == TYPE_INVALID) {
@@ -101,7 +122,15 @@ void load_texture(texture *tex, yaml_document_t *doc, yaml_node_t *node)
                   return;
                }
                break;
-            case 2: tex->depth = strtoul(val, NULL, 0); break;
+            case 2:
+            {
+               if (is_texture(tex->format)) {
+                  tex->depth = strtoul(val, NULL, 0);
+               } else {
+                  section->end = strtoul(val, NULL, 0);
+               }
+               break;
+            }
             case 3: tex->width = strtoul(val, NULL, 0); break;
             case 4: tex->height = strtoul(val, NULL, 0); break;
             case 5:
@@ -154,18 +183,18 @@ void load_section_data(split_section *section, yaml_document_t *doc, yaml_node_t
       case TYPE_MIO0:
       case TYPE_GZIP:
       {
-         // parse texture
-         split_section *tex = calloc(count, sizeof(*tex));
+         // parse child nodes
+         split_section *children = calloc(count, sizeof(*children));
          for (size_t i = 0; i < count; i++) {
             next_node = yaml_document_get_node(doc, i_node[i]);
             if (next_node->type == YAML_SEQUENCE_NODE) {
-               load_texture(&tex[i].tex, doc, next_node);
+               load_child_node(&children[i], doc, next_node);
             } else {
-               ERROR("Error: non-sequence texture node\n");
+               ERROR("Error: non-sequence child node\n");
                return;
             }
          }
-         section->children = tex;
+         section->children = children;
          section->child_count = count;
          break;
       }
@@ -529,8 +558,16 @@ void config_print(const rom_config *config)
                for (j = 0; j < s[i].child_count; j++) {
                   texture *tex = &textures[j].tex;
                   printf("  0x%06X %d", tex->offset, tex->format);
-                  if (tex[j].format != TYPE_SM64_COLLISION) {
-                     printf(" %2d %3d %3d", tex->depth, tex->width, tex->height);
+                  switch (tex[j].format) {
+                     case TYPE_TEX_CI:
+                     case TYPE_TEX_I:
+                     case TYPE_TEX_IA:
+                     case TYPE_TEX_RGBA:
+                     case TYPE_TEX_SKYBOX:
+                        printf(" %2d %3d %3d", tex->depth, tex->width, tex->height);
+                        break;
+                     default:
+                        break;
                   }
                   printf("\n");
                }

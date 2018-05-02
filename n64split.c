@@ -1161,6 +1161,21 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             char binfilename[FILENAME_MAX];
             char extension[8] = {0};
             unsigned char *lut;
+            char binasmfilename[FILENAME_MAX];
+            FILE *binasm;
+            if (sec->label == NULL || sec->label[0] == '\0') {
+               sprintf(start_label, "L%06X", sec->start);
+            } else {
+               strcpy(start_label, sec->label);
+            }
+            sprintf(binfilename, "%s.s", start_label);
+            sprintf(binasmfilename, "%s/%s", bin_dir, binfilename);
+            // decode and write
+            binasm = fopen(binasmfilename, "w");
+            if (binasm == NULL) {
+               perror(binasmfilename);
+               exit(1);
+            }
             switch (sec->type) {
                case TYPE_BLAST:
                   INFO("Section Blast: %d %s %X-%X\n", sec->subtype, sec->label, sec->start, sec->end);
@@ -1177,13 +1192,8 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                default:
                   break;
             }
-            if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(start_label, "L%06X", sec->start);
-            } else {
-               strcpy(start_label, sec->label);
-            }
             sprintf(outfilename, "%s.%s", start_label, extension);
-            sprintf(binfilename, "%s/%s.bin", mio0_dir, start_label);
+            sprintf(binfilename, "%s/%s.bin", bin_dir, start_label);
             sprintf(mio0filename, "%s/%s", mio0_dir, outfilename);
             write_file(mio0filename, &data[sec->start], sec->end - sec->start);
 
@@ -1220,6 +1230,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             // extract texture data
             if (sec->children) {
                unsigned int offset = 0;
+               unsigned int seg_address = 0x07000000 + offset;
                unsigned char *binfilecontents = NULL;
                long binfilelen = 0;
                if (args->raw_texture) {
@@ -1228,10 +1239,12 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                fprintf(fmake, "$(MIO0_DIR)/%s.bin:", start_label);
                INFO("Extracting textures from %s\n", start_label);
                for (int t = 0; t < sec->child_count; t++) {
-                  texture *tex = &sec->children[t].tex;
+                  split_section *child = &sec->children[t];
+                  texture *tex = &child->tex;
                   w = tex->width;
                   h = tex->height;
                   offset = tex->offset;
+                  seg_address = 0x07000000 + offset;
                   switch (tex->format) {
                      case TYPE_TEX_IA:
                      {
@@ -1249,6 +1262,8 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            write_file(outfilepath, &binfilecontents[offset], len);
                         }
+                        fprintf(binasm, "texture_%06X: # 0x%08X\n", offset, seg_address);
+                        fprintf(binasm, ".incbin \"%s\"\n", outfilename);
                         break;
                      }
                      case TYPE_TEX_I:
@@ -1267,6 +1282,8 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            write_file(outfilepath, &binfilecontents[offset], len);
                         }
+                        fprintf(binasm, "texture_%06X: # 0x%08X\n", offset, seg_address);
+                        fprintf(binasm, ".incbin \"%s\"\n", outfilename);
                         break;
                      }
                      case TYPE_TEX_RGBA:
@@ -1285,6 +1302,8 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                            sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
                            write_file(outfilepath, &binfilecontents[offset], len);
                         }
+                        fprintf(binasm, "texture_%06X: # 0x%08X\n", offset, seg_address);
+                        fprintf(binasm, ".incbin \"%s\"\n", outfilename);
                         break;
                      }
                      case TYPE_TEX_SKYBOX:
@@ -1321,6 +1340,46 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                         fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
                         break;
                      }
+                     case TYPE_F3D_DL:
+                     {
+                        int sec_len = child->end - child->start;
+                        fprintf(binasm, "f3d_%06X: # 0x%08X\n", offset, seg_address);
+                        for (int o = 0; o < sec_len; o += 8) {
+                           fprintf(binasm, ".word 0x%08X, 0x%08X\n", read_u32_be(&binfilecontents[offset + o]),
+                                                                     read_u32_be(&binfilecontents[offset + o + 4]));
+                        }
+                        break;
+                     }
+                     case TYPE_F3D_LIGHT:
+                     {
+                        fprintf(binasm, "light_%06X: # 0x%08X\n", offset, seg_address);
+                        fprintf(binasm, ".byte ");
+                        fprint_hex_source(binasm, &binfilecontents[offset], 8);
+                        fprintf(binasm, "\n");
+                        fprintf(binasm, "light_%06X: # 0x%08X\n", offset + 8, seg_address + 8);
+                        fprintf(binasm, ".byte ");
+                        fprint_hex_source(binasm, &binfilecontents[offset + 8], 8);
+                        fprintf(binasm, "\n.byte ");
+                        fprint_hex_source(binasm, &binfilecontents[offset + 16], 8);
+                        fprintf(binasm, "\n\n");
+                        break;
+                     }
+                     case TYPE_F3D_VERTICES:
+                     {
+                        int sec_len = child->end - child->start;
+                        fprintf(binasm, "vertices_%06X: # 0x%08X\n", offset, seg_address);
+                        for (int o = 0; o < sec_len; o += 16) {
+                           fprintf(binasm, ".hword ");
+                           for (int h = 0; h < 6; h++) {
+                              if (h != 0) fprintf(binasm, ", ");
+                              fprintf(binasm, "%5d", read_s16_be(&binfilecontents[offset + o + h*2]));
+                           }
+                           fprintf(binasm, " ; .byte ");
+                           fprint_hex_source(binasm, &binfilecontents[offset + o + 12], 4);
+                           fprintf(binasm, "\n");
+                        }
+                        break;
+                     }
                      case TYPE_SM64_COLLISION:
                      {
                         int len;
@@ -1333,6 +1392,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                            sprintf(outfilepath, "%s/%s", model_dir, outfilename);
                            write_file(outfilepath, &binfilecontents[offset], len);
                         }
+                        fprintf(binasm, "collision_%06X: # 0x%08X\n", offset, seg_address);
                         break;
                      }
                      default:
@@ -1362,6 +1422,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             // touch bin, then mio0 files so 'make' doesn't rebuild them right away
             touch_file(binfilename);
             touch_file(mio0filename);
+            fclose(binasm);
             break;
          }
          case TYPE_SM64_LEVEL:

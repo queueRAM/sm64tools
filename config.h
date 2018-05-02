@@ -15,6 +15,10 @@ typedef enum
    TYPE_SFX_TBL,
    TYPE_MIO0,
    TYPE_PTR,
+   // F3D display lists and related
+   TYPE_F3D_DL,
+   TYPE_F3D_LIGHT,
+   TYPE_F3D_VERTICES,
    // Textures
    TYPE_TEX_CI,
    TYPE_TEX_I,
