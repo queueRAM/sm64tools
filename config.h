@@ -18,7 +18,7 @@ typedef enum
    // F3D display lists and related
    TYPE_F3D_DL,
    TYPE_F3D_LIGHT,
-   TYPE_F3D_VERTICES,
+   TYPE_F3D_VERTEX,
    // Textures
    TYPE_TEX_CI,
    TYPE_TEX_I,

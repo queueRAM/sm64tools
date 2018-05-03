@@ -26,9 +26,9 @@ static const section_entry section_table[] = {
    {"mio0",       TYPE_MIO0},
    {"ptr",        TYPE_PTR},
    // F3D formats
-   {"f3d.dl",       TYPE_F3D_DL},
-   {"f3d.light",    TYPE_F3D_LIGHT},
-   {"f3d.vertices", TYPE_F3D_VERTICES},
+   {"f3d.dl",     TYPE_F3D_DL},
+   {"f3d.light",  TYPE_F3D_LIGHT},
+   {"f3d.vertex", TYPE_F3D_VERTEX},
    // Texture formats
    {"tex.ci",     TYPE_TEX_CI},
    {"tex.i",      TYPE_TEX_I},
