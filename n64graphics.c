@@ -261,8 +261,12 @@ int ia2raw(uint8_t *raw, const ia *img, int width, int height, int depth)
          for (int i = 0; i < width * height; i++) {
             uint8_t val = img[i].intensity;
             uint8_t old = raw[i/8];
-            uint8_t bit = val ? (1 << (7 - (i % 8))) : 0x00;
-            raw[i/8] = (old & (~bit)) | bit;
+            uint8_t bit = 1 << (7 - (i % 8));
+            if (val) {
+               raw[i/8] = old | bit;
+            } else {
+               raw[i/8] = old & (~bit);
+            }
          }
          break;
       default:
@@ -707,7 +711,6 @@ int main(int argc, char *argv[])
             }
             length = rgba2raw(raw, imgr, config.width, config.height, config.depth);
             break;
-         case IMG_FORMAT_I:
          case IMG_FORMAT_IA:
             imgi = png2ia(config.img_filename, &config.width, &config.height);
             raw_size = config.width * config.height * config.depth / 8;
@@ -716,6 +719,15 @@ int main(int argc, char *argv[])
                ERROR("Error allocating %u bytes\n", raw_size);
             }
             length = ia2raw(raw, imgi, config.width, config.height, config.depth);
+            break;
+         case IMG_FORMAT_I:
+            imgi = png2ia(config.img_filename, &config.width, &config.height);
+            raw_size = config.width * config.height * config.depth / 8;
+            raw = malloc(raw_size);
+            if (!raw) {
+               ERROR("Error allocating %u bytes\n", raw_size);
+            }
+            length = i2raw(raw, imgi, config.width, config.height, config.depth);
             break;
          default:
             return EXIT_FAILURE;
@@ -755,11 +767,11 @@ int main(int argc, char *argv[])
             imgr = raw2rgba(raw, config.width, config.height, config.depth);
             res = rgba2png(config.img_filename, imgr, config.width, config.height);
             break;
-         case IMG_FORMAT_I:
+         case IMG_FORMAT_IA:
             imgi = raw2ia(raw, config.width, config.height, config.depth);
             res = ia2png(config.img_filename, imgi, config.width, config.height);
             break;
-         case IMG_FORMAT_IA:
+         case IMG_FORMAT_I:
             imgi = raw2i(raw, config.width, config.height, config.depth);
             res = ia2png(config.img_filename, imgi, config.width, config.height);
             break;
