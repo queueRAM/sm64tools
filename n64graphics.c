@@ -496,16 +496,16 @@ ia *png2ia(const char *png_filename, int *width, int *height)
 
 const char *n64graphics_get_read_version(void)
 {
-   return "stb_image 2.17";
+   return "stb_image 2.19";
 }
 
 const char *n64graphics_get_write_version(void)
 {
-   return "stb_image_write 1.07";
+   return "stb_image_write 1.09";
 }
 
 #ifdef N64GRAPHICS_STANDALONE
-#define N64GRAPHICS_VERSION "0.2+"
+#define N64GRAPHICS_VERSION "0.3"
 #include <string.h>
 
 typedef enum
