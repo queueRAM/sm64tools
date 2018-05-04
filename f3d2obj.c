@@ -222,10 +222,10 @@ static void generate_material_file(arg_config *config, char *mtl_filename, char 
             INFO("Decoding texture %08X %dx%d\n", t->address, t->width, t->height);
             switch (t->format) {
                case IMG_FORMAT_RGBA:
-                  rgba_img = raw2rgba((char*)img_raw, t->width, t->height, t->depth);
+                  rgba_img = raw2rgba(img_raw, t->width, t->height, t->depth);
                   break;
                case IMG_FORMAT_IA:
-                  ia_img = raw2ia((char*)img_raw, t->width, t->height, t->depth);
+                  ia_img = raw2ia(img_raw, t->width, t->height, t->depth);
                   break;
                default:
                   ERROR("Need format %d depth %d\n", t->format, t->depth);
@@ -255,19 +255,19 @@ static void generate_material_file(arg_config *config, char *mtl_filename, char 
             if (retval > 0) {
                switch (text_type) {
                   case 0: // IA8
-                     ia_img = raw2ia((char*)img_raw, t->width, t->height, 8);
+                     ia_img = raw2ia(img_raw, t->width, t->height, 8);
                      break;
                   case 1: // RGBA16
-                     rgba_img = raw2rgba((char*)img_raw, t->width, t->height, 16);
+                     rgba_img = raw2rgba(img_raw, t->width, t->height, 16);
                      break;
                   case 2: // RGBA32
-                     rgba_img = raw2rgba((char*)img_raw, t->width, t->height, 32);
+                     rgba_img = raw2rgba(img_raw, t->width, t->height, 32);
                      break;
                   case 3: // IA8
-                     ia_img = raw2ia((char*)img_raw, t->width, t->height, 8);
+                     ia_img = raw2ia(img_raw, t->width, t->height, 8);
                      break;
                   case 6: // IA8
-                     ia_img = raw2ia((char*)img_raw, t->width, t->height, 8);
+                     ia_img = raw2ia(img_raw, t->width, t->height, 8);
                      break;
                   default:
                      ERROR("Blast Corps texture %d not supported for %X->%X\n",
@@ -278,13 +278,13 @@ static void generate_material_file(arg_config *config, char *mtl_filename, char 
             }
          }
          if (rgba_img != NULL) {
-            int ret = rgba2png(rgba_img, t->width, t->height, texture_path);
+            int ret = rgba2png(texture_path, rgba_img, t->width, t->height);
             if (ret != 1) {
                ERROR("Error writing to %s: %d\n", texture_filename, ret);
             }
          }
          if (ia_img != NULL) {
-            int ret = ia2png(ia_img, t->width, t->height, texture_path);
+            int ret = ia2png(texture_path, ia_img, t->width, t->height);
             if (ret != 1) {
                ERROR("Error writing to %s: %d\n", texture_filename, ret);
             }
