@@ -1259,8 +1259,10 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             // extract texture data
             if (sec->children) {
                unsigned int offset = 0;
-               // TODO: remove segment assumption
-               unsigned int seg_address = 0x07000000 + offset;
+	       unsigned int next_offset = 0;
+               // TODO: add segment base to config file
+	       const unsigned int segment_base = 0x07000000;
+               unsigned int seg_address = segment_base + offset;
                fprintf(fmake, "$(MIO0_DIR)/%s.bin:", start_label);
                INFO("Extracting textures from %s\n", start_label);
                for (int t = 0; t < sec->child_count; t++) {
@@ -1268,8 +1270,32 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                   texture *tex = &child->tex;
                   w = tex->width;
                   h = tex->height;
+		  if (next_offset > child->start) {
+                     ERROR("Error section overlap region %d (%X > %X)\n", t, next_offset, child->start);
+		     exit(1);
+		  }
+		  if (next_offset != child->start) {
+                     unsigned gap_len = child->start - next_offset;
+		     INFO("Filling gap before region %d (%d bytes)\n", t, gap_len);
+		     fprintf(binasm, "# Unknown region %06X-%06X [%X]\n", next_offset, child->start, gap_len);
+		     while (gap_len > 0) {
+                        int group_len = MIN(gap_len, 0x10);
+			fprintf(binasm, ".byte ");
+			fprint_hex_source(binasm, &binfilecontents[next_offset], group_len);
+			fprintf(binasm, "\n");
+			gap_len -= group_len;
+			next_offset += group_len;
+		     }
+                  }
                   offset = tex->offset;
-                  seg_address = 0x07000000 + offset;
+                  seg_address = segment_base + offset;
+		  if (child->end) {
+		     next_offset = child->end;
+		  } else if (tex->format == TYPE_F3D_LIGHT) {
+		     next_offset = child->start + 0x18;
+		  } else { // assume texture
+		     next_offset = child->start + w * h * tex->depth / 8;
+		  }
                   fprintf(binasm, "\n");
                   switch (tex->format) {
                      case TYPE_TEX_IA:
@@ -1400,7 +1426,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                         fprintf(binasm, ".byte ");
                         fprint_hex_source(binasm, &binfilecontents[offset], 8);
                         fprintf(binasm, "\n");
-                        fprintf(binasm, "light_%08X: # 0x%08X\n", offset + 8, seg_address + 8);
+                        fprintf(binasm, "light_%08X: # 0x%08X\n", seg_address + 8, seg_address + 8);
                         fprintf(binasm, ".byte ");
                         fprint_hex_source(binasm, &binfilecontents[offset + 8], 8);
                         fprintf(binasm, "\n.byte ");
