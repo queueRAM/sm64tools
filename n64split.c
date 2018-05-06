@@ -637,6 +637,9 @@ static void generate_macros(arg_config *args)
 static void parse_sound_banks(FILE *out, unsigned char *data, split_section *secCtl, split_section *secTbl, arg_config *args, strbuf *makeheader)
 {
 #define SOUNDS_SUBDIR    "sounds"
+   // TODO: unused parameters
+   (void)out;
+   (void)makeheader;
 
    char sound_dir[FILENAME_MAX];
    char sfx_file[FILENAME_MAX];
@@ -1184,6 +1187,8 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             unsigned char *lut;
             char binasmfilename[FILENAME_MAX];
             FILE *binasm;
+            unsigned char *binfilecontents = NULL;
+            long binfilelen = 0;
             if (sec->label == NULL || sec->label[0] == '\0') {
                sprintf(start_label, "L%06X", sec->start);
             } else {
@@ -1228,7 +1233,8 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             // append to Makefile
             strbuf_sprintf(&makeheader_mio0, " \\\n$(MIO0_DIR)/%s", outfilename);
 
-            // extract texture data
+            // TODO: use in-memory decompression?
+            // extract compressed data
             switch (sec->type) {
                case TYPE_BLAST:
                   // TODO: make this configurable?
@@ -1248,17 +1254,13 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                default:
                   break;
             }
+            binfilelen = read_file(binfilename, &binfilecontents);
 
             // extract texture data
             if (sec->children) {
                unsigned int offset = 0;
                // TODO: remove segment assumption
                unsigned int seg_address = 0x07000000 + offset;
-               unsigned char *binfilecontents = NULL;
-               long binfilelen = 0;
-               if (args->raw_texture) {
-                  binfilelen = read_file(binfilename, &binfilecontents);
-               }
                fprintf(fmake, "$(MIO0_DIR)/%s.bin:", start_label);
                INFO("Extracting textures from %s\n", start_label);
                for (int t = 0; t < sec->child_count; t++) {
@@ -1273,10 +1275,10 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                      case TYPE_TEX_IA:
                      {
                         sprintf(outfilename, "%s.%05X.ia%d", start_label, offset, tex->depth);
-                        ia *img = file2ia(binfilename, offset, w, h, tex->depth);
+                        ia *img = raw2ia(&binfilecontents[offset], w, h, tex->depth);
                         if (img) {
                            sprintf(outfilepath, "%s/%s.png", texture_dir, outfilename);
-                           ia2png(img, w, h, outfilepath);
+                           ia2png(outfilepath, img, w, h);
                            free(img);
                            fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
                         }
@@ -1293,10 +1295,10 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                      case TYPE_TEX_I:
                      {
                         sprintf(outfilename, "%s.%05X.i%d", start_label, offset, tex->depth);
-                        ia *img = file2i(binfilename, offset, w, h, tex->depth);
+                        ia *img = raw2i(&binfilecontents[offset], w, h, tex->depth);
                         if (img) {
                            sprintf(outfilepath, "%s/%s.png", texture_dir, outfilename);
-                           ia2png(img, w, h, outfilepath);
+                           ia2png(outfilepath, img, w, h);
                            free(img);
                            fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
                         }
@@ -1313,10 +1315,10 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                      case TYPE_TEX_RGBA:
                      {
                         sprintf(outfilename, "%s.%05X.rgba%d", start_label, offset, tex->depth);
-                        rgba *img = file2rgba(binfilename, offset, w, h, tex->depth);
+                        rgba *img = raw2rgba(&binfilecontents[offset], w, h, tex->depth);
                         if (img) {
                            sprintf(outfilepath, "%s/%s.png", texture_dir, outfilename);
-                           rgba2png(img, w, h, outfilepath);
+                           rgba2png(outfilepath, img, w, h);
                            free(img);
                            fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
                         }
@@ -1344,7 +1346,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                         h -= n;
                         for (ty = 0; ty < n; ty++) {
                            for (tx = 0; tx < m; tx++) {
-                              rgba *tile = file2rgba(binfilename, sky_offset, 32, 32, tex->depth);
+                              rgba *tile = raw2rgba(&binfilecontents[sky_offset], 32, 32, tex->depth);
                               int cx, cy;
                               for (cy = 0; cy < 31; cy++) {
                                  for (cx = 0; cx < 31; cx++) {
@@ -1359,7 +1361,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                         }
                         sprintf(outfilename, "%s.%05X.skybox.png", start_label, offset);
                         sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
-                        rgba2png(img, w, h, outfilepath);
+                        rgba2png(outfilepath, img, w, h);
                         free(img);
                         fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
                         break;
@@ -1453,11 +1455,11 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                INFO("Generating large texture for %s\n", start_label);
                w = 32;
                h = filesize(binfilename) / (w * (args->large_texture_depth / 8));
-               rgba *img = file2rgba(binfilename, 0, w, h, args->large_texture_depth);
+               rgba *img = raw2rgba(binfilecontents, w, h, args->large_texture_depth);
                if (img) {
                   sprintf(outfilename, "%s.ALL.png", start_label);
                   sprintf(outfilepath, "%s/%s", texture_dir, outfilename);
-                  rgba2png(img, w, h, outfilepath);
+                  rgba2png(outfilepath, img, w, h);
                   free(img);
                   fprintf(fmake, " $(TEXTURE_DIR)/%s", outfilename);
                   img = NULL;
