@@ -63,8 +63,8 @@ to rebuild the image.
 **  The developer of cen64 also makes n64chain which provides a prebuilt
     mips64 toolchain.  The current list is below, but you can find more info
     on his website: http://git.cen64.com/?p=n64chain.git
-  Windows (x86_64) : http://downloads.cen64.com/n64chain/n64chain-win64.zip
-  Linux (x86_64): http://downloads.cen64.com/n64chain/n64chain-linux64.tgz
+  Windows (x86_64) : https://www.cen64.com/uploads/n64chain-win64-tools.zip
+  Linux (x86_64): https://www.cen64.com/uploads/n64chain-linux64-tools.tgz
 
 Usage: With mips64-elf bin directory in your PATH, just run 'make' from the
 command prompt within the 'sm64.split' directory, and it will handle the rest.
