@@ -1608,7 +1608,15 @@ ranges:
       # TODO: 0x0C790-0x0C880 array of floats
       # TODO: 0x0C880-0x0C940 array of floats
    - [0x26D5A0, 0x26EA40, "mio0", "debug_level_select"]
-   - [0x26EA40, 0x271B20, "mio0", "mario_bg"]:
+   - [0x26EA40, 0x271B20, "mio0", "title_screen_bg", 0x0A000000]:
+      - [0x00000, "f3d.vertex", 0x00100]
+      - [0x00100, "f3d.dl", 0x00118]
+      - [0x00118, "f3d.dl", 0x00130]
+      - [0x00130, "f3d.dl", 0x00148]
+      - [0x00148, "f3d.dl", 0x00160]
+      - [0x00160, "f3d.dl", 0x00178]
+      - [0x00178, "f3d.dl", 0x00190]
+      - [0x00190, "f3d.dl", 0x001C0]
       - [0x001C0, "tex.rgba",   16, 80, 20]
       - [0x00E40, "tex.rgba",   16, 80, 20]
       - [0x01AC0, "tex.rgba",   16, 80, 20]
@@ -1617,6 +1625,7 @@ ranges:
       - [0x04040, "tex.rgba",   16, 80, 20]
       - [0x04CC0, "tex.rgba",   16, 80, 20]
       - [0x05940, "tex.rgba",   16, 80, 20]
+      # TODO: 0x65C0-0x65E7: segment address pointers
    - [0x2A42A0, 0x2A4730, "sm64.level", "main_menu_level"]
    - [0x2A4730, 0x2AA240, "mio0", "main_menu_segment7", 0x07000000]:
       - [0x00000, "f3d.light"]
