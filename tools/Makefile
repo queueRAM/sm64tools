@@ -3,7 +3,7 @@
 TARGET := montage
 
 SRC_FILES  := montage.c \
-              ../config.c \
+              ../yamlconfig.c \
               ../utils.c
 
 ##################### Compiler Options #######################
@@ -34,6 +34,9 @@ matchsigs: match_signatures.c ../utils.c
 	$(CC) $(CFLAGS) -o $@ $^ -lcapstone
 
 sm64collision: sm64collision.c ../utils.c
+	$(CC) $(CFLAGS) -o $@ $^
+
+sm64text: sm64text.c
 	$(CC) $(CFLAGS) -o $@ $^
 
 clean:
