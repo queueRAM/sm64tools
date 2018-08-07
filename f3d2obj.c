@@ -139,7 +139,6 @@ static void read_vertex(unsigned char *data, vertex *v, unsigned translate[])
 static void load_vertices(unsigned char *data, unsigned int offset, unsigned int index, unsigned int count, unsigned translate[])
 {
    unsigned i;
-   INFO("load: %X, %d\n", offset, count);
    for (i = 0; i < count; i++) {
       if (i + index < DIM(vertex_buffer)) {
          read_vertex(&data[offset + i*16], &vertex_buffer[i+index], translate);
@@ -321,6 +320,7 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
       sprintf(tmp, "%02X ", data[i]);
       strcat(description, tmp);
    }
+   INFO("%02X%06X: ", dl_seg, seg_offset);
    switch (data[0]) {
       case F3D_MOVEMEM:
          switch (data[1]) {
@@ -494,7 +494,7 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
          unsigned ult = w0 & 0x3FF;
          unsigned lrs = (w1 >> 12) & 0x3FF;
          unsigned dxt = w1 & 0x3FF;
-         INFO("%14s %03X %03X %03X %u", "G_LOADBLOCK", uls, ult, lrs, dxt);
+         INFO("%14s %03X %03X %03X %u\n", "G_LOADBLOCK", uls, ult, lrs, dxt);
          break;
       }
       case G_SETTILE:
@@ -545,7 +545,7 @@ static int print_f3d(FILE *fout, unsigned int *dl_addr, arg_config *config)
          seg_address = read_u32_be(&data[4]);
          bank = data[4];
          seg_offset = seg_address & 0x00FFFFFF;
-         INFO("%14s %02X %06X\n", "G_SETTIMG", bank, seg_offset);
+         INFO("%14s %08X\n", "G_SETTIMG", seg_address);
          fprintf(fout, "\ng s%08X_%08X\n", *dl_addr, seg_address);
          fprintf(fout, "usemtl M%08X\n", seg_address);
          tile.address = seg_address;

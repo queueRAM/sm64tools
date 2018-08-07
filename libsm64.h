@@ -20,6 +20,7 @@ typedef enum
    VERSION_SM64_E,
    VERSION_SM64_J,
    VERSION_SM64_SHINDOU,
+   VERSION_SM64_IQUE,
 } rom_version;
 
 typedef struct

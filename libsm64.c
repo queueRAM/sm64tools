@@ -292,10 +292,10 @@ rom_type sm64_rom_type(unsigned char *buf, unsigned int length)
       return ROM_SM64_LE;
    }
    if (!memcmp(buf, be, sizeof(be))) {
-      if (length == 8*MB) {
-         return ROM_SM64_BE;
-      } else if (length > 8*MB) {
+      if (length > 8*MB) {
          return ROM_SM64_BE_EXT;
+      } else if (length > 7*MB) {
+         return ROM_SM64_BE;
       }
    }
    return ROM_INVALID;
@@ -303,13 +303,18 @@ rom_type sm64_rom_type(unsigned char *buf, unsigned int length)
 
 rom_version sm64_rom_version(unsigned char *buf)
 {
-   typedef struct {const unsigned char cksum1[4]; const rom_version version;} version_entry;
+   typedef struct
+   {
+      const unsigned char cksum1[4];
+      const rom_version version;
+   } version_entry;
    const version_entry version_table[] =
    {
       { {0x63, 0x5a, 0x2b, 0xff}, VERSION_SM64_U},
       { {0xa0, 0x3c, 0xf0, 0x36}, VERSION_SM64_E},
       { {0x4e, 0xaa, 0x3d, 0x0e}, VERSION_SM64_J},
       { {0xd6, 0xfb, 0xa4, 0xa8}, VERSION_SM64_SHINDOU},
+      { {0x00, 0x00, 0x00, 0x00}, VERSION_SM64_IQUE},
    };
    for (unsigned int i = 0; i < DIM(version_table); i++) {
       if (!memcmp(&buf[0x10], version_table[i].cksum1, 4)) {
