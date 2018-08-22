@@ -48,7 +48,7 @@ ranges:
    - [0x0E3EF8, 0x0E3FEC, "ptr", "LevelScriptJumpTable"]
    - [0x0E3FF0, 0x0E40D0, "ptr", "BehaviorJumpTable"]
    # Level Scripts, Geo Layout, Graphics, and Behaviors
-   - [0x0E42C0, 0x0E42F0, "sm64.level",  "main_entry"]
+   - [0x0E42C0, 0x0E42F0, "sm64.level", "main_entry"]
    - [0x0E42F0, 0x0EF770, "mio0", "font_graphics", 0x02000000]:
       #offset, format, depth,width,height
       - [0x00000, "tex.rgba", 16, 16, 16]
@@ -312,7 +312,7 @@ ranges:
       - [0x13458, "tex.ia",   16, 32, 32]
       - [0x13C58, "tex.rgba", 16, 32, 32]
       - [0x14838, "tex.ia",    8,  8,  8]
-   - [0x0EF770, 0x1029D0, "mio0", "mario"]:
+   - [0x0EF770, 0x1029D0, "mio0", "mario_water_sparkles"]:
       - [0x00090, "tex.rgba", 16, 64, 32]
       - [0x01090, "tex.rgba", 16, 32, 32]
       - [0x01890, "tex.rgba", 16, 32, 32]
@@ -361,7 +361,8 @@ ranges:
       - [0x33A88, "tex.ia",   16, 32, 32]
       - [0x34288, "tex.ia",   16, 32, 32]
       - [0x34A88, "tex.ia",   16, 32, 32]
-   - [0x105800, 0x10D870, "mio0", "yoshiegg_owl_thwomp"]:
+   - [0x1029D0, 0x105800, "sm64.geo", "mario_water_sparkles"]
+   - [0x105800, 0x10D870, "mio0", "hoot_thwomp_bullet_heave"]:
       - [0x00040, "tex.rgba", 16, 32, 32]
       - [0x00A20, "tex.rgba", 16, 32, 32]
       - [0x01E50, "tex.rgba", 16, 32, 32]
@@ -384,14 +385,14 @@ ranges:
       - [0x109C8, "tex.rgba", 16, 32, 32]
       - [0x111C8, "tex.rgba", 16, 16, 16]
       - [0x113C8, "tex.rgba", 16, 32, 32]
-   - [0x10D870, 0x10DC80, "sm64.geo",  "owl_thwomp_bullet_heave"]
-   - [0x10DC80, 0x10FA90, "mio0", "big_bully"]:
+   - [0x10D870, 0x10DC80, "sm64.geo", "hoot_thwomp_bullet_heave"]
+   - [0x10DC80, 0x10FA90, "mio0", "bully_blargg"]:
       - [0x000E0, "tex.rgba", 16, 16, 16]
       - [0x00468, "tex.rgba", 16, 32, 64]
       - [0x01468, "tex.rgba", 16, 32, 64]
       - [0x02468, "tex.rgba", 16, 32, 32]
-   - [0x10FA90, 0x10FD40, "sm64.geo",  "bully_blargg"]
-   - [0x10FD40, 0x1165F0, "mio0", "bobombs"]:
+   - [0x10FA90, 0x10FD40, "sm64.geo", "bully_blargg"]
+   - [0x10FD40, 0x1165F0, "mio0", "bobombs_bubble"]:
       - [0x00078, "tex.rgba", 16, 32, 64]
       - [0x01078, "tex.rgba", 16, 32, 64]
       - [0x02078, "tex.rgba", 16, 32, 32]
@@ -404,8 +405,8 @@ ranges:
       - [0x08478, "tex.rgba", 16, 32, 64]
       - [0x09478, "tex.rgba", 16, 32, 64]
       - [0x0FE80, "tex.rgba", 16, 32, 32]
-   - [0x1165F0, 0x116930, "sm64.geo",  "kingbobomb_bubble"]
-   - [0x116930, 0x120C30, "mio0", "sea_creatures_texture"]:
+   - [0x1165F0, 0x116930, "sm64.geo", "bobombs_bubble"]
+   - [0x116930, 0x120C30, "mio0", "sea_creatures"]:
       - [0x00030, "tex.rgba", 16, 32, 32]
       - [0x00830, "tex.rgba", 16, 32, 32]
       - [0x017A0, "tex.rgba", 16, 32, 32]
@@ -422,8 +423,8 @@ ranges:
       - [0x0C320, "tex.rgba", 16,  8,  8]
       - [0x0C3A0, "tex.rgba", 16, 32, 32]
       - [0x12848, "tex.ia",   16, 32, 64]
-   - [0x120C30, 0x120EB0, "sm64.geo",  "sea_creatures"]
-   - [0x120EB0, 0x12CB90, "mio0", "vulture_pokey"]:
+   - [0x120C30, 0x120EB0, "sm64.geo", "sea_creatures"]
+   - [0x120EB0, 0x12CB90, "mio0", "klepto_eyerock_pokey"]:
       - [0x00008, "tex.rgba", 16, 32, 32]
       - [0x00808, "tex.rgba", 16, 32, 32]
       - [0x01008, "tex.rgba", 16, 32, 64]
@@ -438,8 +439,8 @@ ranges:
       - [0x11F50, "tex.rgba", 16, 32, 32]
       - [0x12878, "tex.rgba", 16, 32, 32]
       - [0x13128, "tex.ia",   16, 32, 64]
-   - [0x12CB90, 0x12D1F0, "sm64.geo",  "klepto_eyerock_pokey"]
-   - [0x12D1F0, 0x13B300, "mio0", "monkey"]:
+   - [0x12CB90, 0x12D1F0, "sm64.geo", "klepto_eyerock_pokey"]
+   - [0x12D1F0, 0x13B300, "mio0", "mole_ukiki_fwoosh"]:
       - [0x00040, "tex.ia",   16, 32, 32]
       - [0x00970, "tex.rgba", 16, 32, 32]
       - [0x01170, "tex.rgba", 16, 32, 32]
@@ -452,7 +453,7 @@ ranges:
       - [0x09BC0, "tex.rgba", 16, 32, 32]
       - [0x0A3C0, "tex.rgba", 16, 32, 32]
       - [0x15808, "tex.ia",   16, 32, 32]
-   - [0x13B300, 0x13B690, "sm64.geo",  "mole_monkey_fwoosh"]
+   - [0x13B300, 0x13B690, "sm64.geo", "mole_ukiki_fwoosh"]
    - [0x13B690, 0x140700, "mio0", "spindrift_penguin_snowman"]:
       - [0x006D0, "tex.rgba", 16, 32, 32]
       - [0x00ED0, "tex.rgba", 16, 32, 32]
@@ -469,14 +470,14 @@ ranges:
       - [0x0A470, "tex.rgba", 16, 32, 64]
       - [0x0B470, "tex.rgba", 16, 32, 32]
       - [0x0BC70, "tex.rgba", 16, 32, 32]
-   - [0x140700, 0x140A70, "sm64.geo",  "spindrift_penguin_blizzard"]
-   - [0x140A70, 0x141BF0, "mio0", "checkerboard_question"]:
+   - [0x140700, 0x140A70, "sm64.geo", "spindrift_penguin_snowman"]
+   - [0x140A70, 0x141BF0, "mio0", "capswitch_springboard"]:
       - [0x00018, "tex.rgba", 16, 32, 32]
       - [0x00818, "tex.rgba", 16, 32, 32]
       - [0x01C48, "tex.ia",   16, 32, 64]
       - [0x02C48, "tex.rgba", 16, 16,  4]
-   - [0x141BF0, 0x141C80, "sm64.geo",  "cap_switch"]
-   - [0x141C80, 0x1485E0, "mio0", "piano_books"]:
+   - [0x141BF0, 0x141C80, "sm64.geo", "capswitch_springboard"]
+   - [0x141C80, 0x1485E0, "mio0", "boo_bookend_chair_piano"]:
       - [0x00060, "tex.rgba", 16, 16, 32]
       - [0x00460, "tex.rgba", 16, 16, 32]
       - [0x00860, "tex.rgba", 16, 16, 32]
@@ -499,8 +500,8 @@ ranges:
       - [0x0D288, "tex.rgba", 16, 32, 16]
       - [0x0D688, "tex.rgba", 16, 32, 16]
       - [0x0DA88, "tex.rgba", 16, 32, 32]
-   - [0x1485E0, 0x148890, "sm64.geo",  "bookend_chair_piano_boo"]
-   - [0x148890, 0x15B560, "mio0", "peach_toadstool"]:
+   - [0x1485E0, 0x148890, "sm64.geo", "boo_bookend_chair_piano"]
+   - [0x148890, 0x15B560, "mio0", "peach_toadstool_yoshi_birds"]:
       - [0x00A28, "tex.rgba", 16, 32, 32]
       - [0x01228, "tex.rgba", 16, 32, 32]
       - [0x01A28, "tex.rgba", 16, 32, 32]
@@ -514,8 +515,8 @@ ranges:
       - [0x1C588, "tex.rgba", 16, 16, 16]
       - [0x1C788, "tex.rgba", 16, 16, 16]
       - [0x1C988, "tex.rgba", 16, 16, 16]
-   - [0x15B560, 0x15BBD0, "sm64.geo",  "birds_peach_yoshi"]
-   - [0x15BBD0, 0x162FC0, "mio0", "enemy"]:
+   - [0x15B560, 0x15BBD0, "sm64.geo", "peach_toadstool_yoshi_birds"]
+   - [0x15BBD0, 0x162FC0, "mio0", "bubba_wiggler_lakitu"]:
       - [0x00008, "tex.rgba", 16, 16, 32]
       - [0x00408, "tex.rgba", 16, 64, 32]
       - [0x01408, "tex.rgba", 16, 32, 32]
@@ -533,8 +534,8 @@ ranges:
       - [0x104E0, "tex.rgba", 16, 64, 32]
       - [0x114E0, "tex.rgba", 16, 32, 32]
       - [0x11CE0, "tex.rgba", 16, 32, 32]
-   - [0x162FC0, 0x163460, "sm64.geo",  "bubba_wiggler_lakitu"]
-   - [0x163460, 0x194090, "mio0", "bowser"]:
+   - [0x162FC0, 0x163460, "sm64.geo", "bubba_wiggler_lakitu"]
+   - [0x163460, 0x194090, "mio0", "bowser_flames_bomb"]:
       - [0x00000, "tex.rgba", 16, 64, 64]
       - [0x02000, "tex.rgba", 16, 64, 64]
       - [0x04000, "tex.rgba", 16, 64, 64]
@@ -585,8 +586,8 @@ ranges:
       - [0x57AC0, "tex.rgba", 16, 32, 64]
       - [0x58AC0, "tex.rgba", 16, 32, 64]
       - [0x59AC0, "tex.ia",   16, 32, 32]
-   - [0x194090, 0x194CE0, "sm64.geo",  "bowser_flames_bomb"]
-   - [0x194CE0, 0x19EDD0, "mio0", "treasure_chest_fish"]:
+   - [0x194090, 0x194CE0, "sm64.geo", "bowser_flames_bomb_flames_bomb"]
+   - [0x194CE0, 0x19EDD0, "mio0", "skeeter_fish_manta_treasurechest"]:
       - [0x00090, "tex.rgba", 16, 32, 32]
       - [0x00890, "tex.rgba", 16, 16,  8]
       - [0x07E10, "tex.rgba", 16, 32, 32]
@@ -606,8 +607,8 @@ ranges:
       - [0x147A8, "tex.rgba", 16, 32, 32]
       - [0x14FA8, "tex.rgba", 16, 32, 32]
       - [0x157A8, "tex.rgba", 16, 64, 32]
-   - [0x19EDD0, 0x19F250, "sm64.geo",  "skeeter_fish_manta_chest"]
-   - [0x19F250, 0x1B2CB0, "mio0", "koopa_whomp"]:
+   - [0x19EDD0, 0x19F250, "sm64.geo", "skeeter_fish_manta_treasurechest"]
+   - [0x19F250, 0x1B2CB0, "mio0", "koopa_log_piranha_whomp_chomp"]:
       - [0x00048, "tex.rgba", 16, 32, 32]
       - [0x01050, "tex.rgba", 16, 32, 32]
       - [0x01850, "tex.rgba", 16, 32, 32]
@@ -634,8 +635,8 @@ ranges:
       - [0x223D0, "tex.rgba", 16, 32, 32]
       - [0x22BD0, "tex.rgba", 16, 32, 32]
       - [0x233D0, "tex.rgba", 16, 32, 32]
-   - [0x1B2CB0, 0x1B3330, "sm64.geo",  "koopa_log_piranha_whomp_chomp"]
-   - [0x1B3330, 0x1BFC10, "mio0", "lakitu_toad"]:
+   - [0x1B2CB0, 0x1B3330, "sm64.geo", "koopa_log_piranha_whomp_chomp"]
+   - [0x1B3330, 0x1BFC10, "mio0", "lakitu_toad_mips_boo"]:
       - [0x00000, "tex.rgba", 16, 32, 32]
       - [0x00800, "tex.rgba", 16, 64, 32]
       - [0x01800, "tex.rgba", 16, 64, 32]
@@ -647,15 +648,15 @@ ranges:
       - [0x0FC70, "tex.rgba", 16, 32, 32]
       - [0x15760, "tex.rgba", 16, 64, 32]
       - [0x16760, "tex.rgba", 16, 32, 32]
-   - [0x1BFC10, 0x1C0210, "sm64.geo",  "lakitu_toad_mips_boo"]
-   - [0x1C0210, 0x1C2DB0, "mio0", "chillychief_moneybag"]:
+   - [0x1BFC10, 0x1C0210, "sm64.geo", "lakitu_toad_mips_boo_mips_boo"]
+   - [0x1C0210, 0x1C2DB0, "mio0", "chillychief_chillychief_moneybag"]:
       - [0x00060, "tex.rgba", 16, 32, 64]
       - [0x01060, "tex.rgba", 16, 32, 64]
       - [0x02060, "tex.rgba", 16, 32, 32]
       - [0x039B0, "tex.rgba", 16, 64, 32]
       - [0x049B0, "tex.rgba", 16, 32, 32]
-   - [0x1C2DB0, 0x1C2F00, "sm64.geo",  "moneybag"]
-   - [0x1C2F00, 0x1CCB50, "mio0", "mri_swoop"]:
+   - [0x1C2DB0, 0x1C2F00, "sm64.geo", "chillychief_moneybag"]
+   - [0x1C2F00, 0x1CCB50, "mio0", "mri_swoop_snufit_dorrie_scuttlebug"]:
       - [0x00080, "tex.rgba", 16, 32, 64]
       - [0x01080, "tex.rgba", 16, 32, 64]
       - [0x02170, "tex.rgba", 16, 32, 32]
@@ -678,8 +679,8 @@ ranges:
       - [0x11908, "tex.rgba", 16, 32, 64]
       - [0x12908, "tex.rgba", 16, 32, 32]
       - [0x13108, "tex.rgba", 16, 32, 32]
-   - [0x1CCB50, 0x1CD220, "sm64.geo",  "mri_swoop_snufit_dorrie_scuttlebug"]
-   - [0x1CD220, 0x1DB8F0, "mio0", "chuckya_shyguy_goomba"]:
+   - [0x1CCB50, 0x1CD220, "sm64.geo", "mri_swoop_snufit_dorrie_scuttlebug_snufit_dorrie_scuttlebug"]
+   - [0x1CD220, 0x1DB8F0, "mio0", "amp_chuckya_shyguy_goomba_boxes"]:
       - [0x00018, "tex.rgba", 16, 32, 16]
       - [0x00418, "tex.rgba", 16, 32, 32]
       - [0x00F18, "tex.rgba", 16, 16, 32]
@@ -726,8 +727,8 @@ ranges:
       - [0x25A80, "tex.rgba", 16, 16, 32]
       - [0x274A0, "tex.rgba", 16, 32, 32]
       - [0x27CA0, "tex.rgba", 16, 32, 32]
-   - [0x1DB8F0, 0x1DC430, "sm64.geo",  "cannon_box_switch_enemies"]
-   - [0x1DC430, 0x1F3DC0, "mio0", "doors_trees_coins"]:
+   - [0x1DB8F0, 0x1DC430, "sm64.geo", "amp_chuckya_shyguy_goomba_boxes"]
+   - [0x1DC430, 0x1F3DC0, "mio0", "coins_pipe_doors_maps_trees"]:
       - [0x00080, "tex.ia",   16, 32, 32]
       - [0x00A08, "tex.rgba", 16, 32, 32]
       - [0x01208, "tex.rgba", 16, 32, 32]
@@ -797,7 +798,7 @@ ranges:
       - [0x2FF60, "tex.rgba", 16, 32, 64]
       - [0x31048, "tex.rgba", 16, 32, 64]
       - [0x32218, "tex.rgba", 16, 32, 64]
-   - [0x1F3DC0, 0x1F4E20, "sm64.geo",  "coins_pipe_doors_maps_trees"]
+   - [0x1F3DC0, 0x1F4E20, "sm64.geo", "coins_pipe_doors_maps_trees"]
    - [0x1F4E20, 0x1FA4E0, "sm64.behavior", "behavior_data"]:
       - [0x0000, "beh_star_door"]
       - [0x0054, "beh_mr_i"]
@@ -1366,7 +1367,7 @@ ranges:
       - [0x05940, "tex.rgba", 16, 80, 20]
       - [0x06648, "tex.rgba", 16, 80, 24]
    # TODO: what is here?
-   - [0x280B20, 0x280FB0, "sm64.level",  "main_menu_level"]
+   - [0x280B20, 0x280FB0, "sm64.level", "main_menu_level"]
    - [0x280FB0, 0x286AC0, "mio0", "main_menu_segment7", 0x07000000]:
       - [0x00018, "tex.rgba", 16, 32, 32]
       - [0x00818, "tex.rgba", 16, 32, 32]
@@ -1540,7 +1541,7 @@ ranges:
       - [0x0CCC8, "tex.ia",    8,  8,  8]
       - [0x0D1A8, "tex.rgba", 16, 64, 64]
       - [0x0F2F8, "sm64.collision"]
-   - [0x286AC0, 0x2874D0, "sm64.level",  "main_level_scripts"]
+   - [0x286AC0, 0x2874D0, "sm64.level", "main_level_scripts"]
    - [0x2874D0, 0x293D30, "mio0", "water_skybox"]:
       - [0x00000, "tex.skybox", 16, 256, 256]
    - [0x293D30, 0x2A21F0, "mio0", "ccm_skybox"]:
@@ -1812,18 +1813,18 @@ ranges:
       - [0x0B000, "tex.rgba", 16, 32, 32]
       - [0x0B800, "tex.rgba", 16, 64, 32]
    - [0x34A350, 0x34CA60, "mio0", "flower_textures"]:
-      - [0x00048, "tex.rgba", 16, 32, 32]
-      - [0x00848, "tex.rgba", 16, 32, 32]
-      - [0x01048, "tex.rgba", 16, 32, 32]
-      - [0x01848, "tex.rgba", 16, 32, 32]
-      - [0x02120, "tex.rgba", 16, 32, 32]
-      - [0x02920, "tex.rgba", 16, 32, 32]
-      - [0x03120, "tex.rgba", 16, 32, 32]
-      - [0x03920, "tex.rgba", 16, 32, 32]
-      - [0x04120, "tex.rgba", 16, 32, 32]
-      - [0x04920, "tex.rgba", 16, 32, 32]
-      - [0x05120, "tex.rgba", 16, 32, 32]
-      - [0x05920, "tex.rgba", 16, 32, 32]
+      - [0x00008, "tex.rgba", 16, 32, 32]
+      - [0x00808, "tex.rgba", 16, 32, 32]
+      - [0x01008, "tex.rgba", 16, 32, 32]
+      - [0x01808, "tex.rgba", 16, 32, 32]
+      - [0x02020, "tex.rgba", 16, 32, 32]
+      - [0x02820, "tex.rgba", 16, 32, 32]
+      - [0x03020, "tex.rgba", 16, 32, 32]
+      - [0x03820, "tex.rgba", 16, 32, 32]
+      - [0x04020, "tex.rgba", 16, 32, 32]
+      - [0x04820, "tex.rgba", 16, 32, 32]
+      - [0x05020, "tex.rgba", 16, 32, 32]
+      - [0x05820, "tex.rgba", 16, 32, 32]
       - [0x06048, "tex.rgba", 16, 32, 32]
       - [0x0684C, "tex.rgba", 16, 16, 16]
       - [0x06AD8, "tex.rgba", 16, 16, 16]
@@ -1836,7 +1837,7 @@ ranges:
       - [0x03400, "tex.rgba", 16, 32, 64]
       - [0x04400, "tex.rgba", 16, 16, 32]
       - [0x207A0, "sm64.collision"]
-   - [0x35D6E0, 0x35E770, "sm64.level",  "bbh_level"]
+   - [0x35D6E0, 0x35E770, "sm64.level", "bbh_level"]
    - [0x35E770, 0x370AB0, "mio0", "ccm_segment7", 0x07000000]:
       - [0x00000, "tex.rgba", 16, 32, 32]
       - [0x00800, "tex.rgba", 16, 32,  4]
@@ -1853,7 +1854,7 @@ ranges:
       - [0x11958, "tex.rgba", 16, 32, 32]
       - [0x138E8, "sm64.collision"]
       - [0x20880, "sm64.collision"]
-   - [0x370AB0, 0x371160, "sm64.level",  "ccm_level"]
+   - [0x370AB0, 0x371160, "sm64.level", "ccm_level"]
    - [0x371160, 0x3A9EF0, "mio0", "inside_castle_segment7", 0x07000000]:
       - [0x00000, "tex.ia",   16, 32, 32]
       - [0x00800, "tex.rgba", 16, 32, 32]
@@ -1899,7 +1900,7 @@ ranges:
       - [0x68B88, "sm64.collision"]
       - [0x6E364, "sm64.collision"]
       - [0x73AAC, "sm64.collision"]
-   - [0x3A9EF0, 0x3ABBE0, "sm64.level",  "inside_castle_level"]
+   - [0x3A9EF0, 0x3ABBE0, "sm64.level", "inside_castle_level"]
    - [0x3ABBE0, 0x3C1820, "mio0", "hmc_segment7", 0x07000000]:
       - [0x00000, "tex.rgba", 16, 32, 64]
       - [0x01000, "tex.rgba", 16, 32, 64]
@@ -1910,7 +1911,7 @@ ranges:
       - [0x04800, "tex.rgba", 16, 32, 64]
       - [0x24CE0, "tex.rgba", 16, 32, 32]
       - [0x25594, "sm64.collision"]
-   - [0x3C1820, 0x3C24D0, "sm64.level",  "hmc_level"]
+   - [0x3C1820, 0x3C24D0, "sm64.level", "hmc_level"]
    - [0x3C24D0, 0x3D67B0, "mio0", "ssl_segment7", 0x07000000]:
       - [0x00000, "tex.rgba", 16, 32, 32]
       - [0x00800, "tex.ia",   16, 32, 32]
@@ -1970,10 +1971,10 @@ ranges:
       - [0x0D444, "sm64.collision"]
    - [0x407500, 0x407D40, "sm64.level", "thi_level"]
    - [0x407D40, 0x412220, "mio0", "ttc_segment7", 0x07000000]:
-      - [0x00000, "tex.rgba", 16, 32, 32]
-      - [0x00800, "tex.rgba", 16, 16, 64]
-      - [0x15F90, "tex.rgba", 16, 32, 32]
+      - [0x00000, "tex.rgba",   16, 32, 32]
+      - [0x00800, "tex.rgba",   16, 16, 64]
       - [0x12330, "sm64.collision"]
+      - [0x15F90, "tex.rgba", 16, 32, 32]
    - [0x412220, 0x412690, "sm64.level", "ttc_level"]
    - [0x412690, 0x424F60, "mio0", "rr_segment7", 0x07000000]:
       - [0x00000, "tex.rgba", 16, 32, 32]
@@ -2181,8 +2182,8 @@ ranges:
       - [0x02800, "tex.rgba", 16, 32, 32]
       - [0x03000, "tex.rgba", 16, 64, 32]
       - [0x04000, "tex.rgba", 16, 64, 32]
-      - [0x2AD30, "tex.rgba", 16, 32, 32]
       - [0x13814, "sm64.collision"]
+      - [0x2AD30, "tex.rgba", 16, 32, 32]
       - [0x2BBD0, "sm64.collision"]
       - [0x2D5EC, "sm64.collision"]
       - [0x2F0F8, "sm64.collision"]

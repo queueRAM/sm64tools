@@ -2272,6 +2272,7 @@ ranges:
       - [0x00000, "tex.rgba",   16, 32, 32]
       - [0x00800, "tex.rgba",   16, 16, 64]
       - [0x12330, "sm64.collision"]
+      - [0x15F90, "tex.rgba", 16, 32, 32]
    - [0x435460, 0x4358D0, "sm64.level", "ttc_level"]
    - [0x4358D0, 0x448200, "mio0", "rr_segment7", 0x07000000]:
       - [0x00000, "tex.rgba",   16, 32, 32]
