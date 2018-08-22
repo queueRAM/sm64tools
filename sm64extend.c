@@ -5,7 +5,7 @@
 #include "libsm64.h"
 #include "utils.h"
 
-#define SM64EXTEND_VERSION "0.3.1"
+#define SM64EXTEND_VERSION "0.3.2"
 
 // default configuration
 static const sm64_config default_config =
@@ -24,7 +24,7 @@ static void print_usage(void)
    ERROR("Usage: sm64extend [-a ALIGNMENT] [-p PADDING] [-s SIZE] [-d] [-f] [-v] FILE [OUT_FILE]\n"
          "\n"
          "sm64extend v" SM64EXTEND_VERSION ": Super Mario 64 ROM extender\n"
-         "Supports (E), (J), (U), and Shindou ROMs in .n64, .v64, or .z64 formats\n"
+         "Supports (E), (J), (U), Shindou, and iQue ROMs in .n64, .v64, or .z64 formats\n"
          "\n"
          "Optional arguments:\n"
          " -a ALIGNMENT byte boundary to align MIO0 blocks (default: %d)\n"

@@ -1,6 +1,6 @@
 ## sm64extend: Super Mario 64 ROM Extender
  - accepts Z64 (BE), V64 (byte-swapped), or N64 (little-endian) ROMs as input
- - works with US, European, Japanese, and Shindou ROMs
+ - works with US, European, Japanese, Shindou, and iQue ROMs
  - decompresses all MIO0 blocks from ROM to extended area
  - configurable extended ROM size (default 64 MB)
  - configurable padding between MIO0 blocks (default 32 KB)
@@ -14,12 +14,12 @@
 
 ### Usage
 ```
-sm64extend [-s SIZE] [-p PADDING] [-a ALIGNMENT] [-d] [-f] [-v] FILE [OUT_FILE]
+sm64extend [-a ALIGNMENT] [-p PADDING] [-s SIZE] [-d] [-f] [-v] FILE [OUT_FILE]
 ```
 Options:
- -s SIZE      Size of the extended ROM in MB (default: 64).
- -p PADDING   Padding to insert between MIO0 blocks in KB (default = 32).
  -a ALIGNMENT Byte boundary to align MIO0 blocks (default = 1).
+ -p PADDING   Padding to insert between MIO0 blocks in KB (default = 32).
+ -s SIZE      Size of the extended ROM in MB (default: 64).
  -d           dump MIO0 blocks to files in 'mio0files' directory
  -f           Fill old MIO0 blocks with 0x01.
  -v           Verbose output.
@@ -49,6 +49,7 @@ Pad 64 KB between blocks, align blocks to 16-byte boundaries, fill old MIO0 bloc
 sm64extend -p 64 -a 16 -f sm64.z64 sm64_output.ext.z64
 ```
 ### Changelog:
+v0.3.2: add support for SM64 iQue ROM
 v0.3.1: add little-endian ROM support and error checking
  - add support for .n64 little-endian ROMs
  - add further validation on SM64 ROM version
