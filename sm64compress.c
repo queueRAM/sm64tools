@@ -42,6 +42,8 @@ typedef struct
    char dump;
    char fix_f3d;
    char fix_geo;
+   char force_size;
+   char trim_bank;
 } compress_config;
 
 // default configuration
@@ -54,11 +56,13 @@ static const compress_config default_config =
    0,    // dump
    0,    // f3d
    0,    // geo
+   0,    // forced size
+   0,    // trim bank E
 };
 
 static void print_usage(void)
 {
-   ERROR("Usage: sm64compress [-a ALIGNMENT] [-c] [-d] [-f] [-g] [-v] FILE [OUT_FILE]\n"
+   ERROR("Usage: sm64compress [-a ALIGNMENT] [-c] [-d] [-f] [-g] [-s] [-t] [-v] FILE [OUT_FILE]\n"
          "\n"
          "sm64compress v" SM64COMPRESS_VERSION ": Super Mario 64 ROM compressor and fixer\n"
          "\n"
@@ -68,6 +72,8 @@ static void print_usage(void)
          " -d           dump blocks to 'dump' directory\n"
          " -f           fix F3D combine blending parameters\n"
          " -g           fix geo layout display list layers\n"
+         " -s           force 0xD0000 bank E size for 48Mb hacks\n"
+         " -t           try to trim bank E for better compression (heuristics)\n"
          " -v           verbose progress output\n"
          "\n"
          "File arguments:\n"
@@ -111,6 +117,12 @@ static void parse_arguments(int argc, char *argv[], compress_config *config)
             case 'g':
                config->fix_geo = 1;
                break;
+			case 's':
+				config->force_size = 1;
+				break;
+			case 't':
+				config->trim_bank = 1;
+				break;
             case 'v':
                g_verbosity = 1;
                break;
@@ -174,7 +186,7 @@ static void add_ref(block *blk, unsigned level_script, unsigned offset, unsigned
    }
 }
 
-static int walk_scripts(block *blocks, int block_count, unsigned char *buf, unsigned int in_length, unsigned level_script, unsigned script_end)
+static int walk_scripts(block *blocks, int block_count, unsigned char *buf, unsigned int in_length, unsigned level_script, unsigned script_end, const compress_config *config)
 {
    unsigned off = level_script;
    while (off < script_end) {
@@ -185,7 +197,7 @@ static int walk_scripts(block *blocks, int block_count, unsigned char *buf, unsi
             if (buf[off+1] == 0x10) {
                unsigned block_off = read_u32_be(&buf[off+4]);
                unsigned block_end = read_u32_be(&buf[off+8]);
-               if ((block_off & 0xFF000000) == (block_end & 0xFF000000) && buf[off+0x3] == buf[off+0xC]) {
+               if ((block_off & 0xFF000000) == (block_end & 0xFF000000) && buf[off+0x3] <= buf[off+0xC]) {
                   INFO("%07X: %08X %08X %08X %08X\n", off, cmd, block_off, block_end, read_u32_be(&buf[off+0xC]));
                   int idx = find_block(blocks, block_count, block_off);
                   if (idx < 0) {
@@ -195,7 +207,7 @@ static int walk_scripts(block *blocks, int block_count, unsigned char *buf, unsi
                      blocks[idx].type = BLOCK_LEVEL;
                      block_count++;
                      // recurse
-                     block_count = walk_scripts(blocks, block_count, buf, in_length, block_off, block_end);
+                     block_count = walk_scripts(blocks, block_count, buf, in_length, block_off, block_end, config);
                   }
                   add_ref(&blocks[idx], level_script, off - level_script, buf[off]);
                }
@@ -207,13 +219,34 @@ static int walk_scripts(block *blocks, int block_count, unsigned char *buf, unsi
             if (buf[off+1] == 0x0C) {
                unsigned block_off = read_u32_be(&buf[off+4]);
                unsigned block_end = read_u32_be(&buf[off+8]);
-               if ((block_off & 0xFF000000) == (block_end & 0xFF000000)) {
+               if ((block_off & 0xFF000000) <= (block_end & 0xFF000000)) {
                   INFO("%07X: %08X %08X %08X\n", off, cmd, block_off, block_end);
                   int idx = find_block(blocks, block_count, block_off);
                   if (idx < 0) {
                      idx = block_count;
                      blocks[idx].old = block_off;
                      blocks[idx].old_end = block_end;
+
+                     if (config->trim_bank)
+                     {
+                         if (block_end > 0x1200000 && buf[off + 3] == 0xE)
+                         {
+                             unsigned real_block_end = config->force_size ? block_off + 0xD0000 - 0x100 : block_end - 0x20200;
+                             while (buf[real_block_end] == 0x01 && real_block_end > block_off)
+                                 real_block_end -= 0x100;
+
+                             if (real_block_end == block_off)
+                             {
+                                 INFO("Search failed, bail\n");
+                             }
+                             else
+                             {
+                                 blocks[idx].old_end = real_block_end + 0x100;
+                                 INFO("Real segment [%lx, %lx]~>[%lx, %lx]; saved %lx\n", block_off, block_end, blocks[idx].old, blocks[idx].old_end, block_end - blocks[idx].old_end);
+                             }
+                         }
+                     }
+
                      switch (buf[off]) {
                         case 0x17: // raw data
                            blocks[idx].type = BLOCK_RAW;
@@ -365,7 +398,7 @@ static int sm64_compress_mio0(const compress_config *config,
    block_count++;
 
    // find blocks in level scripts
-   block_count = walk_scripts(block_table, block_count, in_buf, in_length, ENTRY_SCRIPT, ENTRY_SCRIPT + 0x30);
+   block_count = walk_scripts(block_table, block_count, in_buf, in_length, ENTRY_SCRIPT, ENTRY_SCRIPT + 0x30, config);
    // find sequence bank block (usually 0x02F00000 or 0x03E00000)
    block_count = find_sequence_bank(block_table, block_count, in_buf, in_length);
    // some block (usually ROM 0x01200000) is DMAd to 0x80400000
@@ -539,8 +572,6 @@ static int sm64_compress_mio0(const compress_config *config,
                         read_u32_be(&out_buf[offset + 4]), read_u32_be(&out_buf[offset + 8]),
                         blk->refs[r].type, out_buf[offset + 3], blk->new, blk->new_end);
                   out_buf[offset] = blk->refs[r].type;
-                  // some commands have upper byte of segment set to 0x01
-                  out_buf[offset + 2] = 0x00;
                   write_u32_be(&out_buf[offset + 4], blk->new);
                   write_u32_be(&out_buf[offset + 8], blk->new_end);
                }
