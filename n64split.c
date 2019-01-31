@@ -2211,7 +2211,10 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                if (++i >= argc) {
                   print_usage();
                }
-               strcpy(config->config_file, argv[i]);
+               // Unsecure 
+               // strcpy(config->config_file, argv[i]);
+               // Secure version below 
+               strncpy(config->config_file, argv[i], FILENAME_MAX);
                break;
             case 'k':
                config->keep_going = true;
@@ -2223,7 +2226,10 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                if (++i >= argc) {
                   print_usage();
                }
-               strcpy(config->output_dir, argv[i]);
+               //Unsecure (buffer overflow)
+               // strcpy(config->output_dir, argv[i]);
+               //Secure version below without buffer overflow 
+               strncpy(config->output_dir, argv[i], FILENAME_MAX);
                break;
             case 'r':
                config->raw_texture = true;
@@ -2250,7 +2256,9 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
          }
       } else {
          if (file_count == 0) {
-            strcpy(config->input_file, argv[i]);
+            // strcpy(config->input_file, argv[i]);
+            //Secure version without buffer overflow 
+            strncpy(config->input_file, argv[i], FILENAME_MAX); 
          } else {
             // too many
             print_usage();
