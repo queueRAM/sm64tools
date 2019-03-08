@@ -46,7 +46,11 @@ SPLIT_SRC_FILES := blast.c \
                    libsfx.c \
                    mipsdisasm.c \
                    n64graphics.c \
-                   n64split.c \
+                   n64split/n64split.c \
+                   n64split/n64split.sm64.geo.c \
+                   n64split/n64split.sm64.behaviour.c \
+                   n64split/n64split.sm64.collision.c \
+                   n64split/n64split.sound.c \
                    strutils.c \
                    utils.c \
                    yamlconfig.c
@@ -66,7 +70,7 @@ INCLUDES  = -I./ext
 DEFS      = 
 # Release flags
 CFLAGS    = -Wall -Wextra -Wno-format-overflow -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(DEFS) -MMD
-LDFLAGS   = -s -Wl,--gc-sections
+LDFLAGS   = -s -Wl,-dead_strip
 # Debug flags
 #CFLAGS    = -Wall -Wextra -O0 -g $(INCLUDES) $(DEFS) -MMD
 #LDFLAGS   =
@@ -85,6 +89,9 @@ OBJ_FILES = $(LIB_OBJ_FILES) $(EXTEND_OBJ_FILES) $(COMPRESS_OBJ_FILES) \
             $(SPLIT_OBJ_FILES) $(CKSUM_OBJ_FILES) $(F3D_OBJ_FILES) \
             $(F3D2OBJ_OBJ_FILES) $(GEO_OBJ_FILES)
 DEP_FILES = $(OBJ_FILES:.o=.d)
+BIN_OUTPUT_DIR=./bin/
+SPLIT_OBJ_DIR=$(OBJ_DIR)/n64split
+
 
 ######################## Targets #############################
 
@@ -96,6 +103,7 @@ all: $(EXTEND_TARGET) $(COMPRESS_TARGET) $(MIO0_TARGET) $(CKSUM_TARGET) \
 
 $(OBJ_DIR)/%.o: %.c
 	@[ -d $(OBJ_DIR) ] || mkdir -p $(OBJ_DIR)
+	@[ -d $(SPLIT_OBJ_DIR) ] || mkdir -p $(SPLIT_OBJ_DIR)
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 $(SM64_LIB): $(LIB_OBJ_FILES)
@@ -103,40 +111,40 @@ $(SM64_LIB): $(LIB_OBJ_FILES)
 	$(AR) rcs $@ $^
 
 $(CKSUM_TARGET): $(CKSUM_OBJ_FILES) $(SM64_LIB)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(LD) $(LDFLAGS) -o ./bin/$@ $^ $(LIBS)
 
 $(COMPRESS_TARGET): $(COMPRESS_OBJ_FILES) $(SM64_LIB)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(LD) $(LDFLAGS) -o ./bin/$@ $^ $(LIBS)
 
 $(EXTEND_TARGET): $(EXTEND_OBJ_FILES) $(SM64_LIB)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(LD) $(LDFLAGS) -o ./bin/$@ $^ $(LIBS)
 
 $(F3D_TARGET): $(F3D_OBJ_FILES)
-	$(LD) $(LDFLAGS) -o $@ $^
+	$(LD) $(LDFLAGS) -o ./bin/$@ $^
 
 $(F3D2OBJ_TARGET): $(F3D2OBJ_OBJ_FILES)
-	$(LD) $(LDFLAGS) -o $@ $^
+	$(LD) $(LDFLAGS) -o ./bin/$@ $^
 
 $(GEO_TARGET): $(GEO_OBJ_FILES)
-	$(LD) $(LDFLAGS) -o $@ $^
+	$(LD) $(LDFLAGS) -o ./bin/$@ $^
 
 $(GRAPHICS_TARGET): $(GRAPHICS_SRC_FILES)
-	$(CC) $(CFLAGS) -DN64GRAPHICS_STANDALONE $^ $(LDFLAGS) -o $@
+	$(CC) $(CFLAGS) -DN64GRAPHICS_STANDALONE $^ $(LDFLAGS) -o ./bin/$@
 
 $(MIO0_TARGET): libmio0.c libmio0.h
-	$(CC) $(CFLAGS) -DMIO0_STANDALONE $(LDFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -DMIO0_STANDALONE $(LDFLAGS) -o ./bin/$@ $<
 
 $(DISASM_TARGET): $(DISASM_SRC_FILES)
-	$(CC) $(CFLAGS) -DMIPSDISASM_STANDALONE $^ $(LDFLAGS) -o $@ -lcapstone
+	$(CC) $(CFLAGS) -DMIPSDISASM_STANDALONE $^ $(LDFLAGS) -o ./bin/$@ -lcapstone
 
 $(SPLIT_TARGET): $(SPLIT_OBJ_FILES)
-	$(LD) $(LDFLAGS) -o $@ $^ $(SPLIT_LIBS)
+	$(LD) $(LDFLAGS) -o ./bin/$@ $^ $(SPLIT_LIBS)
 
 $(WALK_TARGET): sm64walk.c $(SM64_LIB)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o ./bin/$@ $^
 
 rawmips: rawmips.c utils.c
-	$(CC) $(CFLAGS) -o $@ $^ -lcapstone
+	$(CC) $(CFLAGS) -o ./bin/$@ $^ -lcapstone
 
 clean:
 	rm -f $(OBJ_FILES) $(DEP_FILES) $(SM64_LIB) $(MIO0_TARGET)
