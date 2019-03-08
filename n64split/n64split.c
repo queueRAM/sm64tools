@@ -21,6 +21,14 @@
 #define MACROS_FILE "macros.inc"
 #define MUSIC_SUBDIR    "music"
 
+#define BIN_SUBDIR      "bin"
+#define MIO0_SUBDIR     "bin"
+#define TEXTURE_SUBDIR  "textures"
+#define GEO_SUBDIR      "geo"
+#define LEVEL_SUBDIR    "levels"
+#define MODEL_SUBDIR    "models"
+#define BEHAVIOR_SUBDIR "."
+
 typedef struct _arg_config
 {
    char input_file[FILENAME_MAX];
@@ -394,15 +402,40 @@ static void generate_ld_script(arg_config *args, rom_config *config)
    fclose(fld);
 }
 
+void section_sm64_geo(unsigned char *data, arg_config *args, rom_config *config, disasm_state *state, split_section *sec, char* start_label, char* outfilename, char* outfilepath, FILE *fasm, strbuf *makeheader_level) {
+   char geofilename[FILENAME_MAX];
+   FILE *fgeo;
+   if (sec->label == NULL || sec->label[0] == '\0') {
+      sprintf(geofilename, "%s.%06X.geo.s", config->basename, sec->start);
+      sprintf(start_label, "L%06X", sec->start);
+   } else {
+      sprintf(geofilename, "%s.geo.s", sec->label);
+      strcpy(start_label, sec->label);
+   }
+   sprintf(outfilename, "%s/%s", GEO_SUBDIR, geofilename);
+   sprintf(outfilepath, "%s/%s", args->output_dir, outfilename);
+
+   // decode and write level data out
+   fgeo = fopen(outfilepath, "w");
+   if (fgeo == NULL) {
+      perror(outfilepath);
+      exit(1);
+   }
+   write_geolayout(fgeo, &data[sec->start], 0, sec->end - sec->start, state);
+   fclose(fgeo);
+
+   fprintf(fasm, "\n.align 4, 0x01\n");
+   fprintf(fasm, ".global %s\n", start_label);
+   fprintf(fasm, "%s:\n", start_label);
+   fprintf(fasm, ".include \"%s\"\n", outfilename);
+   fprintf(fasm, "%s_end:\n", start_label);
+   // append to Makefile
+   strbuf_sprintf(&makeheader_level, " \\\n$(GEO_DIR)/%s", geofilename);
+}
+
 static void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_config *config, disasm_state *state)
 {
-#define BIN_SUBDIR      "bin"
-#define MIO0_SUBDIR     "bin"
-#define TEXTURE_SUBDIR  "textures"
-#define GEO_SUBDIR      "geo"
-#define LEVEL_SUBDIR    "levels"
-#define MODEL_SUBDIR    "models"
-#define BEHAVIOR_SUBDIR "."
+
    char makefile_name[FILENAME_MAX];
    char bin_dir[FILENAME_MAX];
    char mio0_dir[FILENAME_MAX];
@@ -641,34 +674,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
       switch (sec->type) {
          case TYPE_SM64_GEO:
          {
-            char geofilename[FILENAME_MAX];
-            FILE *fgeo;
-            if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(geofilename, "%s.%06X.geo.s", config->basename, sec->start);
-               sprintf(start_label, "L%06X", sec->start);
-            } else {
-               sprintf(geofilename, "%s.geo.s", sec->label);
-               strcpy(start_label, sec->label);
-            }
-            sprintf(outfilename, "%s/%s", GEO_SUBDIR, geofilename);
-            sprintf(outfilepath, "%s/%s", args->output_dir, outfilename);
-
-            // decode and write level data out
-            fgeo = fopen(outfilepath, "w");
-            if (fgeo == NULL) {
-               perror(outfilepath);
-               exit(1);
-            }
-            write_geolayout(fgeo, &data[sec->start], 0, sec->end - sec->start, state);
-            fclose(fgeo);
-
-            fprintf(fasm, "\n.align 4, 0x01\n");
-            fprintf(fasm, ".global %s\n", start_label);
-            fprintf(fasm, "%s:\n", start_label);
-            fprintf(fasm, ".include \"%s\"\n", outfilename);
-            fprintf(fasm, "%s_end:\n", start_label);
-            // append to Makefile
-            strbuf_sprintf(&makeheader_level, " \\\n$(GEO_DIR)/%s", geofilename);
+            section_sm64_geo(data, args, config, state, sec, start_label, outfilename, outfilepath, fasm, &makeheader_level);
             break;
          }
          case TYPE_BLAST:
