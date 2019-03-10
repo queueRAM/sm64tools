@@ -433,6 +433,33 @@ void section_sm64_geo(unsigned char *data, arg_config *args, rom_config *config,
    strbuf_sprintf(&makeheader_level, " \\\n$(GEO_DIR)/%s", geofilename);
 }
 
+void write_bin_type(split_section *sec, char* outfilename, char* start_label, FILE* fasm, unsigned char *data, char* outfilepath, arg_config * args, rom_config *config) {
+   printf("write_bin_type");
+   char* output_dir=BIN_SUBDIR;
+   char bin_dir[512];
+   if (sec->section_name != NULL) {
+      output_dir=sec->section_name;
+   }
+   sprintf(bin_dir, "%s/%s", args->output_dir, output_dir);
+   make_dir(bin_dir);
+
+   if (sec->label == NULL || sec->label[0] == '\0') {
+      sprintf(outfilename, "%s/%s.%06X.%s", output_dir, config->basename, sec->start,sec->section_name);
+   } else {
+      sprintf(outfilename, "%s/%s.%06X.%s.%s", output_dir, config->basename, sec->start, sec->label,sec->section_name);
+   }
+   sprintf(outfilepath, "%s/%s", args->output_dir, outfilename);
+   write_file(outfilepath, &data[sec->start], sec->end - sec->start);
+   if (sec->label == NULL || sec->label[0] == '\0') {
+      sprintf(start_label, "L%06X", sec->start);
+   } else {
+      strcpy(start_label, sec->label);
+   }
+   fprintf(fasm, "%s:\n", start_label);
+   fprintf(fasm, ".incbin \"%s\"\n", outfilename);
+   fprintf(fasm, "%s_end:\n", start_label);
+}
+
 static void split_file(unsigned char *data, unsigned int length, arg_config *args, rom_config *config, disasm_state *state)
 {
 
@@ -566,21 +593,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             fprintf(fasm, ".byte  0x%02X       # version\n\n", data[sec->start + 0x3F]);
             break;
          case TYPE_BIN:
-            if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(outfilename, "%s/%s.%06X.bin", BIN_SUBDIR, config->basename, sec->start);
-            } else {
-               sprintf(outfilename, "%s/%s.%06X.%s.bin", BIN_SUBDIR, config->basename, sec->start, sec->label);
-            }
-            sprintf(outfilepath, "%s/%s", args->output_dir, outfilename);
-            write_file(outfilepath, &data[sec->start], sec->end - sec->start);
-            if (sec->label == NULL || sec->label[0] == '\0') {
-               sprintf(start_label, "L%06X", sec->start);
-            } else {
-               strcpy(start_label, sec->label);
-            }
-            fprintf(fasm, "%s:\n", start_label);
-            fprintf(fasm, ".incbin \"%s\"\n", outfilename);
-            fprintf(fasm, "%s_end:\n", start_label);
+            write_bin_type(sec, outfilename, start_label, fasm, data, outfilepath, args, config);
             break;
          case TYPE_BLAST:
          case TYPE_MIO0:
@@ -646,8 +659,9 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             parse_instrument_set(fasm, data, sec);
             break;
          default:
-            ERROR("Don't know what to do with type %d\n", sec->type);
-            exit(1);
+            printf("Treating custom file format as binary %s %s %s\n", sec->section_name, outfilepath, outfilename);
+            // ERROR("Don't know what to do with type %d\n", sec->type);
+            write_bin_type(sec, outfilename, start_label, fasm, data, outfilepath, args, config);
             break;
       }
       prev_end = sec->end;

@@ -41,6 +41,7 @@ static const section_entry section_table[] = {
    {"sm64.geo",       TYPE_SM64_GEO},
    {"sm64.level",     TYPE_SM64_LEVEL},
 };
+// TODO would be cool to extend this dynamically with plugins
 
 static inline int is_texture(section_type section)
 {
@@ -236,7 +237,10 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
             switch (i) {
                case 0: section->start = strtoul(val, NULL, 0); break;
                case 1: section->end = strtoul(val, NULL, 0); break;
-               case 2: section->type = config_str2section(val); break;
+               case 2: 
+                  section->type = config_str2section(val); 
+                  strcpy(section->section_name, val);
+                  break;
                case 3: section->vaddr = strtoul(val, NULL, 0); break;
             }
          } else {
@@ -277,7 +281,7 @@ void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *nod
             }
             break;
          default:
-            ERROR("Error: " SIZE_T_FORMAT " - invalid section type '%s'\n", node->start_mark.line, val);
+            // ERROR("Error: " SIZE_T_FORMAT " - invalid section type '%s'\n", node->start_mark.line, val);
             return;
       }
       if (count > 3) {
