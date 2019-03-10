@@ -608,9 +608,10 @@ int config_validate(const rom_config *config, unsigned int max_len)
    for (i = 0; i < config->section_count; i++) {
       split_section *isec = &config->sections[i];
       if (isec->start < last_end) {
-         ERROR("Error: section %d \"%s\" (%X-%X) out of order\n",
-               i, isec->label, isec->start, isec->end);
-         ret_val = -2;
+         // ERROR("Error: section %d \"%s\" (%X-%X) out of order\n",
+         //       i, isec->label, isec->start, isec->end);
+         isec->start = last_end;
+         // ret_val = -2;
       }
       if (isec->end > max_len) {
          ERROR("Error: section %d \"%s\" (%X-%X) past end of file (%X)\n",
@@ -620,7 +621,8 @@ int config_validate(const rom_config *config, unsigned int max_len)
       if (isec->start >= isec->end) {
          ERROR("Error: section %d \"%s\" (%X-%X) invalid range\n",
                i, isec->label, isec->start, isec->end);
-         ret_val = -4;
+         isec->end=isec->start;
+         //ret_val = -4;
       }
       for (j = 0; j < i; j++) {
          split_section *jsec = &config->sections[j];
@@ -628,7 +630,7 @@ int config_validate(const rom_config *config, unsigned int max_len)
             ERROR("Error: section %d \"%s\" (%X-%X) overlaps %d \"%s\" (%X-%X)\n",
                   i, isec->label, isec->start, isec->end,
                   j, jsec->label, jsec->start, jsec->end);
-            ret_val = -1;
+            // ret_val = -1;
          }
       }
       last_end = isec->end;

@@ -22,6 +22,7 @@
 #define MUSIC_SUBDIR    "music"
 
 #define BIN_SUBDIR      "bin"
+#define ASM_SUBDIR      "asm"
 #define MIO0_SUBDIR     "bin"
 #define TEXTURE_SUBDIR  "textures"
 #define GEO_SUBDIR      "geo"
@@ -434,9 +435,8 @@ void section_sm64_geo(unsigned char *data, arg_config *args, rom_config *config,
 }
 
 void write_bin_type(split_section *sec, char* outfilename, char* start_label, FILE* fasm, unsigned char *data, char* outfilepath, arg_config * args, rom_config *config) {
-   printf("write_bin_type");
    char* output_dir=BIN_SUBDIR;
-   char bin_dir[512];
+   char bin_dir[FILENAME_MAX];
    if (sec->section_name != NULL) {
       output_dir=sec->section_name;
    }
@@ -465,6 +465,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
 
    char makefile_name[FILENAME_MAX];
    char bin_dir[FILENAME_MAX];
+   char asm_dir[FILENAME_MAX];
    char mio0_dir[FILENAME_MAX];
    char texture_dir[FILENAME_MAX];
    char geo_dir[FILENAME_MAX];
@@ -492,6 +493,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
    // create directories
    sprintf(makefile_name, "%s/Makefile.split", args->output_dir);
    sprintf(bin_dir, "%s/%s", args->output_dir, BIN_SUBDIR);
+   sprintf(asm_dir, "%s/%s", args->output_dir, ASM_SUBDIR);
    sprintf(mio0_dir, "%s/%s", args->output_dir, MIO0_SUBDIR);
    sprintf(texture_dir, "%s/%s", args->output_dir, TEXTURE_SUBDIR);
    sprintf(geo_dir, "%s/%s", args->output_dir, GEO_SUBDIR);
@@ -500,6 +502,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
    sprintf(behavior_dir, "%s/%s", args->output_dir, BEHAVIOR_SUBDIR);
    make_dir(args->output_dir);
    make_dir(bin_dir);
+   make_dir(asm_dir);
    make_dir(mio0_dir);
    make_dir(texture_dir);
    make_dir(geo_dir);
@@ -554,6 +557,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
                group_offset += group_len;
             }
          } else {
+            // TODO move gap fillers into a different subdirectory
             sprintf(outfilename, "%s/%s.%06X.bin", BIN_SUBDIR, config->basename, prev_end);
             sprintf(outfilepath, "%s/%s", args->output_dir, outfilename);
             write_file(outfilepath, &data[prev_end], gap_len);
@@ -628,8 +632,16 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             break;
          case TYPE_ASM:
             INFO("Section asm: %X-%X\n", sec->start, sec->end);
-            fprintf(fasm, "\n.section .text%08X, \"ax\"\n\n", sec->vaddr);
-            mipsdisasm_pass2(fasm, state, sec->start);
+            char section_asmfilename[FILENAME_MAX];
+            sprintf(section_asmfilename, "%s/asm/%s.s", args->output_dir, sec->label);
+            // Include in main .s file
+            fprintf(fasm, ".include \"asm/%s.s\" \n", sec->label);
+
+            // Open seperate .s file for this section
+            FILE *section_fasm = fopen(section_asmfilename, "w");
+            fprintf(section_fasm, "\n.section .text%08X, \"ax\"\n\n", sec->vaddr);
+            mipsdisasm_pass2(section_fasm, state, sec->start);
+            fclose(section_fasm);
             break;
          case TYPE_SM64_LEVEL:
             // relocate level scripts to .mio0 area
@@ -659,7 +671,7 @@ static void split_file(unsigned char *data, unsigned int length, arg_config *arg
             parse_instrument_set(fasm, data, sec);
             break;
          default:
-            printf("Treating custom file format as binary %s %s %s\n", sec->section_name, outfilepath, outfilename);
+            // printf("Treating custom file format as binary %s %s %s\n", sec->section_name, outfilepath, outfilename);
             // ERROR("Don't know what to do with type %d\n", sec->type);
             write_bin_type(sec, outfilename, start_label, fasm, data, outfilepath, args, config);
             break;
@@ -1320,6 +1332,7 @@ int main(int argc, char *argv[])
          unsigned int start = config.sections[i].start;
          unsigned int end = config.sections[i].end;
          unsigned int vaddr = config.sections[i].vaddr;
+         printf("First pass of section:%s\n",  config.sections[i].label);
          if (end <= (unsigned int)len) {
             mipsdisasm_pass1(data, start, end - start, vaddr, state);
          } else {
@@ -1342,7 +1355,7 @@ int main(int argc, char *argv[])
       }
    }
    percent = (float)(100 * size) / (float)(len);
-   printf("Total decoded section size:  %X/%lX (%.2f%%)\n", size, len, percent);
+   printf("Total decoded section size:  %X/%lX (%.2f%%) (i.e sections that are not .bin)\n", size, len, percent);
    size = 0;
 
    return 0;
