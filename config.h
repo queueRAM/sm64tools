@@ -35,7 +35,7 @@ typedef enum
 typedef struct _label
 {
    unsigned int ram_addr;
-   char name[128];
+   char name[2048];
 } label;
 
 typedef struct _texture

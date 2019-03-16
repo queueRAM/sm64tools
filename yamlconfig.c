@@ -7,6 +7,7 @@
 #include "config.h"
 #include "utils.h"
 
+#define MAX_SIZE 2048
 typedef struct
 {
    const char *name;
@@ -102,7 +103,7 @@ int get_scalar_uint(unsigned int *val, yaml_node_t *node)
 
 void load_child_node(split_section *section, yaml_document_t *doc, yaml_node_t *node)
 {
-   char val[64];
+   char val[MAX_SIZE];
    yaml_node_item_t *i_node;
    yaml_node_t *next_node;
    texture *tex = &section->tex;
@@ -224,7 +225,7 @@ void load_section_data(split_section *section, yaml_document_t *doc, yaml_node_t
 
 void load_section(split_section *section, yaml_document_t *doc, yaml_node_t *node)
 {
-   char val[128];
+   char val[MAX_SIZE];
    yaml_node_item_t *i_node;
    yaml_node_t *next_node;
    size_t count = node->data.sequence.items.top - node->data.sequence.items.start;
@@ -373,7 +374,7 @@ int load_sections_sequence(rom_config *c, yaml_document_t *doc, yaml_node_t *nod
 
 void load_label(label *lab, yaml_document_t *doc, yaml_node_t *node)
 {
-   char val[128];
+   char val[MAX_SIZE];
    yaml_node_item_t *i_node;
    yaml_node_t *next_node;
    if (node->type == YAML_SEQUENCE_NODE) {
