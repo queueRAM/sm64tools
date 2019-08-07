@@ -1,34 +1,6 @@
-#include <inttypes.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdbool.h>
+#include "n64split.h"
 
-#include <zlib.h>
-
-#include "config.h"
-#include "libblast.h"
-#include "libmio0.h"
-#include "libsfx.h"
-#include "mipsdisasm.h"
-#include "n64graphics.h"
-#include "strutils.h"
-#include "utils.h"
-
-#define N64SPLIT_VERSION "0.4a"
-
-#define GLOBALS_FILE "globals.inc"
-#define MACROS_FILE "macros.inc"
-#define MUSIC_SUBDIR "music"
-
-
-typedef struct
-{
-  unsigned type;
-  char *name;
-} terrain_t;
-
-static const terrain_t terrain_table[] =
+const terrain_t terrain_table[] =
 {
    {0x0000, "normal"},
    {0x0001, "lethal_lava"},
@@ -52,9 +24,9 @@ static const terrain_t terrain_table[] =
    {0x00FD, "pool_warp"},
 };
 
-char *terrain2str(unsigned type)
+char *terrain2str(unsigned int type)
 {
-   unsigned i;
+   unsigned int i;
    static char retval[16];
    if (0x1B <= type && type <= 0x1E) {
       sprintf(retval, "switch%02X", type);
@@ -82,15 +54,15 @@ int collision2obj(char *binfilename, unsigned int binoffset, char *objfilename, 
    unsigned char *data;
    FILE *fobj;
    long in_size;
-   unsigned vcount;
-   unsigned tcount;
-   unsigned cur_tcount;
-   unsigned terrain;
-   unsigned v_per_t;
-   unsigned processing;
-   unsigned offset;
-   unsigned i;
-   unsigned vidx[3];
+   unsigned int vcount;
+   unsigned int tcount;
+   unsigned int cur_tcount;
+   unsigned int terrain;
+   unsigned int v_per_t;
+   unsigned int processing;
+   unsigned int offset;
+   unsigned int i;
+   unsigned int vidx[3];
    short x, y, z;
    int ret_len = 0;
 

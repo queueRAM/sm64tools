@@ -1,53 +1,6 @@
-#include <inttypes.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdbool.h>
+#include "n64split.h"
 
-#include <zlib.h>
-
-#include "config.h"
-#include "libblast.h"
-#include "libmio0.h"
-#include "libsfx.h"
-#include "mipsdisasm.h"
-#include "n64graphics.h"
-#include "strutils.h"
-#include "utils.h"
-
-#define N64SPLIT_VERSION "0.4a"
-
-#define GLOBALS_FILE "globals.inc"
-#define MACROS_FILE "macros.inc"
-
-static void print_spaces(FILE *fp, int count)
-{
-   int i;
-   for (i = 0; i < count; i++) {
-      fputc(' ', fp);
-   }
-}
-
-typedef struct _arg_config
-{
-   char input_file[FILENAME_MAX];
-   char config_file[FILENAME_MAX];
-   char output_dir[FILENAME_MAX];
-   float model_scale;
-   bool raw_texture; // TODO: this should be the default path once n64graphics is updated
-   bool large_texture;
-   bool large_texture_depth;
-   bool keep_going;
-   bool merge_pseudo;
-} arg_config;
-
-typedef struct
-{
-   int length;
-   const char *macro;
-} geo_command;
-
-static geo_command geo_table[] =
+geo_command geo_table[] =
 {
    /* 0x00 */ {0x08, "geo_branch_and_link"},
    /* 0x01 */ {0x04, "geo_end"},
@@ -99,7 +52,7 @@ void write_geolayout(FILE *out, unsigned char *data, unsigned int start, unsigne
                 ".include \"geo_commands.inc\"\n\n"
                 ".section .geo, \"a\"\n\n");
    while (a < end) {
-      unsigned cmd = data[a];
+      unsigned int cmd = data[a];
       if (print_label) {
          fprintf(out, "glabel geo_layout_X_%06X # %04X\n", a, a);
          print_label = 0;
