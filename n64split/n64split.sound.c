@@ -1,47 +1,16 @@
-#include <inttypes.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdbool.h>
+#include "n64split.h"
 
-#include <zlib.h>
-
-#include "config.h"
-#include "libblast.h"
-#include "libmio0.h"
-#include "libsfx.h"
-#include "mipsdisasm.h"
-#include "n64graphics.h"
-#include "strutils.h"
-#include "utils.h"
-
-#define N64SPLIT_VERSION "0.4a"
-
-#define GLOBALS_FILE "globals.inc"
-#define MACROS_FILE "macros.inc"
 #define MUSIC_SUBDIR "music"
-typedef struct _arg_config
-{
-   char input_file[FILENAME_MAX];
-   char config_file[FILENAME_MAX];
-   char output_dir[FILENAME_MAX];
-   float model_scale;
-   bool raw_texture; // TODO: this should be the default path once n64graphics is updated
-   bool large_texture;
-   bool large_texture_depth;
-   bool keep_going;
-   bool merge_pseudo;
-} arg_config;
 
 void parse_music_sequences(FILE *out, unsigned char *data, split_section *sec, arg_config *args, strbuf *makeheader)
 {
    typedef struct {
-      unsigned start;
-      unsigned length;
+      unsigned int start;
+      unsigned int length;
    } sequence;
    typedef struct {
-      unsigned revision;
-      unsigned count;
+      unsigned int revision;
+      unsigned int count;
       sequence *seq;
    } sequence_bank;
 
@@ -50,7 +19,7 @@ void parse_music_sequences(FILE *out, unsigned char *data, split_section *sec, a
    char m64_file_rel[FILENAME_MAX];
    char seq_name[128];
    sequence_bank seq_bank = {0};
-   unsigned i;
+   unsigned int i;
 
    sprintf(music_dir, "%s/%s", args->output_dir, MUSIC_SUBDIR);
    make_dir(music_dir);
@@ -100,9 +69,9 @@ void parse_music_sequences(FILE *out, unsigned char *data, split_section *sec, a
 
 void parse_instrument_set(FILE *out, unsigned char *data, split_section *sec)
 {
-   unsigned *instrument_set;
-   unsigned count;
-   unsigned i, cur;
+   unsigned int *instrument_set;
+   unsigned int count;
+   unsigned int i, cur;
 
    count = sec->child_count;
    // each sequence has its own instrument set defined by offsets table
@@ -131,14 +100,13 @@ void parse_instrument_set(FILE *out, unsigned char *data, split_section *sec)
 
 void parse_sound_banks(FILE *out, unsigned char *data, split_section *secCtl, split_section *secTbl, arg_config *args, strbuf *makeheader)
 {
-#define SOUNDS_SUBDIR    "sounds"
    // TODO: unused parameters
    (void)out;
    (void)makeheader;
 
    char sound_dir[FILENAME_MAX];
    char sfx_file[FILENAME_MAX];
-   unsigned i, j, sound_count;
+   unsigned int i, j, sound_count;
 
    sfx_initialize_key_table();
    

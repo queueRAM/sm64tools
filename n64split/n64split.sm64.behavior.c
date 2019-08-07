@@ -1,24 +1,4 @@
-#include <inttypes.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdbool.h>
-
-#include <zlib.h>
-
-#include "config.h"
-#include "libblast.h"
-#include "libmio0.h"
-#include "libsfx.h"
-#include "mipsdisasm.h"
-#include "n64graphics.h"
-#include "strutils.h"
-#include "utils.h"
-
-#define N64SPLIT_VERSION "0.4a"
-
-#define GLOBALS_FILE "globals.inc"
-#define MACROS_FILE "macros.inc"
+#include "n64split.h"
 
 void write_behavior(FILE *out, unsigned char *data, rom_config *config, int s, disasm_state *state)
 {
