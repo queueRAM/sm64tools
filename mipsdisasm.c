@@ -725,7 +725,7 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
       print_usage();
       exit(1);
    }
-   config->ranges = malloc(argc / 2 * sizeof(*config->ranges));
+   config->ranges = malloc(argc * sizeof(*config->ranges));
    config->range_count = 0;
    for (int i = 1; i < argc; i++) {
       if (argv[i][0] == '-') {
