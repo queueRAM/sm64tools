@@ -83,6 +83,7 @@ typedef struct _disasm_state
 
    asm_syntax syntax;
    int merge_pseudo;
+   int emit_glabel;
 } disasm_state;
 
 static void labels_add(vec(asm_label) *vec, const char *name, unsigned int vaddr)
@@ -346,7 +347,7 @@ static void disassemble_block(unsigned char *data, unsigned int length, unsigned
    }
 }
 
-disasm_state *disasm_state_init(asm_syntax syntax, int merge_pseudo)
+disasm_state *disasm_state_init(asm_syntax syntax, int merge_pseudo, int emit_glabel)
 {
    disasm_state *state = malloc(sizeof(*state));
    vec_alloc(state->globals, 128);
@@ -354,6 +355,7 @@ disasm_state *disasm_state_init(asm_syntax syntax, int merge_pseudo)
 
    state->syntax = syntax;
    state->merge_pseudo = merge_pseudo;
+   state->emit_glabel = emit_glabel;
 
    // open capstone disassembler
    if (cs_open(CS_ARCH_MIPS, CS_MODE_MIPS64 + CS_MODE_BIG_ENDIAN, &state->handle) != CS_ERR_OK) {
@@ -451,7 +453,11 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
       // insert all global labels at this address
       while ( (global_idx < state->globals.count) && (vaddr == state->globals.items[global_idx].vaddr) ) {
          const char *name = state->globals.items[global_idx].name;
-         fprintf(out, "%s:\n", name);
+         if (state->emit_glabel) {
+            fprintf(out, "glabel %s\n", name);
+         } else {
+            fprintf(out, "%s:\n", name);
+         }
          global_idx++;
       }
       // insert all local labels at this address
@@ -661,6 +667,7 @@ typedef struct
    char *input_file;
    char *output_file;
    int merge_pseudo;
+   int emit_glabel;
    asm_syntax syntax;
 } arg_config;
 
@@ -672,16 +679,18 @@ static arg_config default_args =
    NULL, // input_file
    NULL, // output_file
    0,    // merge_pseudo
+   0,    // emit_glabel
    ASM_GAS, // GNU as
 };
 
 static void print_usage(void)
 {
-   ERROR("Usage: mipsdisasm [-o OUTPUT] [-p] [-s ASSEMBLER] [-v] ROM [RANGES]\n"
+   ERROR("Usage: mipsdisasm [-g] [-o OUTPUT] [-p] [-s ASSEMBLER] [-v] ROM [RANGES]\n"
          "\n"
          "mipsdisasm v" MIPSDISASM_VERSION ": MIPS disassembler\n"
          "\n"
          "Optional arguments:\n"
+         " -g           emit \"glabel name\" for global labels\n"
          " -o OUTPUT    output filename (default: stdout)\n"
          " -p           emit pseudoinstructions for related instructions\n"
          " -s SYNTAX    assembler syntax to use [gas, armips] (default: gas)\n"
@@ -724,6 +733,9 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
    for (int i = 1; i < argc; i++) {
       if (argv[i][0] == '-') {
          switch (argv[i][1]) {
+            case 'g':
+               config->emit_glabel = 1;
+               break;
             case 'o':
                if (++i >= argc) {
                   print_usage();
@@ -834,14 +846,14 @@ int main(int argc, char *argv[])
          break;
    }
 
-   state = disasm_state_init(args.syntax, args.merge_pseudo);
+   state = disasm_state_init(args.syntax, args.merge_pseudo, args.emit_glabel);
 
    // run first pass disassembler on each section
    for (int i = 0; i < args.range_count; i++) {
       range *r = &args.ranges[i];
       INFO("Disassembling range 0x%X-0x%X at 0x%08X\n", r->start, r->start + r->length, r->vaddr);
 
-      (void)mipsdisasm_pass1(data, r->start, r->length, r->vaddr, state);
+      mipsdisasm_pass1(data, r->start, r->length, r->vaddr, state);
    }
 
    // output global labels not in asm sections

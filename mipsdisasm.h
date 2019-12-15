@@ -13,8 +13,9 @@ typedef enum
 // allocate and initialize disassembler state to be passed into disassembler routines
 // syntax: assembler syntax to use
 // merge_pseudo: if true, attempt to link pseudo instructions
+// emit_glabel: if true, emit "glabel name" instead of "name:" for global labels
 // returns disassembler state
-disasm_state *disasm_state_init(asm_syntax syntax, int merge_pseudo);
+disasm_state *disasm_state_init(asm_syntax syntax, int merge_pseudo, int emit_glabel);
 
 // free disassembler state allocated during pass1
 // state: disassembler state returned from disasm_state_alloc() or mipsdisasm_pass1()

@@ -2355,7 +2355,7 @@ int main(int argc, char *argv[])
    }
 
    // add config labels to disasm state labels
-   state = disasm_state_init(ASM_GAS, 1);
+   state = disasm_state_init(ASM_GAS, 1, 1);
    for (i = 0; i < config.label_count; i++) {
       disasm_label_add(state, config.labels[i].name, config.labels[i].ram_addr);
    }
