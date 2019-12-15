@@ -381,11 +381,14 @@ disasm_state *disasm_state_init(asm_syntax syntax, int merge_pseudo, int emit_gl
    state->emit_glabel = emit_glabel;
 
    // open capstone disassembler
-   if (cs_open(CS_ARCH_MIPS, CS_MODE_MIPS64 + CS_MODE_BIG_ENDIAN, &state->handle) != CS_ERR_OK) {
+   if (cs_open(CS_ARCH_MIPS, CS_MODE_MIPS64 | CS_MODE_BIG_ENDIAN, &state->handle) != CS_ERR_OK) {
       ERROR("Error initializing disassembler\n");
       exit(EXIT_FAILURE);
    }
    cs_option(state->handle, CS_OPT_DETAIL, CS_OPT_ON);
+
+   // This is kinda sketchy; the capstone documentation says that cs_insn->detail
+   // is undefined when CS_OPT_SKIPDATA is set. But it's useful.
    cs_option(state->handle, CS_OPT_SKIPDATA, CS_OPT_ON);
 
    return state;
