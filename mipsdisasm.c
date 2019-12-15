@@ -391,14 +391,14 @@ void disasm_label_add(disasm_state *state, const char *name, unsigned int vaddr)
 
 int disasm_label_lookup(const disasm_state *state, unsigned int vaddr, char *name)
 {
-   int found = 0;
    int id = labels_find(&state->globals, vaddr);
    if (id >= 0) {
-      strcpy(name, state->globals.labels[id].name);
-      found = 1;
+      strcpy(name, state->globals.items[id].name);
+      return 1;
+   } else {
+      sprintf(name, "0x%08X", vaddr);
+      return 0;
    }
-   sprintf(name, "0x%08X", vaddr);
-   return found;
 }
 
 void mipsdisasm_pass1(unsigned char *data, unsigned int offset, unsigned int length, unsigned int vaddr, disasm_state *state)

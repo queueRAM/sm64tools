@@ -30,7 +30,7 @@ void disasm_label_add(disasm_state *state, const char *name, unsigned int vaddr)
 // lookup a global label from the disassembler state
 // state: disassembler state returned from disasm_state_alloc() or mipsdisasm_pass1()
 // vaddr: virtual address of label
-// name: string to write label to
+// name: string to write label to (or vaddr if label was not found)
 // returns 1 if found, 0 otherwise
 int disasm_label_lookup(const disasm_state *state, unsigned int vaddr, char *name);
 
