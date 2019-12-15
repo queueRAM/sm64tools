@@ -34,6 +34,15 @@ void disasm_label_add(disasm_state *state, const char *name, unsigned int vaddr)
 // returns 1 if found, 0 otherwise
 int disasm_label_lookup(const disasm_state *state, unsigned int vaddr, char *name);
 
+// Add a .text section relocation to the disassembler state, overriding merge_pseudo heuristics.
+// Whether the relocation is R_MIPS_LO16 (%lo), R_MIPS_HI16 (%hi) or R_MIPS_26 is implicit based on instruction mnemonic.
+//
+// state: disassembler state returned from disasm_state_alloc() or mipsdisasm_pass1()
+// offset: buffer offset to apply the relocation to
+// name: symbol name
+// addend: constant to add to the symbol address (typically 0)
+void disasm_reloc_add(disasm_state *state, unsigned int offset, const char *name, int addend);
+
 // first pass of disassembler - collects procedures called and sorts them
 // data: buffer containing raw MIPS assembly
 // offset: buffer offset to start at

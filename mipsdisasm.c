@@ -43,6 +43,15 @@ DEFINE_VEC(asm_label)
 
 typedef struct
 {
+   unsigned int offset;
+   char name[60];
+   int addend;
+} asm_reloc;
+
+DEFINE_VEC(asm_reloc)
+
+typedef struct
+{
    // copied from cs_insn structure
    unsigned int id;
    uint8_t bytes[4];
@@ -77,6 +86,7 @@ DEFINE_VEC(asm_block)
 typedef struct _disasm_state
 {
    vec(asm_label) globals;
+   vec(asm_reloc) relocs;
    vec(asm_block) blocks;
 
    csh handle;
@@ -112,9 +122,21 @@ static int label_cmp(const void *a, const void *b)
    }
 }
 
+static int reloc_cmp(const void *a, const void *b)
+{
+   const asm_reloc *ara = a;
+   const asm_reloc *arb = b;
+   return (ara->offset > arb->offset) - (arb->offset > ara->offset);
+}
+
 static void labels_sort(vec(asm_label) *vec)
 {
    qsort(vec->items, vec->count, sizeof(vec->items[0]), label_cmp);
+}
+
+static void relocs_sort(vec(asm_reloc) *vec)
+{
+   qsort(vec->items, vec->count, sizeof(vec->items[0]), reloc_cmp);
 }
 
 // vec: label vector to search in
@@ -351,6 +373,7 @@ disasm_state *disasm_state_init(asm_syntax syntax, int merge_pseudo, int emit_gl
 {
    disasm_state *state = malloc(sizeof(*state));
    vec_alloc(state->globals, 128);
+   vec_alloc(state->relocs, 128);
    vec_alloc(state->blocks, 128);
 
    state->syntax = syntax;
@@ -379,6 +402,7 @@ void disasm_state_free(disasm_state *state)
          }
       }
       vec_free(state->blocks);
+      vec_free(state->relocs);
       vec_free(state->globals);
       cs_close(&state->handle);
    }
@@ -401,6 +425,14 @@ int disasm_label_lookup(const disasm_state *state, unsigned int vaddr, char *nam
    }
 }
 
+void disasm_reloc_add(disasm_state *state, unsigned int offset, const char *name, int addend)
+{
+   asm_reloc *r = vec_push(state->relocs);
+   r->offset = offset;
+   strcpy(r->name, name);
+   r->addend = addend;
+}
+
 void mipsdisasm_pass1(unsigned char *data, unsigned int offset, unsigned int length, unsigned int vaddr, disasm_state *state)
 {
    asm_block *block = vec_push(state->blocks);
@@ -412,9 +444,10 @@ void mipsdisasm_pass1(unsigned char *data, unsigned int offset, unsigned int len
    // collect all branch and jump targets
    disassemble_block(&data[offset], length, vaddr, state, state->blocks.count - 1);
 
-   // sort global and local labels
+   // sort global and local labels and relocations
    labels_sort(&state->globals);
    labels_sort(&block->locals);
+   relocs_sort(&state->relocs);
 }
 
 void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
@@ -423,6 +456,7 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
    unsigned int vaddr;
    int local_idx = 0;
    int global_idx = 0;
+   int reloc_idx = 0;
    int label;
    int indent = 0;
    // lookup block by offset
@@ -437,12 +471,15 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
       exit(1);
    }
    vaddr = block->vaddr;
-   // skip labels before this section
+   // skip labels/relocations before this section
    while ( (global_idx < state->globals.count) && (vaddr > state->globals.items[global_idx].vaddr) ) {
       global_idx++;
    }
    while ( (local_idx < block->locals.count) && (vaddr > block->locals.items[local_idx].vaddr) ) {
       local_idx++;
+   }
+   while ( (reloc_idx < state->relocs.count) && (offset > state->relocs.items[reloc_idx].offset) ) {
+      reloc_idx++;
    }
    for (int i = 0; i < block->instruction_count; i++) {
       disasm_data *insn = &block->instructions[i];
@@ -471,7 +508,46 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
          indent = 0;
          fputc(' ', out);
       }
-      if (insn->is_jump) {
+      if ( (reloc_idx < state->relocs.count) && (offset == state->relocs.items[reloc_idx].offset) ) {
+         asm_reloc *reloc = &state->relocs.items[reloc_idx];
+         reloc_idx++;
+         fprintf(out, "%-5s ", insn->mnemonic);
+         for (int o = 0; o < insn->op_count; o++) {
+            cs_mips_op *op = &insn->operands[o];
+            if (o > 0) {
+               fprintf(out, ", ");
+            }
+            switch (op->type) {
+               case MIPS_OP_REG:
+                  fprintf(out, "$%s", cs_reg_name(state->handle, op->reg));
+                  break;
+               case MIPS_OP_IMM:
+               case MIPS_OP_MEM:
+               {
+                  char strAddend[32] = {0};
+                  if (reloc->addend > 0) {
+                     sprintf(strAddend, " + 0x%X", reloc->addend);
+                  } else if (reloc->addend < 0) {
+                     sprintf(strAddend, " - 0x%X", -(unsigned)reloc->addend);
+                  }
+                  if (insn->id == MIPS_INS_JAL || insn->id == MIPS_INS_J) {
+                     fprintf(out, "%s%s", reloc->name, strAddend);
+                  } else if (insn->id == MIPS_INS_LUI) {
+                     fprintf(out, "%%hi(%s%s)", reloc->name, strAddend);
+                  } else {
+                     fprintf(out, "%%lo(%s%s)", reloc->name, strAddend);
+                  }
+                  if (op->type == MIPS_OP_MEM) {
+                     fprintf(out, "($%s)", cs_reg_name(state->handle, op->mem.base));
+                  }
+                  break;
+               }
+               default:
+                  break;
+            }
+         }
+         fprintf(out, "\n");
+      } else if (insn->is_jump) {
          indent = 1;
          fprintf(out, "%-5s ", insn->mnemonic);
          if (insn->id == MIPS_INS_JAL || insn->id == MIPS_INS_BAL || insn->id == MIPS_INS_J) {
@@ -484,16 +560,17 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
             }
          } else {
             for (int o = 0; o < insn->op_count; o++) {
+               cs_mips_op *op = &insn->operands[o];
                if (o > 0) {
                   fprintf(out, ", ");
                }
-               switch (insn->operands[o].type) {
+               switch (op->type) {
                   case MIPS_OP_REG:
-                     fprintf(out, "$%s", cs_reg_name(state->handle, insn->operands[o].reg));
+                     fprintf(out, "$%s", cs_reg_name(state->handle, op->reg));
                      break;
                   case MIPS_OP_IMM:
                   {
-                     unsigned int branch_target = (unsigned int)insn->operands[o].imm;
+                     unsigned int branch_target = (unsigned int)op->imm;
                      label = labels_find(&block->locals, branch_target);
                      if (label >= 0) {
                         fprintf(out, "%s", block->locals.items[label].name);
