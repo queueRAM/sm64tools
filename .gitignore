@@ -18,3 +18,18 @@
 
 # Executables
 *.exe
+*.out
+/sm64compress
+/n64cksum
+/mipsdisasm
+/sm64extend
+/f3d
+/f3d2obj
+/sm64geo
+/n64graphics
+/mio0
+/n64split
+/sm64walk
+
+# Makefile dependencies
+*.d
