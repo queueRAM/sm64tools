@@ -795,7 +795,7 @@ static arg_config default_args =
 
 static void print_usage(void)
 {
-   ERROR("Usage: mipsdisasm [-g] [-o OUTPUT] [-p] [-s ASSEMBLER] [-v] ROM [RANGES]\n"
+   ERROR("Usage: mipsdisasm [-g] [-o OUTPUT] [-p] [-s SYNTAX] [-v] ROM [RANGES]\n"
          "\n"
          "mipsdisasm v" MIPSDISASM_VERSION ": MIPS disassembler\n"
          "\n"
@@ -809,7 +809,7 @@ static void print_usage(void)
          "Arguments:\n"
          " FILE         input binary file to disassemble\n"
          " [RANGES]     optional list of ranges (default: entire input file)\n"
-         "              format: <VAddr>:[<Start>-<End>] or <VAddr>:[<Start>+<Length>]\n"
+         "              format: <VAddr>[:<Start>-<End>] or <VAddr>[:<Start>+<Length>]\n"
          "              example: 0x80246000:0x1000-0x0E6258\n");
    exit(EXIT_FAILURE);
 }
