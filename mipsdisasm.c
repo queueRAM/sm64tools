@@ -651,7 +651,42 @@ const char *disasm_get_version(void)
    return version;
 }
 
+void print_asm_header(FILE *out, const char *output_file, asm_syntax syntax) {
+   switch (syntax) {
+      case ASM_GAS:
+         fprintf(out, ".set noat      # allow manual use of $at\n");
+         fprintf(out, ".set noreorder # don't insert nops after branches\n\n");
+         break;
+      case ASM_ARMIPS:
+      {
+         char output_binary[FILENAME_MAX];
+         if (output_file == NULL) {
+            strcpy(output_binary, "test.bin");
+         } else {
+            const char *base = basename(output_file);
+            generate_filename(base, output_binary, "bin");
+         }
+         fprintf(out, ".n64\n");
+         fprintf(out, ".create \"%s\", 0x%08X\n\n", output_binary, 0);
+         break;
+      }
+      default:
+         break;
+   }
+}
+
+void print_asm_footer(FILE *out, asm_syntax syntax) {
+   switch (syntax) {
+      case ASM_ARMIPS:
+         fprintf(out, "\n.close\n");
+         break;
+      default:
+         break;
+   }
+}
+
 #ifdef MIPSDISASM_STANDALONE
+
 typedef struct
 {
    unsigned int start;
@@ -663,7 +698,6 @@ typedef struct
 {
    range *ranges;
    int range_count;
-   unsigned int vaddr;
    char *input_file;
    char *output_file;
    int merge_pseudo;
@@ -675,7 +709,6 @@ static arg_config default_args =
 {
    NULL, // ranges
    0,    // range_count
-   0x0,  // vaddr
    NULL, // input_file
    NULL, // output_file
    0,    // merge_pseudo
@@ -816,6 +849,8 @@ int main(int argc, char *argv[])
       }
    }
 
+   state = disasm_state_init(args.syntax, args.merge_pseudo, args.emit_glabel);
+
    // if no ranges specified or if only vaddr specified, add one of entire input file
    if (args.range_count < 1 || (args.range_count == 1 && args.ranges[0].length == 0)) {
       if (args.range_count < 1) {
@@ -826,31 +861,6 @@ int main(int argc, char *argv[])
       args.range_count = 1;
    }
 
-   // assembler header output
-   switch (args.syntax) {
-      case ASM_GAS:
-         fprintf(out, ".set noat      # allow manual use of $at\n");
-         fprintf(out, ".set noreorder # don't insert nops after branches\n\n");
-         break;
-      case ASM_ARMIPS:
-      {
-         char output_binary[FILENAME_MAX];
-         if (args.output_file == NULL) {
-            strcpy(output_binary, "test.bin");
-         } else {
-            const char *base = basename(args.output_file);
-            generate_filename(base, output_binary, "bin");
-         }
-         fprintf(out, ".n64\n");
-         fprintf(out, ".create \"%s\", 0x%08X\n\n", output_binary, 0);
-         break;
-      }
-      default:
-         break;
-   }
-
-   state = disasm_state_init(args.syntax, args.merge_pseudo, args.emit_glabel);
-
    // run first pass disassembler on each section
    for (int i = 0; i < args.range_count; i++) {
       range *r = &args.ranges[i];
@@ -858,6 +868,8 @@ int main(int argc, char *argv[])
 
       mipsdisasm_pass1(data, r->start, r->length, r->vaddr, state);
    }
+
+   print_asm_header(out, args.output_file, args.syntax);
 
    // output global labels not in asm sections
    if (args.syntax == ASM_ARMIPS) {
@@ -889,17 +901,9 @@ int main(int argc, char *argv[])
       mipsdisasm_pass2(out, state, r->start);
    }
 
+   print_asm_footer(out, args.syntax);
+
    disasm_state_free(state);
-
-   // assembler footer output
-   switch (args.syntax) {
-      case ASM_ARMIPS:
-         fprintf(out, "\n.close\n");
-         break;
-      default:
-         break;
-   }
-
    free(data);
 
    return EXIT_SUCCESS;

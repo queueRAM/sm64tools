@@ -52,4 +52,8 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset);
 // get version string of raw disassembler
 const char *disasm_get_version(void);
 
+// semi-internal functions for printing beginning/end of assembly output
+void print_asm_header(FILE *out, const char *output_file, asm_syntax syntax);
+void print_asm_footer(FILE *out, asm_syntax syntax);
+
 #endif // MIPSDISASM_H_
