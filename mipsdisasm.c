@@ -9,7 +9,7 @@
 #include "mipsdisasm.h"
 #include "utils.h"
 
-#define MIPSDISASM_VERSION "0.2+"
+#define MIPSDISASM_VERSION "0.3"
 
 // typedefs
 #define vec(type) vec_ ## type
