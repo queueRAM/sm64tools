@@ -717,6 +717,9 @@ void range_parse(range *r, const char *arg)
       } else if (plus) {
          r->length = strtoul(plus+1, NULL, 0);
       }
+   } else {
+      r->start = 0;
+      r->length = 0;
    }
 }
 
