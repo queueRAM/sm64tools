@@ -496,7 +496,7 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
                      unsigned int branch_target = (unsigned int)insn->operands[o].imm;
                      label = labels_find(&block->locals, branch_target);
                      if (label >= 0) {
-                        fprintf(out, block->locals.labels[label].name);
+                        fprintf(out, "%s", block->locals.labels[label].name);
                      } else {
                         fprintf(out, "0x%08X", branch_target);
                      }
