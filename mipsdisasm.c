@@ -399,10 +399,9 @@ void disasm_state_free(disasm_state *state)
    if (state) {
       for (int i = 0; i < state->blocks.count; i++) {
          asm_block *block = &state->blocks.items[i];
-         if (block->instructions) {
-            free(block->instructions);
-            block->instructions = NULL;
-         }
+         free(block->instructions);
+         vec_free(block->locals);
+         block->instructions = NULL;
       }
       vec_free(state->blocks);
       vec_free(state->relocs);
