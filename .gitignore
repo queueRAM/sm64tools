@@ -30,6 +30,7 @@
 /mio0
 /n64split
 /sm64walk
+/elfdump
 
 # Makefile dependencies
 *.d

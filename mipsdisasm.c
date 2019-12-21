@@ -816,7 +816,7 @@ static void print_usage(void)
    exit(EXIT_FAILURE);
 }
 
-void range_parse(range *r, const char *arg)
+static void range_parse(range *r, const char *arg)
 {
    char *colon = strchr(arg, ':');
    r->vaddr = strtoul(arg, NULL, 0);

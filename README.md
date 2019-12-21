@@ -100,6 +100,7 @@ There are many other smaller tools included to help with SM64 hacking.  They are
  - n64cksum: standalone N64 checksum generator.  can either do in place or output to a new file
  - n64graphics: converts graphics data from PNG files into RGBA or IA N64 graphics data
  - mipsdisasm: standalone recursive MIPS disassembler
+ - elfdump: disassembler for MIPS ELF object files
  - sm64geo: standalone SM64 geometry layout decoder
 
 ## License
