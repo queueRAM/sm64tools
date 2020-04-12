@@ -9,21 +9,46 @@
 #include "mipsdisasm.h"
 #include "utils.h"
 
-#define MIPSDISASM_VERSION "0.2+"
+#define MIPSDISASM_VERSION "0.3"
 
 // typedefs
+#define vec(type) vec_ ## type
+#define DEFINE_VEC(type) typedef struct { type *items; int alloc; int count; } vec(type);
+#define vec_at(v, index) &((v)->items)[index]
+
+#define vec_alloc(v, initial_capacity) do { \
+   (v).count = 0; \
+   (v).alloc = (initial_capacity); \
+   (v).items = malloc(sizeof(*(v).items) * (v).alloc); \
+} while (0)
+
+#define vec_free(v) do { \
+   free(v.items); \
+   v.items = NULL; \
+} while (0)
+
+#define vec_push(v) (((v).count >= (v).alloc ? \
+      ((v).alloc *= 2, \
+       (v).items = realloc((v).items, sizeof(*(v).items) * (v).alloc), \
+       1) : 1), \
+      &(v).items[(v).count++])
+
 typedef struct
 {
    char name[60];
    unsigned int vaddr;
 } asm_label;
 
+DEFINE_VEC(asm_label)
+
 typedef struct
 {
-   asm_label *labels;
-   int alloc;
-   int count;
-} label_buf;
+   unsigned int offset;
+   char name[60];
+   int addend;
+} asm_reloc;
+
+DEFINE_VEC(asm_reloc)
 
 typedef struct
 {
@@ -47,7 +72,7 @@ typedef struct
 
 typedef struct _asm_block
 {
-   label_buf locals;
+   vec(asm_label) locals;
    disasm_data *instructions;
    int instruction_count;
    unsigned int offset;
@@ -55,36 +80,25 @@ typedef struct _asm_block
    unsigned int vaddr;
 } asm_block;
 
+DEFINE_VEC(asm_block)
+
 // hidden disassembler state struct
 typedef struct _disasm_state
 {
-   label_buf globals;
-
-   asm_block *blocks;
-   int block_alloc;
-   int block_count;
+   vec(asm_label) globals;
+   vec(asm_reloc) relocs;
+   vec(asm_block) blocks;
 
    csh handle;
 
    asm_syntax syntax;
    int merge_pseudo;
+   int emit_glabel;
 } disasm_state;
 
-// default label buffer allocate
-static void labels_alloc(label_buf *buf)
+static void labels_add(vec(asm_label) *vec, const char *name, unsigned int vaddr)
 {
-   buf->count = 0;
-   buf->alloc = 128;
-   buf->labels = malloc(sizeof(*buf->labels) * buf->alloc);
-}
-
-static void labels_add(label_buf *buf, const char *name, unsigned int vaddr)
-{
-   if (buf->count >= buf->alloc) {
-      buf->alloc *= 2;
-      buf->labels = realloc(buf->labels, sizeof(*buf->labels) * buf->alloc);
-   }
-   asm_label *l = &buf->labels[buf->count];
+   asm_label *l = vec_push(*vec);
    // if name is null, generate based on vaddr
    if (name == NULL) {
       sprintf(l->name, "L%08X", vaddr);
@@ -92,7 +106,6 @@ static void labels_add(label_buf *buf, const char *name, unsigned int vaddr)
       strcpy(l->name, name);
    }
    l->vaddr = vaddr;
-   buf->count++;
 }
 
 static int label_cmp(const void *a, const void *b)
@@ -109,18 +122,30 @@ static int label_cmp(const void *a, const void *b)
    }
 }
 
-static void labels_sort(label_buf *buf)
+static int reloc_cmp(const void *a, const void *b)
 {
-   qsort(buf->labels, buf->count, sizeof(buf->labels[0]), label_cmp);
+   const asm_reloc *ara = a;
+   const asm_reloc *arb = b;
+   return (ara->offset > arb->offset) - (arb->offset > ara->offset);
 }
 
-// labels: label buffer to search in
-// vaddr: virtual address to find
-// returns index in buf->labels if found, -1 otherwise
-static int labels_find(const label_buf *buf, unsigned int vaddr)
+static void labels_sort(vec(asm_label) *vec)
 {
-   for (int i = 0; i < buf->count; i++) {
-      if (buf->labels[i].vaddr == vaddr) {
+   qsort(vec->items, vec->count, sizeof(vec->items[0]), label_cmp);
+}
+
+static void relocs_sort(vec(asm_reloc) *vec)
+{
+   qsort(vec->items, vec->count, sizeof(vec->items[0]), reloc_cmp);
+}
+
+// vec: label vector to search in
+// vaddr: virtual address to find
+// returns index in vec->items if found, -1 otherwise
+static int labels_find(const vec(asm_label) *vec, unsigned int vaddr)
+{
+   for (int i = 0; i < vec->count; i++) {
+      if (vec->items[i].vaddr == vaddr) {
          return i;
       }
    }
@@ -130,7 +155,7 @@ static int labels_find(const label_buf *buf, unsigned int vaddr)
 // try to find a matching LUI for a given register
 static void link_with_lui(disasm_state *state, int block_id, int offset, unsigned int reg, unsigned int mem_imm)
 {
-   asm_block *block = &state->blocks[block_id];
+   asm_block *block = &state->blocks.items[block_id];
 #define MAX_LOOKBACK 128
    disasm_data *insn = block->instructions;
    // don't attempt to compute addresses for zero offset
@@ -183,7 +208,7 @@ static void link_with_lui(disasm_state *state, int block_id, int offset, unsigne
 // disassemble a block of code and collect JALs and local labels
 static void disassemble_block(unsigned char *data, unsigned int length, unsigned int vaddr, disasm_state *state, int block_id)
 {
-   asm_block *block = &state->blocks[block_id];
+   asm_block *block = &state->blocks.items[block_id];
 
    // capstone structures require a lot of data, so only request a small block at a time and preserve the required data
    int remaining = length;
@@ -344,24 +369,26 @@ static void disassemble_block(unsigned char *data, unsigned int length, unsigned
    }
 }
 
-disasm_state *disasm_state_init(asm_syntax syntax, int merge_pseudo)
+disasm_state *disasm_state_init(asm_syntax syntax, int merge_pseudo, int emit_glabel)
 {
    disasm_state *state = malloc(sizeof(*state));
-   labels_alloc(&state->globals);
-
-   state->block_count = 0;
-   state->block_alloc = 128;
-   state->blocks = malloc(sizeof(*state->blocks) * state->block_alloc);
+   vec_alloc(state->globals, 128);
+   vec_alloc(state->relocs, 128);
+   vec_alloc(state->blocks, 128);
 
    state->syntax = syntax;
    state->merge_pseudo = merge_pseudo;
+   state->emit_glabel = emit_glabel;
 
    // open capstone disassembler
-   if (cs_open(CS_ARCH_MIPS, CS_MODE_MIPS64 + CS_MODE_BIG_ENDIAN, &state->handle) != CS_ERR_OK) {
+   if (cs_open(CS_ARCH_MIPS, CS_MODE_MIPS64 | CS_MODE_BIG_ENDIAN, &state->handle) != CS_ERR_OK) {
       ERROR("Error initializing disassembler\n");
       exit(EXIT_FAILURE);
    }
    cs_option(state->handle, CS_OPT_DETAIL, CS_OPT_ON);
+
+   // This is kinda sketchy; the capstone documentation says that cs_insn->detail
+   // is undefined when CS_OPT_SKIPDATA is set. But it's useful.
    cs_option(state->handle, CS_OPT_SKIPDATA, CS_OPT_ON);
 
    return state;
@@ -370,16 +397,15 @@ disasm_state *disasm_state_init(asm_syntax syntax, int merge_pseudo)
 void disasm_state_free(disasm_state *state)
 {
    if (state) {
-      for (int i = 0; i < state->block_count; i++) {
-         if (state->blocks[i].instructions) {
-            free(state->blocks[i].instructions);
-            state->blocks[i].instructions = NULL;
-         }
+      for (int i = 0; i < state->blocks.count; i++) {
+         asm_block *block = &state->blocks.items[i];
+         free(block->instructions);
+         vec_free(block->locals);
+         block->instructions = NULL;
       }
-      if (state->blocks) {
-         free(state->blocks);
-         state->blocks = NULL;
-      }
+      vec_free(state->blocks);
+      vec_free(state->relocs);
+      vec_free(state->globals);
       cs_close(&state->handle);
    }
 }
@@ -391,35 +417,39 @@ void disasm_label_add(disasm_state *state, const char *name, unsigned int vaddr)
 
 int disasm_label_lookup(const disasm_state *state, unsigned int vaddr, char *name)
 {
-   int found = 0;
    int id = labels_find(&state->globals, vaddr);
    if (id >= 0) {
-      strcpy(name, state->globals.labels[id].name);
-      found = 1;
+      strcpy(name, state->globals.items[id].name);
+      return 1;
+   } else {
+      sprintf(name, "0x%08X", vaddr);
+      return 0;
    }
-   sprintf(name, "0x%08X", vaddr);
-   return found;
+}
+
+void disasm_reloc_add(disasm_state *state, unsigned int offset, const char *name, int addend)
+{
+   asm_reloc *r = vec_push(state->relocs);
+   r->offset = offset;
+   strcpy(r->name, name);
+   r->addend = addend;
 }
 
 void mipsdisasm_pass1(unsigned char *data, unsigned int offset, unsigned int length, unsigned int vaddr, disasm_state *state)
 {
-   if (state->block_count >= state->block_alloc) {
-      state->block_alloc *= 2;
-      state->blocks = realloc(state->blocks, sizeof(*state->blocks) * state->block_alloc);
-   }
-   asm_block *block = &state->blocks[state->block_count];
-   labels_alloc(&block->locals);
+   asm_block *block = vec_push(state->blocks);
+   vec_alloc(block->locals, 128);
    block->offset = offset;
    block->length = length;
    block->vaddr = vaddr;
 
    // collect all branch and jump targets
-   disassemble_block(&data[offset], length, vaddr, state, state->block_count);
+   disassemble_block(&data[offset], length, vaddr, state, state->blocks.count - 1);
 
-   // sort global and local labels
+   // sort global and local labels and relocations
    labels_sort(&state->globals);
-   labels_sort(&state->blocks[state->block_count].locals);
-   state->block_count++;
+   labels_sort(&block->locals);
+   relocs_sort(&state->relocs);
 }
 
 void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
@@ -428,12 +458,13 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
    unsigned int vaddr;
    int local_idx = 0;
    int global_idx = 0;
+   int reloc_idx = 0;
    int label;
    int indent = 0;
    // lookup block by offset
-   for (int i = 0; i < state->block_count; i++) {
-      if (state->blocks[i].offset == offset) {
-         block = &state->blocks[i];
+   for (int i = 0; i < state->blocks.count; i++) {
+      if (state->blocks.items[i].offset == offset) {
+         block = &state->blocks.items[i];
          break;
       }
    }
@@ -442,12 +473,15 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
       exit(1);
    }
    vaddr = block->vaddr;
-   // skip labels before this section
-   while ( (global_idx < state->globals.count) && (vaddr > state->globals.labels[global_idx].vaddr) ) {
+   // skip labels/relocations before this section
+   while ( (global_idx < state->globals.count) && (vaddr > state->globals.items[global_idx].vaddr) ) {
       global_idx++;
    }
-   while ( (local_idx < block->locals.count) && (vaddr > block->locals.labels[local_idx].vaddr) ) {
+   while ( (local_idx < block->locals.count) && (vaddr > block->locals.items[local_idx].vaddr) ) {
       local_idx++;
+   }
+   while ( (reloc_idx < state->relocs.count) && (offset > state->relocs.items[reloc_idx].offset) ) {
+      reloc_idx++;
    }
    for (int i = 0; i < block->instruction_count; i++) {
       disasm_data *insn = &block->instructions[i];
@@ -456,13 +490,18 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
          fprintf(out, "\n");
       }
       // insert all global labels at this address
-      while ( (global_idx < state->globals.count) && (vaddr == state->globals.labels[global_idx].vaddr) ) {
-         fprintf(out, "%s:\n", state->globals.labels[global_idx].name);
+      while ( (global_idx < state->globals.count) && (vaddr == state->globals.items[global_idx].vaddr) ) {
+         const char *name = state->globals.items[global_idx].name;
+         if (state->emit_glabel) {
+            fprintf(out, "glabel %s\n", name);
+         } else {
+            fprintf(out, "%s:\n", name);
+         }
          global_idx++;
       }
       // insert all local labels at this address
-      while ( (local_idx < block->locals.count) && (vaddr == block->locals.labels[local_idx].vaddr) ) {
-         fprintf(out, "%s:\n", block->locals.labels[local_idx].name);
+      while ( (local_idx < block->locals.count) && (vaddr == block->locals.items[local_idx].vaddr) ) {
+         fprintf(out, "%s:\n", block->locals.items[local_idx].name);
          local_idx++;
       }
       fprintf(out, "/* %06X %08X %02X%02X%02X%02X */  ", offset, vaddr, insn->bytes[0], insn->bytes[1], insn->bytes[2], insn->bytes[3]);
@@ -471,32 +510,72 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
          indent = 0;
          fputc(' ', out);
       }
-      if (insn->is_jump) {
+      if ( (reloc_idx < state->relocs.count) && (offset == state->relocs.items[reloc_idx].offset) ) {
+         asm_reloc *reloc = &state->relocs.items[reloc_idx];
+         reloc_idx++;
+         fprintf(out, "%-5s ", insn->mnemonic);
+         for (int o = 0; o < insn->op_count; o++) {
+            cs_mips_op *op = &insn->operands[o];
+            if (o > 0) {
+               fprintf(out, ", ");
+            }
+            switch (op->type) {
+               case MIPS_OP_REG:
+                  fprintf(out, "$%s", cs_reg_name(state->handle, op->reg));
+                  break;
+               case MIPS_OP_IMM:
+               case MIPS_OP_MEM:
+               {
+                  char strAddend[32] = {0};
+                  if (reloc->addend > 0) {
+                     sprintf(strAddend, " + 0x%X", reloc->addend);
+                  } else if (reloc->addend < 0) {
+                     sprintf(strAddend, " - 0x%X", -(unsigned)reloc->addend);
+                  }
+                  if (insn->id == MIPS_INS_JAL || insn->id == MIPS_INS_J) {
+                     fprintf(out, "%s%s", reloc->name, strAddend);
+                  } else if (insn->id == MIPS_INS_LUI) {
+                     fprintf(out, "%%hi(%s%s)", reloc->name, strAddend);
+                  } else {
+                     fprintf(out, "%%lo(%s%s)", reloc->name, strAddend);
+                  }
+                  if (op->type == MIPS_OP_MEM) {
+                     fprintf(out, "($%s)", cs_reg_name(state->handle, op->mem.base));
+                  }
+                  break;
+               }
+               default:
+                  break;
+            }
+         }
+         fprintf(out, "\n");
+      } else if (insn->is_jump) {
          indent = 1;
          fprintf(out, "%-5s ", insn->mnemonic);
          if (insn->id == MIPS_INS_JAL || insn->id == MIPS_INS_BAL || insn->id == MIPS_INS_J) {
             unsigned int jal_target = (unsigned int)insn->operands[0].imm;
             label = labels_find(&state->globals, jal_target);
             if (label >= 0) {
-               fprintf(out, "%s\n", state->globals.labels[label].name);
+               fprintf(out, "%s\n", state->globals.items[label].name);
             } else {
                fprintf(out, "0x%08X\n", jal_target);
             }
          } else {
             for (int o = 0; o < insn->op_count; o++) {
+               cs_mips_op *op = &insn->operands[o];
                if (o > 0) {
                   fprintf(out, ", ");
                }
-               switch (insn->operands[o].type) {
+               switch (op->type) {
                   case MIPS_OP_REG:
-                     fprintf(out, "$%s", cs_reg_name(state->handle, insn->operands[o].reg));
+                     fprintf(out, "$%s", cs_reg_name(state->handle, op->reg));
                      break;
                   case MIPS_OP_IMM:
                   {
-                     unsigned int branch_target = (unsigned int)insn->operands[o].imm;
+                     unsigned int branch_target = (unsigned int)op->imm;
                      label = labels_find(&block->locals, branch_target);
                      if (label >= 0) {
-                        fprintf(out, block->locals.labels[label].name);
+                        fprintf(out, "%s", block->locals.items[label].name);
                      } else {
                         fprintf(out, "0x%08X", branch_target);
                      }
@@ -558,7 +637,7 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
                         case MIPS_INS_ADDIU:
                            fprintf(out, "%-5s $%s, %%hi(%s) # %s\n", insn->mnemonic,
                                  cs_reg_name(state->handle, insn->operands[0].reg),
-                                 state->globals.labels[label].name, insn->op_str);
+                                 state->globals.items[label].name, insn->op_str);
                            break;
                         case MIPS_INS_ORI:
                            fprintf(out, "%-5s $%s, (0x%08X >> 16) # %s %s\n", insn->mnemonic,
@@ -568,7 +647,7 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
                         default: // LW/SW/etc.
                            fprintf(out, "%-5s $%s, %%hi(%s) # %s\n", insn->mnemonic,
                                  cs_reg_name(state->handle, insn->operands[0].reg),
-                                 state->globals.labels[label].name, insn->op_str);
+                                 state->globals.items[label].name, insn->op_str);
                            break;
                      }
                      break;
@@ -577,7 +656,7 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
                         case MIPS_INS_ADDIU:
                            fprintf(out, "%-5s $%s, %s // %s %s\n", "la.u",
                                  cs_reg_name(state->handle, insn->operands[0].reg),
-                                 state->globals.labels[label].name,
+                                 state->globals.items[label].name,
                                  insn->mnemonic, insn->op_str);
                            break;
                         case MIPS_INS_ORI:
@@ -588,7 +667,7 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
                         default: // LW/SW/etc.
                            fprintf(out, "%-5s $%s, hi(%s) // %s\n", insn->mnemonic,
                                  cs_reg_name(state->handle, insn->operands[0].reg),
-                                 state->globals.labels[label].name, insn->op_str);
+                                 state->globals.items[label].name, insn->op_str);
                            break;
                      }
                      break;
@@ -599,13 +678,13 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
                   case ASM_GAS:
                      fprintf(out, "%-5s $%s, %%lo(%s) # %s %s\n", insn->mnemonic,
                            cs_reg_name(state->handle, insn->operands[0].reg),
-                           state->globals.labels[label].name,
+                           state->globals.items[label].name,
                            insn->mnemonic, insn->op_str);
                      break;
                   case ASM_ARMIPS:
                      fprintf(out, "%-5s $%s, %s // %s %s\n", "la.l",
                            cs_reg_name(state->handle, insn->operands[0].reg),
-                           state->globals.labels[label].name,
+                           state->globals.items[label].name,
                            insn->mnemonic, insn->op_str);
                      break;
                }
@@ -629,7 +708,7 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
                fprintf(out, "%-5s $%s, %slo(%s)($%s)\n", insn->mnemonic,
                      cs_reg_name(state->handle, insn->operands[0].reg),
                      state->syntax == ASM_GAS ? "%" : "",
-                     state->globals.labels[label].name,
+                     state->globals.items[label].name,
                      cs_reg_name(state->handle, insn->operands[1].reg));
             }
          } else {
@@ -651,7 +730,42 @@ const char *disasm_get_version(void)
    return version;
 }
 
+void print_asm_header(FILE *out, const char *output_file, asm_syntax syntax) {
+   switch (syntax) {
+      case ASM_GAS:
+         fprintf(out, ".set noat      # allow manual use of $at\n");
+         fprintf(out, ".set noreorder # don't insert nops after branches\n\n");
+         break;
+      case ASM_ARMIPS:
+      {
+         char output_binary[FILENAME_MAX];
+         if (output_file == NULL) {
+            strcpy(output_binary, "test.bin");
+         } else {
+            const char *base = basename(output_file);
+            generate_filename(base, output_binary, "bin");
+         }
+         fprintf(out, ".n64\n");
+         fprintf(out, ".create \"%s\", 0x%08X\n\n", output_binary, 0);
+         break;
+      }
+      default:
+         break;
+   }
+}
+
+void print_asm_footer(FILE *out, asm_syntax syntax) {
+   switch (syntax) {
+      case ASM_ARMIPS:
+         fprintf(out, "\n.close\n");
+         break;
+      default:
+         break;
+   }
+}
+
 #ifdef MIPSDISASM_STANDALONE
+
 typedef struct
 {
    unsigned int start;
@@ -663,10 +777,10 @@ typedef struct
 {
    range *ranges;
    int range_count;
-   unsigned int vaddr;
    char *input_file;
    char *output_file;
    int merge_pseudo;
+   int emit_glabel;
    asm_syntax syntax;
 } arg_config;
 
@@ -674,20 +788,21 @@ static arg_config default_args =
 {
    NULL, // ranges
    0,    // range_count
-   0x0,  // vaddr
    NULL, // input_file
    NULL, // output_file
    0,    // merge_pseudo
+   0,    // emit_glabel
    ASM_GAS, // GNU as
 };
 
 static void print_usage(void)
 {
-   ERROR("Usage: mipsdisasm [-o OUTPUT] [-p] [-s ASSEMBLER] [-v] ROM [RANGES]\n"
+   ERROR("Usage: mipsdisasm [-g] [-o OUTPUT] [-p] [-s SYNTAX] [-v] ROM [RANGES]\n"
          "\n"
          "mipsdisasm v" MIPSDISASM_VERSION ": MIPS disassembler\n"
          "\n"
          "Optional arguments:\n"
+         " -g           emit \"glabel name\" for global labels\n"
          " -o OUTPUT    output filename (default: stdout)\n"
          " -p           emit pseudoinstructions for related instructions\n"
          " -s SYNTAX    assembler syntax to use [gas, armips] (default: gas)\n"
@@ -696,12 +811,12 @@ static void print_usage(void)
          "Arguments:\n"
          " FILE         input binary file to disassemble\n"
          " [RANGES]     optional list of ranges (default: entire input file)\n"
-         "              format: <VAddr>:[<Start>-<End>] or <VAddr>:[<Start>+<Length>]\n"
+         "              format: <VAddr>[:<Start>-<End>] or <VAddr>[:<Start>+<Length>]\n"
          "              example: 0x80246000:0x1000-0x0E6258\n");
    exit(EXIT_FAILURE);
 }
 
-void range_parse(range *r, const char *arg)
+static void range_parse(range *r, const char *arg)
 {
    char *colon = strchr(arg, ':');
    r->vaddr = strtoul(arg, NULL, 0);
@@ -714,6 +829,9 @@ void range_parse(range *r, const char *arg)
       } else if (plus) {
          r->length = strtoul(plus+1, NULL, 0);
       }
+   } else {
+      r->start = 0;
+      r->length = 0;
    }
 }
 
@@ -725,11 +843,14 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
       print_usage();
       exit(1);
    }
-   config->ranges = malloc(argc / 2 * sizeof(*config->ranges));
+   config->ranges = malloc(argc * sizeof(*config->ranges));
    config->range_count = 0;
    for (int i = 1; i < argc; i++) {
       if (argv[i][0] == '-') {
          switch (argv[i][1]) {
+            case 'g':
+               config->emit_glabel = 1;
+               break;
             case 'o':
                if (++i >= argc) {
                   print_usage();
@@ -807,6 +928,8 @@ int main(int argc, char *argv[])
       }
    }
 
+   state = disasm_state_init(args.syntax, args.merge_pseudo, args.emit_glabel);
+
    // if no ranges specified or if only vaddr specified, add one of entire input file
    if (args.range_count < 1 || (args.range_count == 1 && args.ranges[0].length == 0)) {
       if (args.range_count < 1) {
@@ -817,53 +940,30 @@ int main(int argc, char *argv[])
       args.range_count = 1;
    }
 
-   // assembler header output
-   switch (args.syntax) {
-      case ASM_GAS:
-         fprintf(out, ".set noat      # allow manual use of $at\n");
-         fprintf(out, ".set noreorder # don't insert nops after branches\n\n");
-         break;
-      case ASM_ARMIPS:
-      {
-         char output_binary[FILENAME_MAX];
-         if (args.output_file == NULL) {
-            strcpy(output_binary, "test.bin");
-         } else {
-            const char *base = basename(args.output_file);
-            generate_filename(base, output_binary, "bin");
-         }
-         fprintf(out, ".n64\n");
-         fprintf(out, ".create \"%s\", 0x%08X\n\n", output_binary, 0);
-         break;
-      }
-      default:
-         break;
-   }
-
-   state = disasm_state_init(args.syntax, args.merge_pseudo);
-
    // run first pass disassembler on each section
    for (int i = 0; i < args.range_count; i++) {
       range *r = &args.ranges[i];
       INFO("Disassembling range 0x%X-0x%X at 0x%08X\n", r->start, r->start + r->length, r->vaddr);
 
-      (void)mipsdisasm_pass1(data, r->start, r->length, r->vaddr, state);
+      mipsdisasm_pass1(data, r->start, r->length, r->vaddr, state);
    }
+
+   print_asm_header(out, args.output_file, args.syntax);
 
    // output global labels not in asm sections
    if (args.syntax == ASM_ARMIPS) {
       for (int i = 0; i < state->globals.count; i++) {
-         unsigned int vaddr = state->globals.labels[i].vaddr;
+         unsigned int vaddr = state->globals.items[i].vaddr;
          int global_in_asm = 0;
-         for (int j = 0; j < state->block_count; j++) {
-            unsigned int block_vaddr = state->blocks[j].vaddr;
-            if (vaddr >= block_vaddr && vaddr < block_vaddr + state->blocks[j].length) {
+         for (int j = 0; j < state->blocks.count; j++) {
+            unsigned int block_vaddr = state->blocks.items[j].vaddr;
+            if (vaddr >= block_vaddr && vaddr < block_vaddr + state->blocks.items[j].length) {
                global_in_asm = 1;
                break;
             }
          }
          if (!global_in_asm) {
-            fprintf(out, ".definelabel %s, 0x%08X\n", state->globals.labels[i].name, vaddr);
+            fprintf(out, ".definelabel %s, 0x%08X\n", state->globals.items[i].name, vaddr);
          }
       }
    }
@@ -880,17 +980,9 @@ int main(int argc, char *argv[])
       mipsdisasm_pass2(out, state, r->start);
    }
 
+   print_asm_footer(out, args.syntax);
+
    disasm_state_free(state);
-
-   // assembler footer output
-   switch (args.syntax) {
-      case ASM_ARMIPS:
-         fprintf(out, "\n.close\n");
-         break;
-      default:
-         break;
-   }
-
    free(data);
 
    return EXIT_SUCCESS;

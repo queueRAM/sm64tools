@@ -12,6 +12,7 @@ GRAPHICS_TARGET := n64graphics
 MIO0_TARGET     := mio0
 SPLIT_TARGET    := n64split
 WALK_TARGET     := sm64walk
+ELFDUMP_TARGET  := elfdump
 
 LIB_SRC_FILES  := libmio0.c    \
                   libsm64.c    \
@@ -24,6 +25,10 @@ COMPRESS_SRC_FILES := sm64compress.c
 
 DISASM_SRC_FILES := mipsdisasm.c \
                     utils.c
+
+ELFDUMP_SRC_FILES := mipsdisasm.c \
+                     utils.c      \
+                     elfdump.c
 
 EXTEND_SRC_FILES := sm64extend.c
 
@@ -92,7 +97,7 @@ default: all
 
 all: $(EXTEND_TARGET) $(COMPRESS_TARGET) $(MIO0_TARGET) $(CKSUM_TARGET) \
      $(SPLIT_TARGET) $(F3D_TARGET) $(F3D2OBJ_TARGET) $(GRAPHICS_TARGET) \
-     $(DISASM_TARGET) $(GEO_TARGET) $(WALK_TARGET)
+     $(DISASM_TARGET) $(GEO_TARGET) $(WALK_TARGET) $(ELFDUMP_TARGET)
 
 $(OBJ_DIR)/%.o: %.c
 	@[ -d $(OBJ_DIR) ] || mkdir -p $(OBJ_DIR)
@@ -135,6 +140,9 @@ $(SPLIT_TARGET): $(SPLIT_OBJ_FILES)
 $(WALK_TARGET): sm64walk.c $(SM64_LIB)
 	$(CC) $(CFLAGS) -o $@ $^
 
+$(ELFDUMP_TARGET): $(ELFDUMP_SRC_FILES)
+	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@ -lcapstone
+
 rawmips: rawmips.c utils.c
 	$(CC) $(CFLAGS) -o $@ $^ -lcapstone
 
@@ -151,6 +159,7 @@ clean:
 	rm -f $(GRAPHICS_TARGET) $(GRAPHICS_TARGET).exe
 	rm -f $(SPLIT_TARGET) $(SPLIT_TARGET).exe
 	rm -f $(WALK_TARGET) $(WALK_TARGET).exe
+	rm -f $(ELFDUMP_TARGET) $(ELFDUMP_TARGET).exe
 	-@[ -d $(OBJ_DIR) ] && rmdir --ignore-fail-on-non-empty $(OBJ_DIR)
 
 .PHONY: all clean default
