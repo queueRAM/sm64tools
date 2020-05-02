@@ -1,6 +1,7 @@
 # Object files
 *.o
 *.obj
+*.d
 
 # Precompiled Headers
 *.gch
@@ -18,3 +19,4 @@
 
 # Executables
 *.exe
+bin

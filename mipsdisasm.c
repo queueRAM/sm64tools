@@ -16,6 +16,7 @@ typedef struct
 {
    char name[60];
    unsigned int vaddr;
+   char prefix[FILENAME_MAX];
 } asm_label;
 
 typedef struct
@@ -231,7 +232,7 @@ static void disassemble_block(unsigned char *data, unsigned int length, unsigned
                unsigned int jal_target  = (unsigned int)insn[i].operands[0].imm;
                // create label if one does not exist
                if (labels_find(&state->globals, jal_target) < 0) {
-                  char label_name[32];
+                  char label_name[FILENAME_MAX];
                   sprintf(label_name, "func_%08X", jal_target);
                   labels_add(&state->globals, label_name, jal_target);
                }
@@ -449,6 +450,7 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
    while ( (local_idx < block->locals.count) && (vaddr > block->locals.labels[local_idx].vaddr) ) {
       local_idx++;
    }
+   char previous_instruction[16];
    for (int i = 0; i < block->instruction_count; i++) {
       disasm_data *insn = &block->instructions[i];
       // newline between functions
@@ -465,13 +467,37 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
          fprintf(out, "%s:\n", block->locals.labels[local_idx].name);
          local_idx++;
       }
+      // write out bytes as comment
       fprintf(out, "/* %06X %08X %02X%02X%02X%02X */  ", offset, vaddr, insn->bytes[0], insn->bytes[1], insn->bytes[2], insn->bytes[3]);
       // indent the lines after a jump or branch
       if (indent) {
          indent = 0;
          fputc(' ', out);
       }
-      if (insn->is_jump) {
+      if (strncmp(insn->mnemonic,"movf",4) == 0 || strncmp(insn->mnemonic,"lsa",4) == 0 || strncmp(insn->mnemonic,"dlsa",4) == 0 
+            || strncmp(insn->mnemonic,"movn",4) == 0 || strncmp(insn->mnemonic,"ext",4) == 0 || strncmp(insn->mnemonic,"movt",4) == 0
+            || strncmp(insn->mnemonic,"movz",4) == 0 || strncmp(insn->mnemonic,"bbit",4) == 0 || strncmp(insn->mnemonic,"pref",4) == 0 
+            || strncmp(insn->mnemonic,"synci",5) == 0 || strncmp(insn->mnemonic,"ld.b",4) == 0 || strncmp(insn->mnemonic,"ori.b",4) == 0
+            || strncmp(insn->mnemonic,"pause",4) == 0 || strncmp(insn->mnemonic,"rotr",4) == 0 || strncmp(insn->mnemonic,"madd",4) == 0
+            || strncmp(insn->mnemonic,"nmsub",5) == 0 || strncmp(insn->mnemonic,"mz.",3) == 0
+            || strncmp(insn->mnemonic,"bc0",3) == 0 || strncmp(insn->mnemonic,"dmtc",4) == 0 || strncmp(insn->mnemonic,"sync",4) == 0
+            || strncmp(insn->mnemonic,"bseli",5) == 0 || strncmp(insn->mnemonic,"bnz.",4) == 0  || strncmp(insn->mnemonic,"snei",4) == 0
+            || strncmp(insn->mnemonic,"cle_s.",6) == 0 || strncmp(insn->mnemonic,"bz.",3) == 0 || strncmp(insn->mnemonic,"msub.",5) == 0
+            || strncmp(insn->mnemonic,"shrav.",5) == 0 || strncmp(insn->mnemonic,"din",3) == 0 || strncmp(insn->mnemonic,"cins",4) == 0
+            || strncmp(insn->mnemonic,"st.",3) == 0 || strncmp(insn->mnemonic,"shra",4) == 0 || strncmp(insn->mnemonic,"dextm",5) == 0
+            || strncmp(insn->mnemonic,"srl.",4) == 0 || strncmp(insn->mnemonic,"bc1",3) == 0 || strncmp(insn->mnemonic,"sra.",4) == 0
+            || strncmp(insn->mnemonic,"fmul.",4) == 0 || strncmp(insn->mnemonic,"dextu",5) == 0
+            )
+            {
+               // These instructions aren't supported on the N64 but capstone didn't know that
+               fprintf(out, ".byte 0x%02X,0x%02X,0x%02X,0x%02X /* Because of invalid n64 opcode %s */\n", insn->bytes[0], insn->bytes[1], insn->bytes[2], insn->bytes[3], insn->mnemonic);
+               strcpy(insn->mnemonic, ".byte");
+            }
+      else if (strncmp(previous_instruction,".byte",4) == 0 ) {
+         // fprintf(out, ".byte 0x%02X,0x%02X,0x%02X,0x%02X /* Because previous was .byte */\n", insn->bytes[0], insn->bytes[1], insn->bytes[2], insn->bytes[3]);
+         // strcpy(insn->mnemonic, ".byte");
+      }
+      else if (insn->is_jump) {
          indent = 1;
          fprintf(out, "%-5s ", insn->mnemonic);
          if (insn->id == MIPS_INS_JAL || insn->id == MIPS_INS_BAL || insn->id == MIPS_INS_J) {
@@ -638,6 +664,7 @@ void mipsdisasm_pass2(FILE *out, disasm_state *state, unsigned int offset)
       }
       vaddr += 4;
       offset += 4;
+      strcpy(previous_instruction, insn->mnemonic);
    }
 }
 

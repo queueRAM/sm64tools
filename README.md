@@ -105,3 +105,13 @@ There are many other smaller tools included to help with SM64 hacking.  They are
 ## License
 
 MIT License. Copyright 2015 queueRAM.
+
+## Building
+
+### MacOSX
+```
+git pull --recurse-submodules
+brew install capstone
+brew install libyaml
+export C_INCLUDE_PATH=../sm64tools:/usr/local/Cellar/capstone/4.0.1/include/:/usr/local/Cellar/libyaml/0.2.1/include && export LIBRARY_PATH=/usr/local/opt/capstone/lib/:/usr/local/Cellar/libyaml/0.2.1/lib:/usr/local/Cellar/libpng/1.6.36/lib && make
+```

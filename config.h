@@ -35,7 +35,7 @@ typedef enum
 typedef struct _label
 {
    unsigned int ram_addr;
-   char name[128];
+   char name[2048];
 } label;
 
 typedef struct _texture
@@ -50,11 +50,12 @@ typedef struct _texture
 
 typedef struct _split_section
 {
-   char label[128];
+   char label[512];
    unsigned int start;
    unsigned int end;
    unsigned int vaddr;
    section_type type;
+   char section_name[512];
 
    int subtype;
 
