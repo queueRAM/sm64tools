@@ -790,11 +790,20 @@ int main(int argc, char *argv[])
    int length = 0;
    int flength;
    int res;
-
+   int w = 0;
+   int h = 0;
+   int channels = 0;
+   stbi_uc *data = stbi_load(config.img_filename, &w, &h, &channels, STBI_default);
+   
    int valid = parse_arguments(argc, argv, &config);
    if (!valid || !valid_config(&config)) {
       print_usage();
       exit(EXIT_FAILURE);
+   }
+    
+   if (!data || w <= 0 || h <= 0) {
+      ERROR("Error loading \"%s\"\n", config.img_filename);
+      return 0;
    }
 
    if (config.mode == MODE_IMPORT) {
@@ -863,7 +872,7 @@ int main(int argc, char *argv[])
                fseek(pal_fp, config.bin_offset, SEEK_SET);
             }
 
-            raw16_size = config.width * config.height * config.pal_format.depth / 8;
+            raw16_size = w * h * config.pal_format.depth / 8;
             raw16 = malloc(raw16_size);
             if (!raw16) {
                ERROR("Error allocating %d bytes\n", raw16_size);
