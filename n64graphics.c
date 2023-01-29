@@ -793,9 +793,9 @@ int main(int argc, char *argv[])
    int w = 0;
    int h = 0;
    int channels = 0;
+   int valid = parse_arguments(argc, argv, &config);
    stbi_uc *data = stbi_load(config.img_filename, &w, &h, &channels, STBI_default);
    
-   int valid = parse_arguments(argc, argv, &config);
    if (!valid || !valid_config(&config)) {
       print_usage();
       exit(EXIT_FAILURE);
