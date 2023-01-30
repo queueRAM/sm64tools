@@ -534,7 +534,7 @@ int raw2ci(uint8_t *rawci, palette_t *pal, const uint8_t *raw, int raw_len, int 
 {
    // assign colors to palette
    pal->used = 0;
-   memset(pal->data, 0, sizeof(pal->data));
+   memset16safe(pal->data, 0x07FE, sizeof(pal->data) / sizeof(uint16_t));
    int ci_idx = 0;
    for (int i = 0; i < raw_len; i += sizeof(uint16_t)) {
       uint16_t val = read_u16_be(&raw[i]);
