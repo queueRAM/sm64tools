@@ -75,6 +75,9 @@ extern int g_verbosity;
 
 // functions
 
+// initialize memory to u16 value
+void *memset16safe(void *m, uint16_t val, size_t count);
+
 // convert two bytes in big-endian to signed int
 int read_s16_be(unsigned char *buf);
 
