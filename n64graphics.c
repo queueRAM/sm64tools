@@ -545,6 +545,15 @@ int raw2ci(uint8_t *rawci, palette_t *pal, const uint8_t *raw, int raw_len, int 
       } else {
          switch (ci_depth) {
             case 8:
+               // It appears some palettes have a default index of transparent/0.
+               // This requires iterating the pal_idx unless the CI really does begin with 0.
+               if (i == 0) {
+                  pal->data[0] = 0;
+                  if (val != 0) {
+                     rawci[ci_idx] = (uint8_t) ++pal_idx;
+                     break;
+                  }
+               }
                rawci[ci_idx] = (uint8_t)pal_idx;
                break;
             case 4:
