@@ -21,6 +21,7 @@
 #define SCALE_3_8(VAL_) ((VAL_) * 0x24)
 #define SCALE_8_3(VAL_) ((VAL_) / 0x24)
 
+unsigned short magicFiller = 0x07FE;
 
 typedef struct
 {
@@ -155,7 +156,10 @@ ia *raw2i(const uint8_t *raw, int width, int height, int depth)
                bits >>= 4;
             }
             img[i].intensity = SCALE_4_8(bits);
-            img[i].alpha     = 0xFF;
+            img[i].alpha     = img[i].intensity; // alpha copy intensity
+            // TODO: modes
+            // img[i].alpha     = 0xFF; // alpha = 1
+            // img[i].alpha     = img[i].intensity ? 0xFF : 0x00; // binary
          }
          break;
       default:
@@ -203,7 +207,7 @@ uint8_t *ci2raw(const uint8_t *rawci, const uint8_t *palette, int width, int hei
 
 int rgba2raw(uint8_t *raw, const rgba *img, int width, int height, int depth)
 {
-   int size = width * height * depth / 8;
+   int size = (width * height * depth + 7) / 8;
    INFO("Converting RGBA%d %dx%d to raw\n", depth, width, height);
 
    if (depth == 16) {
@@ -233,8 +237,9 @@ int rgba2raw(uint8_t *raw, const rgba *img, int width, int height, int depth)
 
 int ia2raw(uint8_t *raw, const ia *img, int width, int height, int depth)
 {
-   int size = width * height * depth / 8;
+   int size = (width * height * depth + 7) / 8;
    INFO("Converting IA%d %dx%d to raw\n", depth, width, height);
+   memset(raw, 0, size);
 
    switch (depth) {
       case 16:
@@ -283,10 +288,59 @@ int ia2raw(uint8_t *raw, const ia *img, int width, int height, int depth)
    return size;
 }
 
+/**
+ * Check 2 rgba structs for equality. 0 if unequal, 1 if equal
+**/
+int comp_rgba(const rgba left, const rgba right) {
+   if ((left.red != right.red) || (left.green != right.green) || (left.blue != right.blue) || (left.alpha != right.alpha)) {
+      return 0;
+   } else {
+      return 1;
+   }
+}
+
+/**
+ * Check if a given rgba (comp) is in a given palette (pal, represented as an array of rgba structs)
+ * If found, return the index in pal it was found out
+ * Otherwise, return -1
+**/
+int get_color_index(const rgba comp, const rgba *pal, int pal_size) {
+   int pal_idx;
+   for (pal_idx = 0; pal_idx < pal_size; pal_idx++) {
+      if (comp_rgba(comp, pal[pal_idx]) == 1) return pal_idx;
+   }
+   ERROR("Could not find a color in the palette\n");
+   ERROR("comp: %x%x%x%x\n", comp.red, comp.green, comp.blue, comp.alpha);
+   return -1;
+}
+
+/**
+ * Takes an image (img, an array of rgba structs) and a palette (pal, also an array of rgba structs)
+ * Sets the values of rawci (8 bit color index array) to the appropriate index in pal that each entry in img can be found at
+ * If a value in img is not found in pal, return 0, indicating an error
+ * Returns 1 if all values in img are found somewhere in pal
+**/
+int imgpal2rawci(uint8_t *rawci, const rgba *img, const rgba *pal, int raw_size, int img_size, int pal_size) {
+   int img_idx;
+   int pal_idx;
+   memset(rawci, 0, raw_size);
+
+   for (img_idx = 0; img_idx < img_size; img_idx++) {
+      pal_idx = get_color_index(img[img_idx], pal, pal_size);
+      if (pal_idx != -1) {
+         rawci[img_idx] = pal_idx;
+      } else {
+         return 0;
+      }
+   }
+   return 1;
+}
+
 int i2raw(uint8_t *raw, const ia *img, int width, int height, int depth)
 {
-   int size = width * height * depth / 8;
+   int size = (width * height * depth + 7) / 8;
    INFO("Converting I%d %dx%d to raw\n", depth, width, height);
+   memset(raw, 0, size);
 
    switch (depth) {
       case 8:
@@ -534,7 +588,7 @@ int raw2ci(uint8_t *rawci, palette_t *pal, const uint8_t *raw, int raw_len, int 
 {
    // assign colors to palette
    pal->used = 0;
-   memset16safe(pal->data, 0x07FE, sizeof(pal->data) / sizeof(uint16_t));
+   memset16safe(pal->data, magicFiller, sizeof(pal->data) / sizeof(uint16_t));
    int ci_idx = 0;
    for (int i = 0; i < raw_len; i += sizeof(uint16_t)) {
       uint16_t val = read_u16_be(&raw[i]);
@@ -565,6 +619,11 @@ int raw2ci(uint8_t *rawci, palette_t *pal, const uint8_t *raw, int raw_len, int 
                break;
             }
          }
+         //if (ci_idx == 0) {
+         //   pal->data[0] = 0;
+            //pal_idx += 1;
+            //pal->used++;
+         //}
          ci_idx++;
       }
    }
@@ -589,6 +648,7 @@ typedef enum
 {
    MODE_EXPORT,
    MODE_IMPORT,
+   MODE_EXPORT_CI,
 } tool_mode;
 
 typedef struct
@@ -597,6 +657,7 @@ typedef struct
    char *bin_filename;
    char *pal_filename;
    tool_mode mode;
+   write_encoding encoding;
    unsigned int bin_offset;
    unsigned int pal_offset;
    img_format format;
@@ -613,6 +674,7 @@ static const graphics_config default_config =
    .bin_filename = NULL,
    .pal_filename = NULL,
    .mode = MODE_EXPORT,
+   .encoding = ENCODING_RAW,
    .bin_offset = 0,
    .pal_offset = 0,
    .format = {IMG_FORMAT_RGBA, 16},
@@ -665,6 +727,42 @@ static int parse_format(img_format *format, const char *str)
    return 0;
 }
 
+typedef struct
+{
+   const char *name;
+   write_encoding encoding;
+} scheme_entry;
+
+static const scheme_entry encoding_table[] =
+{
+   {"raw", ENCODING_RAW},
+   {"u8",  ENCODING_U8},
+   {"u16", ENCODING_U16},
+   {"u32", ENCODING_U32},
+   {"u64", ENCODING_U64},
+};
+
+static const char *encoding2str(write_encoding encoding)
+{
+   for (unsigned i = 0; i < DIM(encoding_table); i++) {
+      if (encoding == encoding_table[i].encoding) {
+         return encoding_table[i].name;
+      }
+   }
+   return "unknown";
+}
+
+static int parse_encoding(write_encoding *encoding, const char *str)
+{
+   for (unsigned i = 0; i < DIM(encoding_table); i++) {
+      if (!strcasecmp(str, encoding_table[i].name)) {
+         *encoding = encoding_table[i].encoding;
+         return 1;
+      }
+   }
+   return 0;
+}
+
 static void print_usage(void)
 {
    ERROR("Usage: n64graphics -e/-i BIN_FILE -g IMG_FILE [-p PAL_FILE] [-o BIN_OFFSET] [-P PAL_OFFSET] [-f FORMAT] [-c CI_FORMAT] [-w WIDTH] [-h HEIGHT] [-V]\n"
@@ -678,6 +776,7 @@ static void print_usage(void)
          "Optional arguments:\n"
          " -o BIN_OFFSET starting offset in BIN_FILE (prevents truncation during import)\n"
          " -f FORMAT     texture format: rgba16, rgba32, ia1, ia4, ia8, ia16, i4, i8, ci4, ci8 (default: %s)\n"
+         " -s SCHEME     output scheme: raw, u8 (hex), u64 (hex) (default: %s)\n"
          " -w WIDTH      export texture width (default: %d)\n"
          " -h HEIGHT     export texture height (default: %d)\n"
          "CI arguments:\n"
@@ -688,6 +787,7 @@ static void print_usage(void)
          " -v            verbose logging\n"
          " -V            print version information\n",
          format2str(&default_config.format),
+         encoding2str(default_config.encoding),
          default_config.width,
          default_config.height,
          format2str(&default_config.pal_format));
@@ -751,6 +851,12 @@ static int parse_arguments(int argc, char *argv[], graphics_config *config)
                config->pal_offset = strtoul(argv[i], NULL, 0);
                config->pal_truncate = 0;
                break;
+            case 's':
+               if (++i >= argc) return 0;
+               if (!parse_encoding(&config->encoding, argv[i])) {
+                  return 0;
+               }
+               break;
             case 'v':
                g_verbosity = 1;
                break;
@@ -761,6 +867,15 @@ static int parse_arguments(int argc, char *argv[], graphics_config *config)
             case 'w':
                if (++i >= argc) return 0;
                config->width = strtoul(argv[i], NULL, 0);
+               break;
+            case 'Z':
+               if (++i >= argc) return 0;
+               config->bin_filename = argv[i];
+               config->mode = MODE_EXPORT_CI;
+               break;
+            case 'm':
+               if (i++ >= argc) return 0;
+               magicFiller = strtol(argv[i], NULL, 16);
                break;
             default:
                return 0;
@@ -792,6 +907,7 @@ int main(int argc, char *argv[])
 {
    graphics_config config = default_config;
    rgba *imgr;
+   rgba *palr;
    ia   *imgi;
    FILE *bin_fp;
    uint8_t *raw;
@@ -806,229 +922,313 @@ int main(int argc, char *argv[])
       exit(EXIT_FAILURE);
    }
 
-   if (config.mode == MODE_IMPORT) {
-      if (config.bin_truncate) {
-         bin_fp = fopen(config.bin_filename, "w");
-      } else {
-         bin_fp = fopen(config.bin_filename, "r+");
-      }
-      if (!bin_fp) {
-         ERROR("Error opening \"%s\"\n", config.bin_filename);
-         return -1;
-      }
-      if (!config.bin_truncate) {
-         fseek(bin_fp, config.bin_offset, SEEK_SET);
-      }
-      switch (config.format.format) {
-         case IMG_FORMAT_RGBA:
-            imgr = png2rgba(config.img_filename, &config.width, &config.height);
-            raw_size = config.width * config.height * config.format.depth / 8;
-            raw = malloc(raw_size);
-            if (!raw) {
-               ERROR("Error allocating %u bytes\n", raw_size);
-            }
-            length = rgba2raw(raw, imgr, config.width, config.height, config.format.depth);
-            break;
-         case IMG_FORMAT_IA:
-            imgi = png2ia(config.img_filename, &config.width, &config.height);
-            raw_size = config.width * config.height * config.format.depth / 8;
-            raw = malloc(raw_size);
-            if (!raw) {
-               ERROR("Error allocating %u bytes\n", raw_size);
-            }
-            length = ia2raw(raw, imgi, config.width, config.height, config.format.depth);
-            break;
-         case IMG_FORMAT_I:
-            imgi = png2ia(config.img_filename, &config.width, &config.height);
-            raw_size = config.width * config.height * config.format.depth / 8;
-            raw = malloc(raw_size);
-            if (!raw) {
-               ERROR("Error allocating %u bytes\n", raw_size);
-            }
-            length = i2raw(raw, imgi, config.width, config.height, config.format.depth);
-            break;
-         case IMG_FORMAT_CI:
-         {
-            palette_t pal;
-            FILE *pal_fp;
-            uint8_t *raw16;
-            int raw16_size;
-            int raw16_length;
-            uint8_t *ci;
-            int ci_length;
-            int pal_success;
-            int pal_length;
-            int w = 0;
-            int h = 0;
-            int channels = 0;
-            
-            stbi_uc *data = stbi_load(config.img_filename, &w, &h, &channels, STBI_default);
-            if (!data || w <= 0 || h <= 0) {
-               ERROR("Error loading \"%s\"\n", config.img_filename);
-               return 0;
-            }
-
-            if (config.pal_truncate) {
-               pal_fp = fopen(config.pal_filename, "w");
+   switch(config.mode){
+      case MODE_IMPORT:
+         if (0 == strcmp("-", config.bin_filename)) {
+            bin_fp = stdout;
+         } else {
+            if (config.bin_truncate) {
+               bin_fp = fopen(config.bin_filename, "wb");
             } else {
-               pal_fp = fopen(config.pal_filename, "r+");
+               bin_fp = fopen(config.bin_filename, "r+b");
             }
-            if (!pal_fp) {
-               ERROR("Error opening \"%s\"\n", config.pal_filename);
-               return EXIT_FAILURE;
-            }
-            if (!config.pal_truncate) {
-               fseek(pal_fp, config.bin_offset, SEEK_SET);
-            }
-
-            raw16_size = w * h * config.pal_format.depth / 8;
-            raw16 = malloc(raw16_size);
-            if (!raw16) {
-               ERROR("Error allocating %d bytes\n", raw16_size);
-               return EXIT_FAILURE;
-            }
-            switch (config.pal_format.format) {
-               case IMG_FORMAT_RGBA:
-                  imgr = png2rgba(config.img_filename, &config.width, &config.height);
-                  raw16_length = rgba2raw(raw16, imgr, config.width, config.height, config.pal_format.depth);
-                  break;
-               case IMG_FORMAT_IA:
-                  imgi = png2ia(config.img_filename, &config.width, &config.height);
-                  raw16_length = ia2raw(raw16, imgi, config.width, config.height, config.pal_format.depth);
-                  break;
-               default:
-                  ERROR("Unsupported palette format: %s\n", format2str(&config.pal_format));
-                  exit(EXIT_FAILURE);
-            }
-
-            // convert raw to palette
-            pal.max = (1 << config.format.depth);
-            ci_length = config.width * config.height * config.format.depth / 8;
-            ci = malloc(ci_length);
-            pal_success = raw2ci(ci, &pal, raw16, raw16_length, config.format.depth);
-            if (!pal_success) {
-               ERROR("Error converting palette\n");
-               exit(EXIT_FAILURE);
-            }
-
-            pal_length = pal.max * sizeof(pal.data[0]);
-            INFO("Writing 0x%X bytes to offset 0x%X of \"%s\"\n", pal_length, config.pal_offset, config.pal_filename);
-            flength = 0;
-            for (int i = 0; i < pal.max; i++) {
-               uint8_t entry[2];
-               write_u16_be(entry, pal.data[i]);
-               flength += fwrite(entry, 1, sizeof(entry), pal_fp);
-            }
-            if (flength != pal_length) {
-               ERROR("Error writing %d bytes to \"%s\"\n", pal_length, config.pal_filename);
-            }
-
-            raw = ci;
-            length = ci_length;
-
-            free(raw16);
-            fclose(pal_fp);
-            break;
          }
-         default:
-            return EXIT_FAILURE;
-      }
-      if (length <= 0) {
-         ERROR("Error converting to raw format\n");
-         return EXIT_FAILURE;
-      }
-      INFO("Writing 0x%X bytes to offset 0x%X of \"%s\"\n", length, config.bin_offset, config.bin_filename);
-      flength = fwrite(raw, 1, length, bin_fp);
-      if (flength != length) {
-         ERROR("Error writing %d bytes to \"%s\"\n", length, config.bin_filename);
-      }
-      fclose(bin_fp);
+         if (!bin_fp) {
+            ERROR("Error opening \"%s\"\n", config.bin_filename);
+            return -1;
+         }
+         if (!config.bin_truncate) {
+            fseek(bin_fp, config.bin_offset, SEEK_SET);
+         }
+         switch (config.format.format) {
+            case IMG_FORMAT_RGBA:
+               imgr = png2rgba(config.img_filename, &config.width, &config.height);
+               raw_size = (config.width * config.height * config.format.depth + 7) / 8;
+               raw = malloc(raw_size);
+               if (!raw) {
+                  ERROR("Error allocating %u bytes\n", raw_size);
+               }
+               length = rgba2raw(raw, imgr, config.width, config.height, config.format.depth);
+               break;
+            case IMG_FORMAT_IA:
+               imgi = png2ia(config.img_filename, &config.width, &config.height);
+               raw_size = (config.width * config.height * config.format.depth + 7) / 8;
+               raw = malloc(raw_size);
+               if (!raw) {
+                  ERROR("Error allocating %u bytes\n", raw_size);
+               }
+               length = ia2raw(raw, imgi, config.width, config.height, config.format.depth);
+               break;
+            case IMG_FORMAT_I:
+               imgi = png2ia(config.img_filename, &config.width, &config.height);
+               raw_size = (config.width * config.height * config.format.depth + 7) / 8;
+               raw = malloc(raw_size);
+               if (!raw) {
+                  ERROR("Error allocating %u bytes\n", raw_size);
+               }
+               length = i2raw(raw, imgi, config.width, config.height, config.format.depth);
+               break;
+            case IMG_FORMAT_CI:
+            {
+               int w = 0;
+               int h = 0;
+               int channels = 0;
+               stbi_uc *data = stbi_load(config.img_filename, &w, &h, &channels, STBI_default);
+               palette_t pal = {0};
+               FILE *pal_fp;
+               uint8_t *raw16;
+               int raw16_size;
+               int raw16_length;
+               uint8_t *ci;
+               int ci_length;
+               int pal_success;
+               int pal_length;
 
-   } else {
-      if (config.width <= 0 || config.height <= 0 || config.format.depth <= 0) {
-         ERROR("Error: must set position width and height for export\n");
-         return EXIT_FAILURE;
-      }
-      bin_fp = fopen(config.bin_filename, "r");
-      if (!bin_fp) {
-         ERROR("Error opening \"%s\"\n", config.bin_filename);
-         return -1;
-      }
-      raw_size = config.width * config.height * config.format.depth / 8;
-      raw = malloc(raw_size);
-      if (config.bin_offset > 0) {
-         fseek(bin_fp, config.bin_offset, SEEK_SET);
-      }
-      flength = fread(raw, 1, raw_size, bin_fp);
-      if (flength != raw_size) {
-         ERROR("Error reading %d bytes from \"%s\"\n", raw_size, config.bin_filename);
-      }
-      switch (config.format.format) {
-         case IMG_FORMAT_RGBA:
-            imgr = raw2rgba(raw, config.width, config.height, config.format.depth);
-            res = rgba2png(config.img_filename, imgr, config.width, config.height);
-            break;
-         case IMG_FORMAT_IA:
-            imgi = raw2ia(raw, config.width, config.height, config.format.depth);
-            res = ia2png(config.img_filename, imgi, config.width, config.height);
-            break;
-         case IMG_FORMAT_I:
-            imgi = raw2i(raw, config.width, config.height, config.format.depth);
-            res = ia2png(config.img_filename, imgi, config.width, config.height);
-            break;
-         case IMG_FORMAT_CI:
-         {
-            FILE *pal_fp;
-            uint8_t *pal;
-            uint8_t *raw_fmt;
-            int pal_size;
+               if (!data || w <= 0 || h <= 0) {
+                  ERROR("Error reading w/h from img \"%s\"\n", config.img_filename);
+                  return 0;
+               }
 
-            INFO("Extracting %s offset 0x%X, pal.offset 0x%0X, pal.format %s\n", format2str(&config.format),
-                 config.bin_offset, config.pal_offset, format2str(&config.pal_format));
-
-            pal_fp = fopen(config.pal_filename, "r");
-            if (!pal_fp) {
-               ERROR("Error opening \"%s\"\n", config.bin_filename);
-               return EXIT_FAILURE;
-            }
-            if (config.pal_offset > 0) {
-               fseek(pal_fp, config.pal_offset, SEEK_SET);
-            }
-
-            pal_size = sizeof(uint16_t) * (1 << config.format.depth);
-            INFO("Palette size: %d\n", pal_size);
-            pal = malloc(pal_size);
-            flength = fread(pal, 1, pal_size, pal_fp);
-            if (flength != pal_size) {
-               ERROR("Error reading %d bytes from \"%s\"\n", pal_size, config.pal_filename);
-            }
-            raw_fmt = ci2raw(raw, pal, config.width, config.height, config.format.depth);
-            switch (config.pal_format.format) {
-               case IMG_FORMAT_RGBA:
-                  INFO("Converting raw to RGBA16\n");
-                  imgr = raw2rgba(raw_fmt, config.width, config.height, config.pal_format.depth);
-                  res = rgba2png(config.img_filename, imgr, config.width, config.height);
-                  break;
-               case IMG_FORMAT_IA:
-                  INFO("Converting raw to IA16\n");
-                  imgi = raw2ia(raw_fmt, config.width, config.height, config.pal_format.depth);
-                  res = ia2png(config.img_filename, imgi, config.width, config.height);
-                  break;
-               default:
-                  ERROR("Unsupported palette format: %s\n", format2str(&config.pal_format));
+               if (config.pal_truncate) {
+                  pal_fp = fopen(config.pal_filename, "wb");
+               } else {
+                  pal_fp = fopen(config.pal_filename, "r+b");
+               }
+               if (!pal_fp) {
+                  ERROR("Error opening \"%s\"\n", config.pal_filename);
                   return EXIT_FAILURE;
+               }
+               if (!config.pal_truncate) {
+                  fseek(pal_fp, config.bin_offset, SEEK_SET);
+               }
+
+               raw16_size = w * h * config.pal_format.depth / 8;
+               raw16 = malloc(raw16_size);
+               if (!raw16) {
+                  ERROR("Error allocating %d bytes\n", raw16_size);
+                  return EXIT_FAILURE;
+               }
+               switch (config.pal_format.format) {
+                  case IMG_FORMAT_RGBA:
+                     imgr = png2rgba(config.img_filename, &config.width, &config.height);
+                     raw16_length = rgba2raw(raw16, imgr, config.width, config.height, config.pal_format.depth);
+                     break;
+                  case IMG_FORMAT_IA:
+                     imgi = png2ia(config.img_filename, &config.width, &config.height);
+                     raw16_length = ia2raw(raw16, imgi, config.width, config.height, config.pal_format.depth);
+                     break;
+                  default:
+                     ERROR("Unsupported palette format: %s\n", format2str(&config.pal_format));
+                     exit(EXIT_FAILURE);
+               }
+
+               // convert raw to palette
+               pal.max = (1 << config.format.depth);
+               ci_length = config.width * config.height * config.format.depth / 8;
+               ci = malloc(ci_length);
+               pal_success = raw2ci(ci, &pal, raw16, raw16_length, config.format.depth);
+               if (!pal_success) {
+                  ERROR("Error converting palette\n");
+                  exit(EXIT_FAILURE);
+               }
+
+               // pack the bytes
+               uint8_t raw_pal[sizeof(pal.data)];
+               for (int i = 0; i < pal.max; i++) {
+                  write_u16_be(&raw_pal[2*i], pal.data[i]);
+               }
+               pal_length = pal.max * sizeof(pal.data[0]);
+               INFO("Writing 0x%X bytes to offset 0x%X of \"%s\"\n", pal_length, config.pal_offset, config.pal_filename);
+               flength = fprint_write_output(pal_fp, config.encoding, raw_pal, pal_length);
+               if (config.encoding == ENCODING_RAW && flength != pal_length) {
+                  ERROR("Error writing %d bytes to \"%s\"\n", pal_length, config.pal_filename);
+               }
+               INFO("Wrote 0x%X bytes to \"%s\"\n", flength, config.pal_filename);
+
+               raw = ci;
+               length = ci_length;
+
+               free(raw16);
+               fclose(pal_fp);
+               break;
             }
-            free(raw_fmt);
-            free(pal);
-            break;
+            default:
+               return EXIT_FAILURE;
          }
-         default:
+         if (length <= 0) {
+            ERROR("Error converting to raw format\n");
             return EXIT_FAILURE;
+         }
+         INFO("Writing 0x%X bytes to offset 0x%X of \"%s\"\n", length, config.bin_offset, config.bin_filename);
+         flength = fprint_write_output(bin_fp, config.encoding, raw, length);
+         if (config.encoding == ENCODING_RAW && flength != length) {
+            ERROR("Error writing %d bytes to \"%s\"\n", length, config.bin_filename);
+         }
+         INFO("Wrote 0x%X bytes to \"%s\"\n", flength, config.bin_filename);
+         if (bin_fp != stdout) {
+            fclose(bin_fp);
+         }
+         break;
+      case MODE_EXPORT:
+         if (config.width <= 0 || config.height <= 0 || config.format.depth <= 0) {
+            ERROR("Error: must set position width and height for export\n");
+            return EXIT_FAILURE;
+         }
+         bin_fp = fopen(config.bin_filename, "rb");
+         if (!bin_fp) {
+            ERROR("Error opening \"%s\"\n", config.bin_filename);
+            return -1;
+         }
+         raw_size = (config.width * config.height * config.format.depth + 7) / 8;
+         raw = malloc(raw_size);
+         if (config.bin_offset > 0) {
+            fseek(bin_fp, config.bin_offset, SEEK_SET);
+         }
+         flength = fread(raw, 1, raw_size, bin_fp);
+         if (flength != raw_size) {
+            ERROR("Error reading %d bytes from \"%s\"\n", raw_size, config.bin_filename);
+         }
+         switch (config.format.format) {
+            case IMG_FORMAT_RGBA:
+               imgr = raw2rgba(raw, config.width, config.height, config.format.depth);
+               res = rgba2png(config.img_filename, imgr, config.width, config.height);
+               break;
+            case IMG_FORMAT_IA:
+               imgi = raw2ia(raw, config.width, config.height, config.format.depth);
+               res = ia2png(config.img_filename, imgi, config.width, config.height);
+               break;
+            case IMG_FORMAT_I:
+               imgi = raw2i(raw, config.width, config.height, config.format.depth);
+               res = ia2png(config.img_filename, imgi, config.width, config.height);
+               break;
+            case IMG_FORMAT_CI:
+            {
+               FILE *pal_fp;
+               uint8_t *pal;
+               uint8_t *raw_fmt;
+               int pal_size;
+
+               INFO("Extracting %s offset 0x%X, pal.offset 0x%0X, pal.format %s\n", format2str(&config.format),
+                    config.bin_offset, config.pal_offset, format2str(&config.pal_format));
+
+               pal_fp = fopen(config.pal_filename, "rb");
+               if (!pal_fp) {
+                  ERROR("Error opening \"%s\"\n", config.bin_filename);
+                  return EXIT_FAILURE;
+               }
+               if (config.pal_offset > 0) {
+                  fseek(pal_fp, config.pal_offset, SEEK_SET);
+               }
+
+               pal_size = sizeof(uint16_t) * (1 << config.format.depth);
+               INFO("Palette size: %d\n", pal_size);
+               pal = malloc(pal_size);
+               flength = fread(pal, 1, pal_size, pal_fp);
+               if (flength != pal_size) {
+                  ERROR("Error reading %d bytes from \"%s\"\n", pal_size, config.pal_filename);
+               }
+               raw_fmt = ci2raw(raw, pal, config.width, config.height, config.format.depth);
+               switch (config.pal_format.format) {
+                  case IMG_FORMAT_RGBA:
+                     INFO("Converting raw to RGBA16\n");
+                     imgr = raw2rgba(raw_fmt, config.width, config.height, config.pal_format.depth);
+                     res = rgba2png(config.img_filename, imgr, config.width, config.height);
+                     break;
+                  case IMG_FORMAT_IA:
+                     INFO("Converting raw to IA16\n");
+                     imgi = raw2ia(raw_fmt, config.width, config.height, config.pal_format.depth);
+                     res = ia2png(config.img_filename, imgi, config.width, config.height);
+                     break;
+                  default:
+                     ERROR("Unsupported palette format: %s\n", format2str(&config.pal_format));
+                     return EXIT_FAILURE;
+               }
+               free(raw_fmt);
+               free(pal);
+               break;
+            }
+            default:
+               return EXIT_FAILURE;
+         }
+         if (!res) {
+            ERROR("Error writing to \"%s\"\n", config.img_filename);
+            return EXIT_FAILURE;
+         }
+         break;
+      case MODE_EXPORT_CI:
+      {
+         uint8_t *rawci;
+         int img_length;
+         int pal_length;
+         int ci_length;
+         int conversion_success;
+
+         if (0 == strcmp("-", config.bin_filename)) {
+            bin_fp = stdout;
+         } else {
+            if (config.bin_truncate) {
+               bin_fp = fopen(config.bin_filename, "wb");
+            } else {
+               bin_fp = fopen(config.bin_filename, "r+b");
+            }
+         }
+         if (!bin_fp) {
+            ERROR("Error opening \"%s\"\n", config.bin_filename);
+            return -1;
+         }
+         if (!config.bin_truncate) {
+            fseek(bin_fp, config.bin_offset, SEEK_SET);
+         }
+         switch (config.pal_format.format) {
+            case IMG_FORMAT_RGBA:
+               palr = png2rgba(config.pal_filename, &config.width, &config.height);
+               break;
+            default:
+               ERROR("Unexpected format for the palette: %s\n", format2str(&config.pal_format));
+               return EXIT_FAILURE;
+         }
+         pal_length = config.width * config.height;
+         /**
+          * We're kind misusing the config stuff here
+          * We at first use it to convert the input image into an rgba16 (always 16, not 32)
+          * But then we re-use it to control the output bin file's size
+          * The proper thing to do here would be to:
+          *     Expand the config to have separate image and bin file parameters
+          *     Add optional argument(s) to specify the new parameters
+          *  In practice what this means is that, as written, when using the -Z mode you MUST set the -f
+          *  argument to `ci8`. Anything else is erroneous
+         **/
+         switch (config.format.format) {
+            case IMG_FORMAT_CI:
+               imgr = png2rgba(config.img_filename, &config.width, &config.height);
+               break;
+            default:
+               ERROR("Unexpected format for the image: %s\n", format2str(&config.format));
+               return EXIT_FAILURE;
+         }
+         img_length = config.width * config.height;
+         ci_length = img_length * config.format.depth / 8;
+         rawci = malloc(ci_length);
+         conversion_success = imgpal2rawci(rawci, imgr, palr, ci_length, img_length, pal_length);
+         if (!conversion_success) {
+            ERROR("Error converting PNG and TLUT to CI\n");
+            exit(EXIT_FAILURE);
+         }
+         INFO("Writing 0x%X bytes to offset 0x%X of \"%s\"\n", ci_length, config.bin_offset, config.bin_filename);
+         flength = fprint_write_output(bin_fp, config.encoding, rawci, ci_length);
+         if (config.encoding == ENCODING_RAW && flength != ci_length) {
+            ERROR("Error writing %d bytes to \"%s\"\n", ci_length, config.bin_filename);
+         }
+         INFO("Wrote 0x%X bytes to \"%s\"\n", flength, config.bin_filename);
+         if (bin_fp != stdout) {
+            fclose(bin_fp);
+         }
+         free(rawci);
+         break;
       }
-      if (!res) {
-         ERROR("Error writing to \"%s\"\n", config.img_filename);
+      default:
+         ERROR("Unexpected run mode: %d\n", config.mode);
          return EXIT_FAILURE;
-      }
    }
 
    return EXIT_SUCCESS;
