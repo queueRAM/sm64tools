@@ -586,10 +586,16 @@ static int pal_add_color(palette_t *pal, uint16_t val)
 // returns 1 on success
 int raw2ci(uint8_t *rawci, palette_t *pal, const uint8_t *raw, int raw_len, int ci_depth)
 {
-   // assign colors to palette
+   // Fill palette with magic number. Once colours are added, the remainder will be a tail of magicFiller.
+   // This was likely used for easy debugging. 0x0, 0x07FE, and 0xFFFF are known magic numbers.
    pal->used = 0;
    memset16safe(pal->data, magicFiller, sizeof(pal->data) / sizeof(uint16_t));
    int ci_idx = 0;
+
+   // Palettes have a default first index of 0x0000.
+   pal_add_color(pal, 0);
+
+   // assign colors to palette
    for (int i = 0; i < raw_len; i += sizeof(uint16_t)) {
       uint16_t val = read_u16_be(&raw[i]);
       int pal_idx = pal_add_color(pal, val);
@@ -599,15 +605,6 @@ int raw2ci(uint8_t *rawci, palette_t *pal, const uint8_t *raw, int raw_len, int 
       } else {
          switch (ci_depth) {
             case 8:
-               // It appears some palettes have a default index of transparent/0.
-               // This requires iterating the pal_idx unless the CI really does begin with 0.
-               if (i == 0) {
-                  pal->data[0] = 0;
-                  if (val != 0) {
-                     rawci[ci_idx] = (uint8_t) ++pal_idx;
-                     break;
-                  }
-               }
                rawci[ci_idx] = (uint8_t)pal_idx;
                break;
             case 4:
@@ -619,11 +616,6 @@ int raw2ci(uint8_t *rawci, palette_t *pal, const uint8_t *raw, int raw_len, int 
                break;
             }
          }
-         //if (ci_idx == 0) {
-         //   pal->data[0] = 0;
-            //pal_idx += 1;
-            //pal->used++;
-         //}
          ci_idx++;
       }
    }
