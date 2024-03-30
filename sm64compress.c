@@ -10,6 +10,10 @@
 
 #define MAX_REFS 64
 
+const char unused_pattern[] = { 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
+                                0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
+                                0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x1B, 0x04, 0x00, 0x00 };
+
 typedef struct
 {
    unsigned int level;  // original level script offset where referenced
@@ -42,7 +46,8 @@ typedef struct
    char dump;
    char fix_f3d;
    char fix_geo;
-   char force_size;
+   char remove_unused;
+   unsigned int forced_size;
    char trim_bank;
 } compress_config;
 
@@ -56,13 +61,14 @@ static const compress_config default_config =
    0,    // dump
    0,    // f3d
    0,    // geo
+   0,    // remove unused level script
    0,    // forced size
    0,    // trim bank E
 };
 
 static void print_usage(void)
 {
-   ERROR("Usage: sm64compress [-a ALIGNMENT] [-c] [-d] [-f] [-g] [-s] [-t] [-v] FILE [OUT_FILE]\n"
+   ERROR("Usage: sm64compress [-a ALIGNMENT] [-c] [-d] [-f] [-g] [-s] [-t] [-u] [-v] FILE [OUT_FILE]\n"
          "\n"
          "sm64compress v" SM64COMPRESS_VERSION ": Super Mario 64 ROM compressor and fixer\n"
          "\n"
@@ -72,8 +78,9 @@ static void print_usage(void)
          " -d           dump blocks to 'dump' directory\n"
          " -f           fix F3D combine blending parameters\n"
          " -g           fix geo layout display list layers\n"
-         " -s           force 0xD0000 bank E size for 48Mb hacks\n"
+         " -s           force bank E size 0xD0000 for 48Mb hacks, 0x150000 for 64\n"
          " -t           try to trim bank E for better compression (heuristics)\n"
+         " -u           try to remove unused level scripts (heuristics)\n"
          " -v           verbose progress output\n"
          "\n"
          "File arguments:\n"
@@ -118,11 +125,14 @@ static void parse_arguments(int argc, char *argv[], compress_config *config)
                config->fix_geo = 1;
                break;
 			case 's':
-				config->force_size = 1;
+                config->forced_size = 1;
 				break;
 			case 't':
 				config->trim_bank = 1;
 				break;
+            case 'u':
+                config->remove_unused = 1;
+                break;
             case 'v':
                g_verbosity = 1;
                break;
@@ -186,6 +196,15 @@ static void add_ref(block *blk, unsigned level_script, unsigned offset, unsigned
    }
 }
 
+static int memcmpb(char* buf, char byte, int len)
+{
+	for (int i = 0; i < len; i++)
+		if (buf[i] != byte)
+			return i + 1;
+
+	return 0;
+}
+
 static int walk_scripts(block *blocks, int block_count, unsigned char *buf, unsigned int in_length, unsigned level_script, unsigned script_end, const compress_config *config)
 {
    unsigned off = level_script;
@@ -194,6 +213,8 @@ static int walk_scripts(block *blocks, int block_count, unsigned char *buf, unsi
       switch (buf[off]) {
          case 0x00: // level script
          case 0x01: // level script
+			//if (off == 0x029604a4 || off == 0x3040428)
+			//	break;
             if (buf[off+1] == 0x10) {
                unsigned block_off = read_u32_be(&buf[off+4]);
                unsigned block_end = read_u32_be(&buf[off+8]);
@@ -219,7 +240,7 @@ static int walk_scripts(block *blocks, int block_count, unsigned char *buf, unsi
             if (buf[off+1] == 0x0C) {
                unsigned block_off = read_u32_be(&buf[off+4]);
                unsigned block_end = read_u32_be(&buf[off+8]);
-               if ((block_off & 0xFF000000) <= (block_end & 0xFF000000)) {
+               if (((block_end & 0xFF000000) - (block_off & 0xFF000000)) <= 0x2000000) {
                   INFO("%07X: %08X %08X %08X\n", off, cmd, block_off, block_end);
                   int idx = find_block(blocks, block_count, block_off);
                   if (idx < 0) {
@@ -231,8 +252,19 @@ static int walk_scripts(block *blocks, int block_count, unsigned char *buf, unsi
                      {
                          if (block_end > 0x1200000 && buf[off + 3] == 0xE)
                          {
-                             unsigned real_block_end = config->force_size ? block_off + 0xD0000 - 0x100 : block_end - 0x20200;
-                             while (buf[real_block_end] == 0x01 && real_block_end > block_off)
+                             unsigned real_block_end = block_end - 0x100;
+                             if (config->forced_size)
+                             {
+                                 unsigned current_size = block_end - block_off;
+                                 if (current_size > config->forced_size)
+                                 {
+                                     real_block_end = block_off + config->forced_size - 0x100;
+                                 }
+                             }
+                             if (read_u32_be(&buf[real_block_end]) != 0x01010101) // skip skybox, also heuristics
+                                 real_block_end -= 0x20100;
+
+                             while (!memcmpb(buf + real_block_end, 0x01, 0x100) && real_block_end > block_off)
                                  real_block_end -= 0x100;
 
                              if (real_block_end == block_off)
@@ -250,7 +282,7 @@ static int walk_scripts(block *blocks, int block_count, unsigned char *buf, unsi
                      switch (buf[off]) {
                         case 0x17: // raw data
                            blocks[idx].type = BLOCK_RAW;
-                           blocks[idx].compressible = 1;
+                           blocks[idx].compressible = (block_off > 0x1200000 && buf[off + 3] == 0xE) ? 1 : 0;
                            break;
                         case 0x18: // MIO0
                         case 0x1A: // MIO0
@@ -380,7 +412,9 @@ static int sm64_compress_mio0(const compress_config *config,
 #define MAX_BLOCKS 512
 #define ENTRY_SCRIPT 0x108A10 // hard-coded level entry
 #define SEGMENT2_ROM_OFFSET 0x800000
-#define SEGMENT2_ROM_END    0x81BB64
+	// 0x803156
+#define SEGMENT2_ROM_END 0x81BB64
+	// 0x81D164
    block block_table[MAX_BLOCKS];
    unsigned char *tmp_raw = NULL;
    unsigned char *tmp_cmp = NULL;
@@ -421,8 +455,8 @@ static int sm64_compress_mio0(const compress_config *config,
 
    // allocate 1MB buffer for MIO0 compression
    if (config->compress) {
-      tmp_raw = malloc(512*KB);
-      tmp_cmp = malloc(512*KB);
+      tmp_raw = malloc(2048*KB);
+      tmp_cmp = malloc(2048*KB);
    }
 
 #define EXT_ROM_OFFSET 0x800000
@@ -446,14 +480,14 @@ static int sm64_compress_mio0(const compress_config *config,
          if (config->fix_geo) {
             fix_geo(&in_buf[blk->old], block_len);
          }
-         if (config->compress && blk->type == BLOCK_MIO0) {
+         /*if (config->compress && blk->type == BLOCK_MIO0) {
             // decompress to remove fake header and recompress
             int raw_len = mio0_decode(&in_buf[blk->old], tmp_raw, NULL);
             int cmp_len = mio0_encode(tmp_raw, raw_len, tmp_cmp);
             src = tmp_cmp;
             src_len = cmp_len;
             INFO("Compressed %08X[%06X=%06X] => %08X[%06X]\n", blk->old, block_len, raw_len, cur_offset, cmp_len);
-         } else if(config->compress && blk->compressible) {
+         }*/ else if(config->compress && blk->compressible) {
             // compress blocks that don't have a fake header and are compressible
             int cmp_len = mio0_encode(&in_buf[blk->old], block_len, tmp_cmp);
             src = tmp_cmp;
@@ -636,6 +670,33 @@ int main(int argc, char *argv[])
    if (in_size <= 0) {
       ERROR("Error reading input file \"%s\"\n", config.in_filename);
       exit(1);
+   }
+   int fileSize = filesize(config.in_filename);
+
+   if (config.forced_size) {
+       if (fileSize == 48 * 1024 * 1024)
+           config.forced_size = 0xD0000;
+		else if (fileSize == 64 * 1024 * 1024)
+           config.forced_size = 0x150000;
+       else
+       {
+           ERROR("Invalid \"%s\" file size for -s", config.in_filename);
+           exit(1);
+       }
+   }
+   if (config.remove_unused)
+   {
+       unsigned max_high = fileSize >> 16;
+       for (unsigned high = 0x0120; high < max_high; high += 0x0001)
+       {
+           unsigned pattern_offset = high << 16 | 0x00A4;
+           if (!memcmp(unused_pattern, &in_buf[pattern_offset], sizeof(unused_pattern)))
+           {
+               unsigned unused_offset = high << 16;
+               unsigned unused_length = 0x2000;
+               memset(&in_buf[unused_offset], 0x01, unused_length);
+           }
+       }
    }
 
    // TODO: confirm valid SM64
