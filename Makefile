@@ -65,13 +65,13 @@ AR        = $(CROSS)ar
 INCLUDES  = -I./ext
 DEFS      = 
 # Release flags
-CFLAGS    = -Wall -Wextra -Wno-format-overflow -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(DEFS) -MMD
-LDFLAGS   = -s -Wl,--gc-sections
+CFLAGS    = -Wall -Wextra -Wno-format-overflow -O2 -ffunction-sections -fdata-sections $(INCLUDES) $(DEFS) `pkg-config --cflags capstone yaml-0.1` -MMD
+LDFLAGS   = -s
 # Debug flags
 #CFLAGS    = -Wall -Wextra -O0 -g $(INCLUDES) $(DEFS) -MMD
 #LDFLAGS   =
 LIBS      = 
-SPLIT_LIBS = -lcapstone -lyaml -lz
+SPLIT_LIBS = `pkg-config --libs capstone yaml-0.1` -lz
 
 LIB_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(LIB_SRC_FILES:.c=.o))
 CKSUM_OBJ_FILES = $(addprefix $(OBJ_DIR)/,$(CKSUM_SRC_FILES:.c=.o))
@@ -127,7 +127,7 @@ $(MIO0_TARGET): libmio0.c libmio0.h
 	$(CC) $(CFLAGS) -DMIO0_STANDALONE $(LDFLAGS) -o $@ $<
 
 $(DISASM_TARGET): $(DISASM_SRC_FILES)
-	$(CC) $(CFLAGS) -DMIPSDISASM_STANDALONE $^ $(LDFLAGS) -o $@ -lcapstone
+	$(CC) $(CFLAGS) -DMIPSDISASM_STANDALONE $^ $(LDFLAGS) -o $@ `pkg-config --libs capstone`
 
 $(SPLIT_TARGET): $(SPLIT_OBJ_FILES)
 	$(LD) $(LDFLAGS) -o $@ $^ $(SPLIT_LIBS)
@@ -136,7 +136,7 @@ $(WALK_TARGET): sm64walk.c $(SM64_LIB)
 	$(CC) $(CFLAGS) -o $@ $^
 
 rawmips: rawmips.c utils.c
-	$(CC) $(CFLAGS) -o $@ $^ -lcapstone
+	$(CC) $(CFLAGS) -o $@ $^ `pkg-config --libs capstone`
 
 clean:
 	rm -f $(OBJ_FILES) $(DEP_FILES) $(SM64_LIB) $(MIO0_TARGET)

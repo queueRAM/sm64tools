@@ -60,6 +60,12 @@ static void PUT_BIT(unsigned char *buf, int bit, int val)
    buf[offset] = (buf[offset] & ~(mask)) | (val ? mask : 0);
 }
 
+typedef struct {
+    int length;
+    int offset; // absolute offset
+    int r_offset; // offset stored in MIO0 (distance back)
+} Bestie;
+
 // used to find longest matching stream in buffer
 // buf: buffer
 // start_offset: offset in buf to look back from
@@ -76,6 +82,9 @@ static int find_longest(const unsigned char *buf, int start_offset, int max_sear
    int lb_idx;
    const unsigned char first = buf[start_offset];
    lookback *lb = &lkbk[first];
+   Bestie *bests;
+   int best_count = 0;
+   bests = malloc(sizeof(Bestie) * 1000);
 
    // buf
    //  |    off        start                  max
@@ -110,11 +119,32 @@ static int find_longest(const unsigned char *buf, int start_offset, int max_sear
          }
          cur_length += i;
       }
-      if (cur_length > best_length) {
+      if (cur_length >= best_length) {
          best_offset = start_offset - off;
          best_length = cur_length;
+         bests[best_count].offset = off;
+         bests[best_count].r_offset = best_offset;
+         bests[best_count].length = best_length;
+         best_count++;
       }
    }
+
+   if (best_length > 2) {
+       printf("0x%02X | %02X |", start_offset, best_length);
+       for (i = 0; i < best_count; i++) {
+           if (bests[i].length == best_length) {
+               printf(" %02X", bests[i].r_offset);
+           }
+       }
+       printf(" |");
+       for (i = 0; i < best_count; i++) {
+           if (bests[i].length == best_length) {
+               printf(" %02X", bests[i].offset);
+           }
+       }
+       printf("\n");
+   }
+   free(bests);
 
    // return best reverse offset and length (may be 0)
    *found_offset = best_offset;
@@ -142,7 +172,7 @@ void mio0_encode_header(unsigned char *buf, const mio0_header_t *head)
    write_u32_be(&buf[12], head->uncomp_offset);
 }
 
-int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end)
+int mio0_decompress(const unsigned char *in, unsigned char *out, unsigned int *end)
 {
    mio0_header_t head;
    unsigned int bytes_written = 0;
@@ -158,11 +188,13 @@ int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end)
       return -2;
    }
 
+   printf("Header: %08X %08X %08X\n", head.dest_size, head.comp_offset, head.uncomp_offset);
    // decode data
    while (bytes_written < head.dest_size) {
       if (GET_BIT(&in[MIO0_HEADER_LENGTH], bit_idx)) {
          // 1 - pull uncompressed data
          out[bytes_written] = in[head.uncomp_offset + uncomp_idx];
+         printf("%06X: 1 %02X\n", bytes_written, out[bytes_written]);
          bytes_written++;
          uncomp_idx++;
       } else {
@@ -174,6 +206,7 @@ int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end)
          comp_idx += 2;
          length = ((vals[0] & 0xF0) >> 4) + 3;
          idx = ((vals[0] & 0x0F) << 8) + vals[1] + 1;
+         printf("%06X: 0 %X %03X %02X...\n", bytes_written, length, idx, out[bytes_written]);
          for (i = 0; i < length; i++) {
             out[bytes_written] = out[bytes_written - idx];
             bytes_written++;
@@ -189,7 +222,7 @@ int mio0_decode(const unsigned char *in, unsigned char *out, unsigned int *end)
    return bytes_written;
 }
 
-int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out)
+int mio0_compress(const unsigned char *in, unsigned int length, unsigned char *out, int greedy)
 {
    unsigned char *bit_buf;
    unsigned char *comp_buf;
@@ -213,6 +246,9 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
    uncomp_buf = malloc(length); // all uncompressed
    memset(bit_buf, 0, (length + 7) / 8);
 
+   printf("Off. |Len.| Matching offsets\n");
+   printf("-----|----|-------------------------------------------\n");
+
    // encode data
    // special case for first byte
    lookback_push(lookbacks, in[0], 0);
@@ -227,21 +263,23 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
       // push current byte before checking next longer match
       lookback_push(lookbacks, in[bytes_proc], bytes_proc);
       if (longest_match > 2) {
-         int lookahead_offset;
          // lookahead to next byte to see if longer match
-         int lookahead_length = MIN(length - bytes_proc - 1, 18);
-         int lookahead_match = find_longest(in, bytes_proc + 1, lookahead_length, &lookahead_offset, lookbacks);
-         // better match found, use uncompressed + lookahead compressed
-         if ((longest_match + 1) < lookahead_match) {
-            // uncompressed byte
-            uncomp_buf[uncomp_idx] = in[bytes_proc];
-            uncomp_idx++;
-            PUT_BIT(bit_buf, bit_idx, 1);
-            bytes_proc++;
-            longest_match = lookahead_match;
-            offset = lookahead_offset;
-            bit_idx++;
-            lookback_push(lookbacks, in[bytes_proc], bytes_proc);
+         if (!greedy) {
+            int lookahead_offset;
+            int lookahead_length = MIN(length - bytes_proc - 1, 18);
+            int lookahead_match = find_longest(in, bytes_proc + 1, lookahead_length, &lookahead_offset, lookbacks);
+            // better match found, use uncompressed + lookahead compressed
+            if ((longest_match + 1) < lookahead_match) {
+               // uncompressed byte
+               uncomp_buf[uncomp_idx] = in[bytes_proc];
+               uncomp_idx++;
+               PUT_BIT(bit_buf, bit_idx, 1);
+               bytes_proc++;
+               longest_match = lookahead_match;
+               offset = lookahead_offset;
+               bit_idx++;
+               lookback_push(lookbacks, in[bytes_proc], bytes_proc);
+            }
          }
          // first byte already pushed above
          for (int i = 1; i < longest_match; i++) {
@@ -291,7 +329,7 @@ int mio0_encode(const unsigned char *in, unsigned int length, unsigned char *out
    return bytes_written;
 }
 
-int mio0_decode_file(const char *in_file, unsigned long offset, const char *out_file)
+int mio0_decompress_file(const char *in_file, unsigned long offset, const char *out_file)
 {
    mio0_header_t head;
    FILE *in;
@@ -332,7 +370,7 @@ int mio0_decode_file(const char *in_file, unsigned long offset, const char *out_
    out_buf = malloc(head.dest_size);
 
    // decompress MIO0 encoded data
-   bytes_decoded = mio0_decode(in_buf, out_buf, NULL);
+   bytes_decoded = mio0_decompress(in_buf, out_buf, NULL);
    if (bytes_decoded < 0) {
       ret_val = 3;
       goto free_all;
@@ -365,7 +403,7 @@ free_all:
    return ret_val;
 }
 
-int mio0_encode_file(const char *in_file, const char *out_file)
+int mio0_compress_file(const char *in_file, const char *out_file, int greedy)
 {
    FILE *in;
    FILE *out;
@@ -399,7 +437,7 @@ int mio0_encode_file(const char *in_file, const char *out_file)
    out_buf = malloc(MIO0_HEADER_LENGTH + ((file_size+7)/8) + file_size);
 
    // compress data in MIO0 format
-   bytes_encoded = mio0_encode(in_buf, file_size, out_buf);
+   bytes_encoded = mio0_compress(in_buf, file_size, out_buf, greedy);
 
    // open output file
    out = fopen(out_file, "wb");
@@ -436,6 +474,7 @@ typedef struct
    char *out_filename;
    unsigned int offset;
    int compress;
+   int greedy;
 } arg_config;
 
 static arg_config default_config =
@@ -443,18 +482,20 @@ static arg_config default_config =
    NULL,
    NULL,
    0,
-   1
+   1,
+   0
 };
 
 static void print_usage(void)
 {
-   ERROR("Usage: mio0 [-c / -d] [-o OFFSET] FILE [OUTPUT]\n"
+   ERROR("Usage: mio0 [-c / -d] [-g] [-o OFFSET] FILE [OUTPUT]\n"
          "\n"
          "mio0 v" MIO0_VERSION ": MIO0 compression and decompression tool\n"
          "\n"
          "Optional arguments:\n"
          " -c           compress raw data into MIO0 (default: compress)\n"
          " -d           decompress MIO0 into raw data\n"
+         " -g           greedy compression algorithm (faster, but larger)\n"
          " -o OFFSET    starting offset in FILE (default: 0)\n"
          "\n"
          "File arguments:\n"
@@ -480,6 +521,9 @@ static void parse_arguments(int argc, char *argv[], arg_config *config)
                break;
             case 'd':
                config->compress = 0;
+               break;
+            case 'g':
+               config->greedy = 1;
                break;
             case 'o':
                if (++i >= argc) {
@@ -527,9 +571,9 @@ int main(int argc, char *argv[])
 
    // operation
    if (config.compress) {
-      ret_val = mio0_encode_file(config.in_filename, config.out_filename);
+      ret_val = mio0_compress_file(config.in_filename, config.out_filename, config.greedy);
    } else {
-      ret_val = mio0_decode_file(config.in_filename, config.offset, config.out_filename);
+      ret_val = mio0_decompress_file(config.in_filename, config.offset, config.out_filename);
    }
 
    switch (ret_val) {
@@ -553,4 +597,3 @@ int main(int argc, char *argv[])
    return ret_val;
 }
 #endif // MIO0_STANDALONE
-
